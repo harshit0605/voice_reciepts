@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: counterwell
+      POSTGRES_PASSWORD: counterwell_local
+      POSTGRES_DB: counterwell
+    ports: ["127.0.0.1:50489:5432"]
+    volumes: ["counterwell_pg:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U counterwell"]
+      interval: 5s
+      retries: 10
+volumes:
+  counterwell_pg:

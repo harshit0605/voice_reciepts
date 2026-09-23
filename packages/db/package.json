@@ -1,0 +1,12 @@
+{
+  "name": "@counterwell/db",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@counterwell/core": "0.1.0",
+    "drizzle-orm": "^0.45.3",
+    "pg": "^8.16.0"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "counterwell",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,mobile 'npm run dev -w @counterwell/api' 'npm run web -w @counterwell/mobile'",
+    "dev:api": "npm run dev -w @counterwell/api",
+    "dev:mobile": "npm run start -w @counterwell/mobile",
+    "dev:gateway": "npm run dev -w @counterwell/gateway",
+    "db:migrate": "tsx --env-file=.env packages/db/src/migrate.ts",
+    "seed": "tsx --env-file=.env scripts/seed.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test",
+    "test:camera": "python3 -m unittest discover -s services/camera/tests",
+    "build:web": "npm run build:web -w @counterwell/mobile",
+    "dev:worker": "npm run worker -w @counterwell/api",
+    "test:integration": "RUN_DB_TESTS=1 vitest run",
+    "evaluate:voice": "tsx scripts/evaluate-voice.ts",
+    "verify:backup": "tsx --env-file=.env scripts/verify-backup.ts",
+    "format": "prettier --write apps packages scripts docs README.md *.json .github/workflows/*.yml"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "@types/react": "~19.2.0",
+    "concurrently": "^9.2.0",
+    "prettier": "^3.9.9",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.1"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}

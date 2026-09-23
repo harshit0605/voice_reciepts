@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Counterwell",
+    "slug": "counterwell",
+    "scheme": "counterwell",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "com.counterwell.mobile",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Connect to your shop printer and backup gateway."
+      }
+    },
+    "android": { "package": "com.counterwell.mobile" },
+    "web": { "bundler": "metro", "output": "single", "name": "Counterwell" },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-sqlite", { "useSQLCipher": true }],
+      ["expo-camera", { "cameraPermission": "Scan product barcodes." }],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Record the sale items you choose to dictate."
+        }
+      ],
+      "expo-font",
+      "expo-localization"
+    ],
+    "experiments": { "typedRoutes": false }
+  }
+}

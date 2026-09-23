@@ -1,0 +1,15 @@
+{
+  "name": "@counterwell/gateway",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx --env-file=../../.env src/index.ts"
+  },
+  "dependencies": {
+    "@counterwell/core": "0.1.0",
+    "@hono/node-server": "^1.19.0",
+    "hono": "^4.9.0",
+    "jose": "^6.1.0",
+    "sharp": "^0.35.4"
+  }
+}
