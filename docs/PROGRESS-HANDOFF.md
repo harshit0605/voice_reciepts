@@ -1,14 +1,14 @@
 # Counterwell — development progress and agent handoff
 
-Snapshot: 23 September 2026, after the voice-assisted selling refinement pass. Read alongside the user's original **Pharmacy-first retail operations app** plan. This document describes the current implementation and evidence; the plan describes the intended product. Local source and a fresh inspection take precedence if development has continued since this snapshot.
+Snapshot: 23 September 2026, after the checkout double-billing fixes (first part of the checkout pass). Read alongside the user's original **Pharmacy-first retail operations app** plan. This document describes the current implementation and evidence; the plan describes the intended product. Local source and a fresh inspection take precedence if development has continued since this snapshot.
 
 ## Start here
 
 - Workspace: `/Users/harshit/Code/Agency/voice_reciepts` (the directory spelling is intentional).
 - An implemented pilot monorepo already exists. Continue it; do not scaffold a replacement app.
-- **There is no Git repository in this directory or its parents.** No branch, commit, PR or remote represents these changes. Preserve the existing files and private local data. Version-control setup has not been performed.
-- The latest work completed two focused passes: **supplier-invoice receiving**, then **voice-assisted selling**. Their implementation and local checks are complete, but their live-provider and physical-device acceptance is not.
-- **Next agreed pass: manual/barcode checkout and cashier handoff.** Inspect existing UI and backend, improve the complete workflow, add meaningful regression coverage, and test it before moving to the next feature.
+- **Git was initialised on 23 September 2026** (local `main`, no remote). The first commit is the pre-existing implementation; later commits are the checkout pass. `.data/`, `.env` and generated native projects stay ignored. Preserve the private local data.
+- Completed passes: **supplier-invoice receiving**, then **voice-assisted selling**. Their implementation and local checks are complete, but their live-provider and physical-device acceptance is not.
+- **Current pass: manual/barcode checkout and cashier handoff.** The three client double-billing paths are fixed (see below). Continue with the remaining checkout gaps listed there.
 - No production deployment, store cutover, paid-provider evaluation, TestFlight upload or Play internal release has happened.
 
 Suggested reading order: this document → [README](../README.md) → [architecture/API](ARCHITECTURE.md) → [verification evidence](VERIFICATION.md) → [feature sequence](FEATURE-PASSES.md) → [AI costs](AI-COSTS.md) → [pilot gates](PILOT.md).
@@ -27,21 +27,21 @@ Keep sales, collections, dues and shared-drawer shortage separate. Attribute rec
 
 “Implemented” below means code exists, not that all original acceptance tests have been satisfied.
 
-| Area                        | Implemented now                                                                                                                                                                        | Remaining or not established                                                                                                                      |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Accounts and isolation      | Better Auth username login, assisted owner seed, owner-created employees, temporary-password replacement, memberships, collection permissions, devices, server-side tenant/role checks | Production onboarding, security review and real multi-shop operations                                                                             |
-| Sell and orders             | Search, camera barcode path, batch selection/confirmation, loose units, quote, held orders, versioned acknowledged cashier handoff, checkout, invoice snapshots                        | Next focused refinement pass; physical scanner/camera operation, full UI concurrency and uncertain-response walkthroughs                          |
-| Supplier receiving          | Document uploads, extraction jobs, editable reviewed draft, product mapping, paid/bonus pack conversion, source opening, native autosave, resumable jobs, posting safeguards           | Real provider documents, physical-device source opening/restart, diverse invoice layouts; no camera capture/crop UI                               |
-| Voice selling               | Recording and typed-entry paths, local exact parser, editable compact review, product candidates/conflict warnings, saved draft/basket, resumable jobs, STT checkpoint, usage controls | Live speech accuracy/latency, microphone on target phones, durable failed-audio upload queue, independent media-duration verification             |
-| Payments and credit         | Cash/manual UPI/mixed payments, duplicate-reference checks, approved credit/discounts, customer ledger and repayments                                                                  | Dedicated UI/backend refinement and real operating validation; no UPI provider integration                                                        |
-| Returns and approvals       | Owner approvals, separate refund execution, linked returns, quarantine and reviewed disposal                                                                                           | Dedicated operational refinement and shop acceptance                                                                                              |
-| Inventory                   | Catalogue/units/aliases/barcodes, batches/cost/MRP/prices, opening counts, supplier purchases/bonus quantities, movement rules and stock corrections                                   | Large real catalogue ingestion, physical counts and complete receiving/expiry operating validation                                                |
-| Drawer and EOD              | Opening/closing counts, recorded cash movements, reconciliation, separate sales/collections/dues, provisional/revised reports                                                          | Dedicated refinement; actual shared-drawer process and multi-phone closing exercise                                                               |
-| Offline and sync            | Native SQLCipher, durable sequence/outbox transaction, signed 24-hour authorisation, idempotent replay, gateway backup, revoked-device review, redacted incremental sync               | Four-hour physical-phone test, power-loss/restart/reinstall tests, gateway outage exercise; browser memory storage is not durable offline billing |
-| Receipts and printing       | Invoice HTML/PDF path, authenticated gateway print queue, status, explicit audited reprints                                                                                            | Physical Epson/Hindi/PDF checks from Android and iPhone; no printer configured                                                                    |
-| Owner monitoring            | Dashboards, approvals/review cases, device/backlog/gateway status, request/extraction telemetry                                                                                        | Hosted monitoring, operator alerts, actual cost reconciliation; background push not implemented                                                   |
-| Camera pilot                | YOLOX/ByteTrack adapter, zones/sessionisation, replay/evaluation, observations, local clips, owner reviews, coverage gaps                                                              | Recorder inspection, model weights/licensing, hardware sizing, real streams, 500 labelled interactions and accuracy/review-time evidence          |
-| Distribution and operations | Native build configuration, EAS profiles, local backup-restore verifier                                                                                                                | Production infrastructure/backups/signing, release distribution and primary-system cutover                                                        |
+| Area                        | Implemented now                                                                                                                                                                                                         | Remaining or not established                                                                                                                      |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Accounts and isolation      | Better Auth username login, assisted owner seed, owner-created employees, temporary-password replacement, memberships, collection permissions, devices, server-side tenant/role checks                                  | Production onboarding, security review and real multi-shop operations                                                                             |
+| Sell and orders             | Search, camera barcode path, batch selection/confirmation, loose units, quote, held orders, versioned acknowledged cashier handoff, checkout, invoice snapshots, draft-pinned checkout identity with automatic recovery | Rest of the checkout pass (below); physical scanner/camera operation and live uncertain-response walkthroughs                                     |
+| Supplier receiving          | Document uploads, extraction jobs, editable reviewed draft, product mapping, paid/bonus pack conversion, source opening, native autosave, resumable jobs, posting safeguards                                            | Real provider documents, physical-device source opening/restart, diverse invoice layouts; no camera capture/crop UI                               |
+| Voice selling               | Recording and typed-entry paths, local exact parser, editable compact review, product candidates/conflict warnings, saved draft/basket, resumable jobs, STT checkpoint, usage controls                                  | Live speech accuracy/latency, microphone on target phones, durable failed-audio upload queue, independent media-duration verification             |
+| Payments and credit         | Cash/manual UPI/mixed payments, duplicate-reference checks, approved credit/discounts, customer ledger and repayments                                                                                                   | Dedicated UI/backend refinement and real operating validation; no UPI provider integration                                                        |
+| Returns and approvals       | Owner approvals, separate refund execution, linked returns, quarantine and reviewed disposal                                                                                                                            | Dedicated operational refinement and shop acceptance                                                                                              |
+| Inventory                   | Catalogue/units/aliases/barcodes, batches/cost/MRP/prices, opening counts, supplier purchases/bonus quantities, movement rules and stock corrections                                                                    | Large real catalogue ingestion, physical counts and complete receiving/expiry operating validation                                                |
+| Drawer and EOD              | Opening/closing counts, recorded cash movements, reconciliation, separate sales/collections/dues, provisional/revised reports                                                                                           | Dedicated refinement; actual shared-drawer process and multi-phone closing exercise                                                               |
+| Offline and sync            | Native SQLCipher, durable sequence/outbox transaction, signed 24-hour authorisation, idempotent replay, gateway backup, revoked-device review, redacted incremental sync                                                | Four-hour physical-phone test, power-loss/restart/reinstall tests, gateway outage exercise; browser memory storage is not durable offline billing |
+| Receipts and printing       | Invoice HTML/PDF path, authenticated gateway print queue, status, explicit audited reprints                                                                                                                             | Physical Epson/Hindi/PDF checks from Android and iPhone; no printer configured                                                                    |
+| Owner monitoring            | Dashboards, approvals/review cases, device/backlog/gateway status, request/extraction telemetry                                                                                                                         | Hosted monitoring, operator alerts, actual cost reconciliation; background push not implemented                                                   |
+| Camera pilot                | YOLOX/ByteTrack adapter, zones/sessionisation, replay/evaluation, observations, local clips, owner reviews, coverage gaps                                                                                               | Recorder inspection, model weights/licensing, hardware sizing, real streams, 500 labelled interactions and accuracy/review-time evidence          |
+| Distribution and operations | Native build configuration, EAS profiles, local backup-restore verifier                                                                                                                                                 | Production infrastructure/backups/signing, release distribution and primary-system cutover                                                        |
 
 Deferred by the plan: grocery weighing, electronics serial numbers, multi-branch transfers, subscriptions, full accounting and automated tax filing. Current tax handling is intra-state tax-inclusive CGST/SGST; IGST, cess and specialised Schedule X dispensing are not supported. Schedule X is blocked. Verify applicable pharmacy/GST record requirements during onboarding before replacing existing records.
 
@@ -122,7 +122,7 @@ These are the latest recorded results, not tests rerun solely to write this hand
 | Check                                                                   | Latest evidence                                                                                                               |
 | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Strict TypeScript                                                       | Passed after voice UI/backend changes                                                                                         |
-| Core + authenticated PostgreSQL/API + gateway + provider-contract tests | **80 passed across seven suites**, `.data/voice-tests.log`                                                                    |
+| Core + authenticated PostgreSQL/API + gateway + provider-contract tests | **94 passed across nine suites** after the checkout fixes, `.data/checkout-fix-tests.log`                                     |
 | Camera session tests                                                    | Four passed during initial implementation; not rerun for the voice-only pass                                                  |
 | Expo web export                                                         | Passed after voice changes, `.data/voice-web-build.log`; output `apps/mobile/dist/`                                           |
 | Android/iOS JS/Hermes export                                            | Passed after voice changes, `.data/voice-native-build.log`; output `.data/voice-native-bundles/`                              |
@@ -171,7 +171,41 @@ npx expo export --platform ios --platform android --output-dir ../../.data/voice
 
 Use absolute upload/gateway/clip directories when services run from different locations. API/worker share uploads; camera/gateway share clips. Native artifacts from earlier builds are documented in VERIFICATION.md. Check disk before native builds: an earlier four-architecture Android build filled the disk; ARM64 succeeded after removing only this project's generated intermediates.
 
-## Concrete next pass: manual/barcode checkout and handoff
+## Checkout pass, part 1: double-billing fixes (done)
+
+Main files: `packages/core/src/checkout-recovery.ts` (pure, tested), `apps/mobile/src/selling.tsx` (`SellScreen`, `Checkout`), `apps/mobile/src/session.tsx`, `storage.native.ts`/`storage.web.ts` (`commitCash`).
+
+Three defects were fixed. Each could bill one basket twice:
+
+1. **A timed-out online checkout followed by Cash.** `cashSale` ignored the pending uncertain command and minted a new order and invoice. The error message even said cash billing could continue.
+2. **Reopening Checkout after an uncertain result.** The held order lived only in component state, so a new order and invoice were created.
+3. **A crash between the local cash commit and the draft clear.** Only a dismissible "check Orders" banner stood in the way.
+
+How the fix works:
+
+- `SaleEntry.checkout` (`CheckoutAttempt`: `orderId`, `cashCommandId`, `online`) is saved in the encrypted draft **before** anything is sent. Every retry, method change and restart reuses it.
+- Once `online` is set, the basket is billed only through its server order, where the engine allows one checkout per order. `billsLocally()` enforces this.
+- `commitCash` refuses a command ID already in the outbox, inside its exclusive transaction.
+- `recoverCheckout()` decides from state, outbox and the uncertain command what happened to the attempt: `billed`, `saved_locally`, `elsewhere`, `uncertain`, `held` or `unsent`.
+  - The Sell screen shows the receipt for a billed attempt, clears finished ones, and locks the basket while its own payment has no answer, offering **Check now** and **Set aside**.
+  - Set aside keeps the uncertain command for exact-ID replay, which records a payment that was physically taken, and tells staff not to bill the items again.
+- A network failure on a command now says the action may already be saved and not to collect again. Sync reports whether an unanswered action was confirmed or not saved.
+- The manual "I checked Orders" gate remains only for drafts saved before this change (`checkoutInterrupted` without `checkout`).
+
+Evidence: see VERIFICATION.md. Not yet exercised: the lock banner against the live API, and native crash recovery on a phone.
+
+## Checkout pass, part 2: remaining work
+
+Audit findings not yet addressed, most important first:
+
+1. `ReceiptSheet` keeps print ID/status across invoices, so a reprint can target the previous bill. Reset it on invoice change.
+2. A handoff offer cannot be recalled, declined or reassigned; an absent cashier strands the order.
+3. Barcode scanning only fills the search box. It needs exact-match add, a clear unknown-code message, a denied-permission message with a Settings link, and multiple barcodes per product.
+4. The online checkout reserves an invoice number before sending, so any rejection leaves a gap in the GST series (seen: 000003 skipped).
+5. Speed: about 10–11 taps for a 2-item cash sale, and no amount-tendered/change field.
+6. After restart an uncertain command waits up to 30 s for the first sync. On iOS, chained modals (basket → checkout → receipt) need device checking. A reprint after sync can be refused because the device and server timestamps differ.
+
+Original checklist for the pass:
 
 1. Inspect `SellScreen`/`Checkout`/`OrdersScreen`, session command retry handling, `order.save`/`order.offer`/`order.accept`/`checkout` contracts and domain rules. Identify actual gaps before changing working behavior.
 2. Walk employee and owner flows on a narrow phone layout: search/scan → select physical batch → edit basket → hold/resume or collect. Cover repeated scanner events, unrecognised/ambiguous barcodes, camera-denied fallback, loose units, expired/out-of-stock batches and Hindi copy.

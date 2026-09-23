@@ -26,7 +26,12 @@ export function useSaleEntry(key: string) {
         if (saved) {
           ref.current = saved;
           setEntry(saved);
-          setReviewRecovery(saved.basket.length > 0);
+          // Pinned attempts are resolved from recorded state; only older drafts need a manual Orders check.
+          setReviewRecovery(
+            saved.basket.length > 0 &&
+              saved.checkoutInterrupted &&
+              !saved.checkout,
+          );
         }
         setReady(true);
       })

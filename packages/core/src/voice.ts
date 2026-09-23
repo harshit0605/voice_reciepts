@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Product, OrderLine } from "./types";
+import type { CheckoutAttempt } from "./checkout-recovery";
 export const voiceItemSchema = z.object({
   name: z.string().max(180),
   strength: z.string().max(60).nullable(),
@@ -27,7 +28,9 @@ export type VoiceWork = {
 export type SaleEntry = {
   basket: OrderLine[];
   voice: VoiceWork;
+  /** Only drafts saved before `checkout` existed set this; they still need the manual Orders check. */
   checkoutInterrupted: boolean;
+  checkout?: CheckoutAttempt;
 };
 export function emptyVoice(id: string): VoiceWork {
   return {

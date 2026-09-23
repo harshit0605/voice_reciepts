@@ -69,37 +69,41 @@ export async function nextSequence(key: string) {
   });
   return value;
 }
+/** Returns null, writing nothing, when `commandId` is already queued. */
 export async function commitCash(
   scope: string,
   sequenceKey: string,
+  commandId: string,
   build: (sequence: number) => { entry: Queued; state: State },
 ) {
-  let result!: ReturnType<typeof build>;
+  let result = null as ReturnType<typeof build> | null;
   await (
     await db()
   ).withExclusiveTransactionAsync(async (tx) => {
-    const row = await tx.getFirstAsync<{ value: string }>(
-      "SELECT value FROM kv WHERE key=?",
-      `sequence:${sequenceKey}`,
-    );
-    const n = Number(row?.value ?? 0) + 1;
-    result = build(n);
     const queued = await tx.getFirstAsync<{ value: string }>(
       "SELECT value FROM kv WHERE key=?",
       `outbox:${scope}`,
     );
     const entries: Queued[] = queued ? JSON.parse(queued.value) : [];
-    entries.push(result.entry);
+    if (entries.some((e) => e.command.id === commandId)) return;
+    const row = await tx.getFirstAsync<{ value: string }>(
+      "SELECT value FROM kv WHERE key=?",
+      `sequence:${sequenceKey}`,
+    );
+    const n = Number(row?.value ?? 0) + 1;
+    const built = build(n);
+    entries.push(built.entry);
     for (const [key, value] of [
       [`sequence:${sequenceKey}`, n],
       [`outbox:${scope}`, entries],
-      [`state:${scope}`, result.state],
+      [`state:${scope}`, built.state],
     ] as const)
       await tx.runAsync(
         "INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
         key,
         JSON.stringify(value),
       );
+    result = built;
   });
   return result;
 }

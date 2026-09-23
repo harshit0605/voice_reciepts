@@ -22,17 +22,18 @@ export async function nextSequence(key: string) {
   await set(`sequence:${key}`, n);
   return n;
 }
+/** Returns null, writing nothing, when `commandId` is already queued. */
 export async function commitCash(
   scope: string,
   sequenceKey: string,
+  commandId: string,
   build: (sequence: number) => { entry: Queued; state: State },
 ) {
+  const entries = (await get<Queued[]>(`outbox:${scope}`)) ?? [];
+  if (entries.some((e) => e.command.id === commandId)) return null;
   const n = await nextSequence(sequenceKey);
   const result = build(n);
-  await set(`outbox:${scope}`, [
-    ...((await get<Queued[]>(`outbox:${scope}`)) ?? []),
-    result.entry,
-  ]);
+  await set(`outbox:${scope}`, [...entries, result.entry]);
   await set(`state:${scope}`, result.state);
   return result;
 }

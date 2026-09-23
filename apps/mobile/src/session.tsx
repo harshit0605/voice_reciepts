@@ -21,7 +21,10 @@ import {
   type Operation,
   type Invoice,
   type OrderLine,
+  type CheckoutAttempt,
 } from "@counterwell/core";
+const NO_RESPONSE =
+  "No response from the server. This may already be saved, so do not collect payment again. It will be checked when the connection returns.";
 type Identity = {
   actor: Actor;
   deviceId: string;
@@ -38,6 +41,8 @@ type Ctx = {
   error: string;
   language: "en" | "hi";
   pending: storage.Queued[];
+  /** Online command sent without a definite answer; retried with the same ID until resolved. */
+  uncertain: Command | null;
   login: (u: string, p: string) => Promise<void>;
   changePassword: (current: string, password: string) => Promise<void>;
   passwordRequired: boolean;
@@ -47,8 +52,9 @@ type Ctx = {
   command: (op: Operation) => Promise<any>;
   cashSale: (
     lines: OrderLine[],
-    customerId?: string,
-    prescription?: State["orders"][string]["prescription"],
+    customerId: string | undefined,
+    prescription: State["orders"][string]["prescription"],
+    attempt: CheckoutAttempt,
   ) => Promise<Invoice>;
   sync: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -68,6 +74,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [error, setError] = useState(""),
     [language, changeLanguage] = useState<"en" | "hi">("en"),
     [pending, setPending] = useState<storage.Queued[]>([]),
+    [uncertain, setUncertain] = useState<Command | null>(null),
     [passwordRequired, setPasswordRequired] = useState(false);
   const demoRef = useRef(false);
   const stateRef = useRef(state);
@@ -78,6 +85,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const operating = useRef(false);
   const scope = () =>
     `${identityRef.current!.actor.businessId}:${identityRef.current!.actor.id}`;
+  async function markUncertain(cmd: Command | null) {
+    if (cmd) await storage.set(`online:${scope()}`, cmd);
+    else await storage.remove(`online:${scope()}`);
+    setUncertain(cmd);
+  }
   function setLanguage(value: "en" | "hi") {
     changeLanguage(value);
     void storage.set("language", value);
@@ -133,6 +145,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     };
     identityRef.current = base;
     setIdentity(base);
+    setUncertain(await storage.get<Command>(`online:${scope()}`));
     if (m.mustChangePassword) {
       setPasswordRequired(true);
       return;
@@ -198,6 +211,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     stateRef.current = s;
     setDemo(true);
     setPending([]);
+    setUncertain(null);
     setError("");
     setPasswordRequired(false);
   }
@@ -244,6 +258,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (!demo) await authClient.signOut();
     await storage.remove("identity");
     setState(null);
+    setUncertain(null);
     setIdentity(null);
     identityRef.current = null;
     setDemo(false);
@@ -314,11 +329,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       }
       // Preserve uncertain online mutations for exact-id retry rather than issuing a second checkout.
       const unresolved = await storage.get<Command>(`online:${scope()}`);
-      if (unresolved)
+      if (unresolved) {
+        void sync();
         throw new Error(
-          "Synchronise the previous uncertain action before starting another.",
+          "An earlier action is still waiting for a server response. Try again after it is checked.",
         );
-      await storage.set(`online:${scope()}`, cmd);
+      }
+      await markUncertain(cmd);
       let result: any;
       try {
         result = await request("/commands", {
@@ -326,11 +343,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify(cmd),
         });
       } catch (e) {
-        if ((e as any).httpStatus && (e as any).httpStatus < 500)
-          await storage.remove(`online:${scope()}`);
-        throw e;
+        const status = (e as any).httpStatus;
+        if (status && status < 500) {
+          await markUncertain(null);
+          throw e;
+        }
+        throw new Error(NO_RESPONSE);
       }
-      await storage.remove(`online:${scope()}`);
+      await markUncertain(null);
       try {
         await refresh();
       } catch {
@@ -361,14 +381,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }
   async function cashSale(
     lines: OrderLine[],
-    customerId?: string,
-    prescription?: State["orders"][string]["prescription"],
+    customerId: string | undefined,
+    prescription: State["orders"][string]["prescription"],
+    attempt: CheckoutAttempt,
   ): Promise<Invoice> {
     if (operating.current) throw new Error("A sale is being saved");
     operating.current = true;
     try {
       const i = identityRef.current!,
         s = stateRef.current!;
+      const id = attempt.cashCommandId,
+        orderId = attempt.orderId;
+      const recorded = s.invoices[`${id}:invoice`];
+      if (recorded) return recorded;
       const now = new Date().toISOString();
       if (now < i.issuedAt || now > i.expiresAt)
         throw new Error(
@@ -380,8 +405,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         );
       const { quote } = await import("@counterwell/core");
       const total = quote(s, lines, now).reduce((n, l) => n + l.netPaise, 0);
-      const id = uid(),
-        orderId = uid();
       const key = `${i.deviceId}:${fiscalYear(now)}`;
       const max = Math.max(
         0,
@@ -395,7 +418,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       );
       if (((await storage.get<number>(`sequence:${key}`)) ?? 0) < max)
         await storage.set(`sequence:${key}`, max);
-      const saved = await storage.commitCash(scope(), key, (sequence) => {
+      const saved = await storage.commitCash(scope(), key, id, (sequence) => {
         const cmd: Command = {
           id,
           occurredAt: now,
@@ -422,6 +445,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           state: out.state,
         };
       });
+      if (!saved)
+        throw new Error(
+          "This cash sale is already saved on this phone and waiting to sync. Do not collect again.",
+        );
       stateRef.current = saved.state;
       setState(saved.state);
       setPending(
@@ -442,20 +469,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     try {
       let entries =
         (await storage.get<storage.Queued[]>(`outbox:${scope()}`)) ?? [];
-      const uncertain = await storage.get<Command>(`online:${scope()}`);
-      if (uncertain) {
+      const unresolved = await storage.get<Command>(`online:${scope()}`);
+      if (unresolved) {
         try {
           await request("/commands", {
             method: "POST",
-            body: JSON.stringify(uncertain),
+            body: JSON.stringify(unresolved),
           });
+          await markUncertain(null);
+          setError(
+            "An action that had no response is now confirmed as saved. Check Orders before collecting again.",
+          );
         } catch (e) {
-          if ((e as any).httpStatus && (e as any).httpStatus < 500) {
-            await storage.remove(`online:${scope()}`);
-            setError((e as Error).message);
-          } else throw e;
+          const status = (e as any).httpStatus;
+          if (!status || status >= 500) throw e;
+          await markUncertain(null);
+          setError(
+            "An action that had no response was not saved. Check Orders, then try again if needed.",
+          );
         }
-        await storage.remove(`online:${scope()}`);
       }
       if (entries.length) {
         const gateway = stateRef.current?.settings.gatewayUrl;
@@ -585,6 +617,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
               `outbox:${cached.actor.businessId}:${cached.actor.id}`,
             )) ?? [];
           setPending(q);
+          setUncertain(
+            await storage.get<Command>(
+              `online:${cached.actor.businessId}:${cached.actor.id}`,
+            ),
+          );
           try {
             await establish();
           } catch {
@@ -622,6 +659,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         error,
         language,
         pending,
+        uncertain,
         login,
         changePassword,
         passwordRequired,

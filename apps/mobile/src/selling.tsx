@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   ScrollView,
@@ -34,6 +34,11 @@ import {
   spokenUnit,
   spokenQuantity,
   emptyVoice,
+  recoverCheckout,
+  billsLocally,
+  orderMatches,
+  commandOrderId,
+  type CheckoutAttempt,
   type SpokenItem,
   quote,
   rupees,
@@ -83,6 +88,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
       basket: [],
       voice: { ...emptyVoice(uid()), appliedJobIds: v.voice.appliedJobIds },
       checkoutInterrupted: false,
+      checkout: undefined,
     }));
     if (!saved)
       s.setError(
@@ -90,6 +96,43 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
       );
     selling.setReviewRecovery(false);
     if (invoice) onInvoice(invoice);
+  }
+  const recovery = recoverCheckout(
+    selling.entry.checkout,
+    state,
+    s.identity!.actor.id,
+    s.pending.map((p) => p.command.id),
+    s.uncertain,
+  );
+  const settled = useRef("");
+  // Finish a restored or late-confirmed attempt once, from recorded state, instead of relying on staff to check Orders.
+  useEffect(() => {
+    const attempt = selling.entry.checkout;
+    if (!selling.ready || !attempt) return;
+    const key = `${attempt.orderId}:${recovery.kind}`;
+    if (settled.current === key) return;
+    if (recovery.kind === "billed") {
+      settled.current = key;
+      void finishEntry(recovery.invoice);
+    } else if (
+      recovery.kind === "saved_locally" ||
+      recovery.kind === "elsewhere"
+    ) {
+      settled.current = key;
+      void finishEntry().then(() =>
+        s.setError(
+          recovery.kind === "saved_locally"
+            ? "This cash sale is already saved on this phone and waiting to sync. Do not collect again."
+            : "This sale is now in Orders, billed or handed over. Do not collect it again here.",
+        ),
+      );
+    }
+  }, [selling.ready, selling.entry.checkout?.orderId, recovery.kind]);
+  async function setAside() {
+    await finishEntry();
+    s.setError(
+      "Sale set aside. It will be confirmed automatically when the connection returns. Do not bill these items again; check Orders later.",
+    );
   }
   const [permission, requestPermission] = useCameraPermissions();
   const batches = Object.values(state.batches)
@@ -226,23 +269,15 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
             !basketValid ||
             busy ||
             selling.reviewRecovery ||
+            recovery.kind === "uncertain" ||
             selling.entry.voice.items.length > 0 ||
             !!selling.entry.voice.jobId ||
             !!selling.entry.voice.input.trim()
           }
-          onPress={() =>
-            void (async () => {
-              if (
-                await selling.update((v) => ({
-                  ...v,
-                  checkoutInterrupted: true,
-                }))
-              ) {
-                setCheckout(true);
-                setBasketOpen(false);
-              }
-            })()
-          }
+          onPress={() => {
+            setCheckout(true);
+            setBasketOpen(false);
+          }}
           icon="arrow-forward"
         >
           {t("checkout")}
@@ -368,6 +403,29 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                 ? "ऑर्डर जाँचे — यह बिक्री अधूरी है"
                 : "I checked Orders — this sale is unfinished"}
             </Button>
+          </View>
+        )}
+        {recovery.kind === "uncertain" && (
+          <View
+            style={{
+              padding: 12,
+              backgroundColor: colors.amberBg,
+              gap: 10,
+              marginBottom: 12,
+            }}
+          >
+            <Txt>
+              No server response yet for this sale's payment. It may already be
+              recorded, so do not collect again.
+            </Txt>
+            <Row style={{ flexWrap: "wrap" }}>
+              <Button secondary small onPress={() => void s.sync()}>
+                Check now
+              </Button>
+              <Button secondary small onPress={() => void setAside()}>
+                Set aside and start a new sale
+              </Button>
+            </Row>
           </View>
         )}
         {(selling.entry.voice.items.length > 0 ||
@@ -634,6 +692,10 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
       >
         <Checkout
           lines={basket}
+          attempt={selling.entry.checkout}
+          pin={(attempt) =>
+            selling.update((v) => ({ ...v, checkout: attempt }))
+          }
           onComplete={(i) => void finishEntry(i)}
           onHeld={() => void finishEntry()}
         />
@@ -683,11 +745,16 @@ export function Checkout({
   onComplete,
   onHeld,
   existingOrderId,
+  attempt,
+  pin,
 }: {
   lines: OrderLine[];
   onComplete: (i: Invoice) => void;
   onHeld: () => void;
+  /** Collect an order already in Orders. Otherwise `attempt` and `pin` are required. */
   existingOrderId?: string;
+  attempt?: CheckoutAttempt;
+  pin?: (attempt: CheckoutAttempt) => Promise<boolean>;
 }) {
   const s = useSession(),
     t = useText(),
@@ -736,26 +803,63 @@ export function Checkout({
           reference: prescriptionRef,
         }
       : undefined);
-  const [heldOrder, setHeldOrder] = useState<Order | undefined>();
-  async function hold() {
+  const orderId = existingOrderId ?? attempt?.orderId;
+  const awaitingServer =
+    !!s.uncertain && !!orderId && commandOrderId(s.uncertain) === orderId;
+  const submitting = useRef(false);
+  // Save the identity in the draft before anything is sent, so a retry, restart or method change reuses it.
+  async function pinAttempt(online: boolean): Promise<CheckoutAttempt> {
+    const next = {
+      orderId: attempt?.orderId ?? uid(),
+      cashCommandId: attempt?.cashCommandId ?? uid(),
+      online: !!attempt?.online || online,
+    };
+    if ((!attempt || attempt.online !== next.online) && !(await pin!(next)))
+      throw new Error(
+        "Draft could not be saved. Retry before collecting payment.",
+      );
+    return next;
+  }
+  async function hold(): Promise<Order> {
     if (existingOrderId) return state.orders[existingOrderId];
-    if (heldOrder) return heldOrder;
-    const o = await s.command({
-      type: "order.save",
-      orderId: uid(),
-      version: 0,
+    const { orderId } = await pinAttempt(true);
+    const current = state.orders[orderId];
+    const content = {
       lines,
       customerId: customerId || undefined,
-      counterId: state.devices[s.identity!.deviceId]?.counterId ?? "counter-1",
       prescription,
+    };
+    if (current) {
+      if (current.status !== "held")
+        throw new Error(
+          "This sale is no longer open here. Check Orders before collecting.",
+        );
+      if (orderMatches(current, content)) return current;
+    }
+    return s.command({
+      type: "order.save",
+      orderId,
+      version: current?.version ?? 0,
+      ...content,
+      counterId: state.devices[s.identity!.deviceId]?.counterId ?? "counter-1",
     });
-    setHeldOrder(o);
-    return o;
   }
-  async function finish() {
+  async function guarded(action: () => Promise<void>) {
+    if (submitting.current) return;
+    submitting.current = true;
     setBusy(true);
     setError("");
     try {
+      await action();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      submitting.current = false;
+      setBusy(false);
+    }
+  }
+  const finish = () =>
+    guarded(async () => {
       if (
         rx &&
         (!prescription?.patient ||
@@ -765,11 +869,12 @@ export function Checkout({
           !prescription.prescriberAddress)
       )
         throw new Error("Complete the prescription register details");
-      if (method === "cash" && !existingOrderId) {
+      if (billsLocally(method, attempt, existingOrderId)) {
         const i = await s.cashSale(
           lines,
           customerId || undefined,
           prescription,
+          await pinAttempt(false),
         );
         onComplete(i);
         return;
@@ -842,12 +947,7 @@ export function Checkout({
         discountApprovalId: approvedDiscount?.id,
       });
       onComplete(invoice);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
+    });
   return (
     <View style={{ gap: 16 }}>
       <Row style={{ justifyContent: "space-between" }}>
@@ -951,7 +1051,17 @@ export function Checkout({
         </View>
       )}
       {!!error && <Txt style={{ color: colors.red }}>{error}</Txt>}
-      <Button disabled={busy} onPress={() => void finish()} icon="checkmark">
+      {awaitingServer && (
+        <Txt style={{ color: colors.amber }}>
+          Waiting for the server to confirm this sale. Do not collect payment
+          again.
+        </Txt>
+      )}
+      <Button
+        disabled={busy || awaitingServer}
+        onPress={() => void finish()}
+        icon="checkmark"
+      >
         {busy
           ? "Saving…"
           : method === "credit"
@@ -961,15 +1071,13 @@ export function Checkout({
       {!existingOrderId && (
         <Button
           secondary
-          disabled={busy}
-          onPress={async () => {
-            try {
+          disabled={busy || awaitingServer}
+          onPress={() =>
+            void guarded(async () => {
               await hold();
               onHeld();
-            } catch (e) {
-              setError((e as Error).message);
-            }
-          }}
+            })
+          }
         >
           {t("hold")}
         </Button>

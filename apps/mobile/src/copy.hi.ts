@@ -343,4 +343,28 @@ export const hindiCopy: Record<string, string> = {
   introduced: "नकद जमा",
   withdrawal: "नकद निकासी",
   safe_transfer: "तिजोरी में स्थानांतरण",
+  "No response from the server. This may already be saved, so do not collect payment again. It will be checked when the connection returns.":
+    "सर्वर से जवाब नहीं आया। यह पहले ही दर्ज हो चुका हो सकता है, इसलिए दोबारा भुगतान न लें। कनेक्शन लौटने पर इसकी जाँच अपने-आप होगी।",
+  "An earlier action is still waiting for a server response. Try again after it is checked.":
+    "पिछली कार्रवाई अभी सर्वर के जवाब का इंतज़ार कर रही है। उसकी जाँच होने के बाद फिर कोशिश करें।",
+  "An action that had no response is now confirmed as saved. Check Orders before collecting again.":
+    "जिस कार्रवाई का जवाब नहीं आया था, वह दर्ज होने की पुष्टि हो गई है। दोबारा भुगतान लेने से पहले ऑर्डर जाँचें।",
+  "An action that had no response was not saved. Check Orders, then try again if needed.":
+    "जिस कार्रवाई का जवाब नहीं आया था, वह दर्ज नहीं हुई। ऑर्डर जाँचें, फिर ज़रूरत हो तो दोबारा कोशिश करें।",
+  "This cash sale is already saved on this phone and waiting to sync. Do not collect again.":
+    "यह नकद बिक्री इस फ़ोन में पहले से दर्ज है और सिंक होने का इंतज़ार कर रही है। दोबारा भुगतान न लें।",
+  "This sale is now in Orders, billed or handed over. Do not collect it again here.":
+    "यह बिक्री अब ऑर्डर में है — बिल बन चुका है या सौंप दी गई है। यहाँ दोबारा भुगतान न लें।",
+  "Sale set aside. It will be confirmed automatically when the connection returns. Do not bill these items again; check Orders later.":
+    "बिक्री अलग रखी गई। कनेक्शन लौटने पर इसकी पुष्टि अपने-आप होगी। इन सामानों का दोबारा बिल न बनाएँ; बाद में ऑर्डर जाँचें।",
+  "No server response yet for this sale's payment. It may already be recorded, so do not collect again.":
+    "इस बिक्री के भुगतान पर सर्वर का जवाब अभी नहीं आया। यह पहले ही दर्ज हो सकता है, इसलिए दोबारा भुगतान न लें।",
+  "Check now": "अभी जाँचें",
+  "Set aside and start a new sale": "अलग रखें और नई बिक्री शुरू करें",
+  "Waiting for the server to confirm this sale. Do not collect payment again.":
+    "सर्वर से इस बिक्री की पुष्टि का इंतज़ार है। दोबारा भुगतान न लें।",
+  "Draft could not be saved. Retry before collecting payment.":
+    "ड्राफ्ट सेव नहीं हो सका। भुगतान लेने से पहले फिर कोशिश करें।",
+  "This sale is no longer open here. Check Orders before collecting.":
+    "यह बिक्री अब यहाँ खुली नहीं है। भुगतान लेने से पहले ऑर्डर जाँचें।",
 };
