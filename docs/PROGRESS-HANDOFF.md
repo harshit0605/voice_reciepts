@@ -12,7 +12,7 @@ Snapshot: 28 September 2026, after the checkout pass, catalogue import and openi
 - **Checkout/handoff pass and catalogue import: done**, device-checked on iOS and Android (see "Catalogue import").
 - **Opening stock count: done**, checked on iOS with printing, PDF sharing and a two-phone owner → cashier handoff (see "Opening stock count and two-phone checks"). Android re-check is pending. Next: payments/credit/returns.
 - **Shared bill PDF** is now receipt-sized and states what was paid (checked on iOS). **Shop PC remote setup** exists for the shop's Windows PC (Tailscale, key-only SSH, gateway tools); see [SHOP-PC-SETUP.md](SHOP-PC-SETUP.md). It has not run on the real PC yet.
-- **Phone uploads fixed:** invoice photos/PDFs and voice recordings had never reached the server from a phone (Expo `fetch` refused the file part). Sign-out and ended sessions were also fixed; see VERIFICATION.md. Voice still needs `SARVAM_API_KEY`.
+- **Phone uploads fixed:** invoice photos/PDFs and voice recordings had never reached the server from a phone (Expo `fetch` refused the file part). Sign-out and ended sessions were also fixed; see VERIFICATION.md. Voice now works end to end with OpenAI `gpt-4o-transcribe` when there is no Sarvam key (checked on the iPhone simulator; real voices not yet).
 - **Invoice reading works live** through OpenRouter when there is no Google key, after two fixes (shape-only schema; clearer MRP and expiry rules). Checked on six sample-invoice images; a real distributor bill is still needed. Android checks need the host load well below 50.
 - No production deployment, store cutover, paid-provider evaluation, TestFlight upload or Play internal release has happened.
 

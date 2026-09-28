@@ -197,3 +197,14 @@ It has **not** run on a real Windows PC yet. The one-line version downloads the 
 - **A phone whose session ended looked connected.** After a password change elsewhere, the phone kept "Up to date" while every sync returned 401. It now shows "Sign in again" (English and Hindi) and stops syncing; unsent sales stay queued.
   - Checked: the password was changed from another client at 20:14:28. The cashier's phone showed "Sign in again" by 20:14:44 after one refused sync, and signing in with the new password returned it to Sell.
 - **Android:** not run. The host load average was 108–180.
+
+**Voice selling with OpenAI transcription (28 September 2026, late evening):**
+
+- No Sarvam key exists, so recorded sales now go to OpenAI when only `OPENAI_API_KEY` is set. The model was chosen on six synthetic clips; see AI-COSTS.md.
+- **API path:** a clip uploaded through `/extractions` was transcribed ("Dolo 650 एक पत्ती, नहीं नहीं, दो पत्ती."), structured with the spoken correction applied (Dolo 650, 2 strips), and the audio file was deleted afterwards. The job records the speech provider and model.
+- **iPhone 17e simulator, end to end:**
+  - The app asked for the microphone, and a clip played through the Mac speaker was recorded (14 s including silence).
+  - The phone uploaded it using the fixed upload path; it was transcribed in 3.4 s as "Dolo 650 की दो पत्ती और एक Cetirizine की पत्ती दे दो."
+  - The review listed Dolo 650 and Cetirizine. Staff confirmed each batch (DOL2401, CET2401); the basket held 2 strips + 1 strip = ₹91.00. It was not billed.
+- **Defect found:** "Dolo 650" was flagged "Strength or form differs" against Dolo 650 mg, because the spoken strength had no unit. A bare spoken number now matches a catalogue strength starting with that number; a different number or unit is still flagged.
+- **Not established:** real voices, accents and crowd noise; brands the synthetic voice mispronounced ("Crocin" was heard as "Klaricid"/"Pracin"); Android recording.

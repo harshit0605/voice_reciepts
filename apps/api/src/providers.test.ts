@@ -5,7 +5,7 @@ vi.mock("@google/genai", () => ({
     models = { generateContent: generate };
   },
 }));
-import { extract, decodingSchema } from "./providers";
+import { extract, decodingSchema, speechProvider } from "./providers";
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -90,6 +90,11 @@ it("uses Sarvam codemix before structured voice extraction and never sends audio
 it("fails explicitly when the provider is not configured", async () => {
   vi.stubEnv("GEMINI_API_KEY", "");
   vi.stubEnv("OPENROUTER_API_KEY", "");
+  vi.stubEnv("SARVAM_API_KEY", "");
+  vi.stubEnv("OPENAI_API_KEY", "");
+  await expect(
+    extract("voice", Buffer.from("audio"), "audio/mp4"),
+  ).rejects.toThrow("Speech provider is not configured");
   await expect(
     extract("invoice", Buffer.from("x"), "image/png"),
   ).rejects.toThrow("not configured");
@@ -240,4 +245,62 @@ it("gives the model the draft's shape without value limits, which zod still enfo
   await expect(
     extract("invoice", Buffer.from("x"), "image/png"),
   ).rejects.toThrow();
+});
+const voiceDraft = {
+  items: [
+    {
+      name: "Dolo",
+      strength: "650",
+      form: null,
+      quantity: "2",
+      unit: "patti",
+      uncertain: false,
+    },
+  ],
+  warnings: [],
+};
+it("transcribes with OpenAI when Sarvam is not configured, asking for names in English letters", async () => {
+  vi.stubEnv("GEMINI_API_KEY", "test-only");
+  vi.stubEnv("SARVAM_API_KEY", "");
+  vi.stubEnv("OPENAI_API_KEY", "test-only");
+  const fetch = vi
+    .fn()
+    .mockResolvedValue(
+      new Response(JSON.stringify({ text: "Dolo 650 की दो पत्ती" })),
+    );
+  vi.stubGlobal("fetch", fetch);
+  generate.mockResolvedValue({ text: JSON.stringify(voiceDraft) });
+  const output = await extract("voice", Buffer.from("audio"), "audio/mp4");
+  const [url, init] = fetch.mock.calls[0];
+  expect(url).toBe("https://api.openai.com/v1/audio/transcriptions");
+  expect(init.headers.Authorization).toBe("Bearer test-only");
+  expect(init.body.get("model")).toBe("gpt-4o-transcribe");
+  expect(init.body.get("prompt")).toMatch(/English letters/);
+  expect(init.body.get("file").name).toBe("sale.m4a");
+  expect(output.transcript).toBe("Dolo 650 की दो पत्ती");
+  expect(output.draft).toEqual(voiceDraft);
+});
+it("prefers Sarvam when both speech keys are set, and reports which service heard it", async () => {
+  vi.stubEnv("SARVAM_API_KEY", "test-only");
+  vi.stubEnv("OPENAI_API_KEY", "test-only");
+  expect(speechProvider()).toEqual({ provider: "sarvam", model: "saaras:v3" });
+  vi.stubEnv("SARVAM_API_KEY", "");
+  vi.stubEnv("SPEECH_MODEL", "gpt-transcribe");
+  expect(speechProvider()).toEqual({
+    provider: "openai",
+    model: "gpt-transcribe",
+  });
+});
+it("treats an OpenAI error as a failed transcription without calling the structure model", async () => {
+  vi.stubEnv("GEMINI_API_KEY", "test-only");
+  vi.stubEnv("SARVAM_API_KEY", "");
+  vi.stubEnv("OPENAI_API_KEY", "test-only");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(new Response("{}", { status: 429 })),
+  );
+  await expect(
+    extract("voice", Buffer.from("audio"), "audio/mp4"),
+  ).rejects.toThrow("Speech provider returned 429");
+  expect(generate).not.toHaveBeenCalled();
 });

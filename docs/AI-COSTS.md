@@ -2,12 +2,12 @@
 
 Prices are vendor list prices, not measured cost or pharmacy accuracy. Taxes, provider billing granularity, retries, hosting, support and payment fees are extra.
 
-| Work                                | v1 approach                                                          | Pricing reference                                                                                                                                          |
-| ----------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Speech recognition                  | Existing Sarvam Saaras v3 codemix adapter; evaluate before changing  | [Sarvam](https://docs.sarvam.ai/api/getting-started/pricing): ₹30/hour of speech                                                                           |
-| Invoice reading + structured fields | One Gemini multimodal request, no separate OCR/LLM chain             | [Gemini 2.5 Flash-Lite](https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash-lite): $0.10/M text/image/video input tokens, $0.40/M output tokens |
-| Transcript structure                | Configurable small Gemini model; keep catalogue and arithmetic local | Same Flash-Lite rates for text                                                                                                                             |
-| Candidate decisions                 | Jev is a future experiment, not integrated                           | [OpenRouter Jev 1.13](https://openrouter.ai/typesafe/jev-1.13): $0.042/M input, $0 output                                                                  |
+| Work                                | v1 approach                                                                                                                  | Pricing reference                                                                                                                                          |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Speech recognition                  | Sarvam Saaras v3 codemix when configured; otherwise OpenAI `gpt-4o-transcribe` ($0.006/min, about ₹0.03 for a 5-second sale) | [Sarvam](https://docs.sarvam.ai/api/getting-started/pricing): ₹30/hour of speech                                                                           |
+| Invoice reading + structured fields | One Gemini multimodal request, no separate OCR/LLM chain                                                                     | [Gemini 2.5 Flash-Lite](https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash-lite): $0.10/M text/image/video input tokens, $0.40/M output tokens |
+| Transcript structure                | Configurable small Gemini model; keep catalogue and arithmetic local                                                         | Same Flash-Lite rates for text                                                                                                                             |
+| Candidate decisions                 | Jev is a future experiment, not integrated                                                                                   | [OpenRouter Jev 1.13](https://openrouter.ai/typesafe/jev-1.13): $0.042/M input, $0 output                                                                  |
 
 Jev accepts text and chooses from defined options. It does not generate arbitrary invoice text or item arrays. TypeSafe specifically advises keeping arithmetic in code and using a generative model for free-form extraction: [documented limitations](https://docs.typesafe.ai/model-jaggedness/jev-1.13). It may later rerank a short catalogue candidate list, with a none-of-these option and human confirmation. No claim about Hindi medicine matching is established.
 
@@ -33,6 +33,18 @@ Six images of Busy's public sample pharmacy invoice (three layouts, clean and as
 These are simple 3-line templates. A dense real distributor bill (20+ lines, free quantity, PTR) still needs measuring; expect more tokens and more errors. At 10 invoices a day, Flash is about ₹50 a month.
 
 Through OpenRouter, requests ask for providers that honour the JSON schema and do not keep data (`data_collection: "deny"`), send PDFs to the model itself rather than a paid OCR plugin, and turn thinking off.
+
+### Speech (28 September 2026)
+
+Six synthetic counter clips (macOS Hindi and Indian-English voices over shop noise, 3–6 s: Hindi–English mixes, an English list, a spoken correction), all transcribed with a short hint asking for medicine names in English letters:
+
+| Model                    | Result                                                                                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `gpt-4o-transcribe`      | Kept brand names and numbers in English letters inside Hindi ("Dolo 650 की दो पत्ती"). 5 of 6 fully right; misheard "Crocin" as "Klaricid"/"Pracin". Chosen. |
+| `gpt-transcribe` (newer) | Right on English; wrote Hindi-spoken names in Devanagari ("डालो 650", "सेटिरिजीन") even with the hint, which catalogue search cannot match.                  |
+| `gpt-4o-mini-transcribe` | Same Devanagari problem, plus garbled numbers ("छ सौ पचास").                                                                                                 |
+
+Every transcript is only a draft; staff choose the product and physical batch. Synthetic voices are cleaner than a real counter: real accents, crowd noise and fast speech still need a recorded sample set. `SPEECH_MODEL` changes the model without code.
 
 ## Controls implemented
 

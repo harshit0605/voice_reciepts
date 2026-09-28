@@ -4,27 +4,60 @@ import {
   invoiceDraftSchema as invoiceSchema,
   voiceDraftSchema as voiceSchema,
 } from "@counterwell/core";
-// REST contract: https://docs.sarvam.ai/api-reference/speech-to-text/transcribe
+const audioName = (mimeType: string) =>
+  `sale.${mimeType.includes("webm") ? "webm" : mimeType.includes("wav") ? "wav" : mimeType.includes("ogg") ? "ogg" : mimeType.includes("mpeg") ? "mp3" : "m4a"}`;
+// Spoken sales mix Hindi and English; catalogue matching needs names in English letters.
+const SPEECH_HINT =
+  "Pharmacy counter in India. Hindi and English are mixed. Write medicine names, strengths and numbers in English letters and digits, for example Dolo 650, Cetirizine, Pan 40, Azithral 500.";
+/** Which speech-to-text service a new recording goes to: Sarvam when configured, else OpenAI. */
+export function speechProvider() {
+  if (process.env.SARVAM_API_KEY)
+    return { provider: "sarvam", model: "saaras:v3" };
+  if (process.env.OPENAI_API_KEY)
+    return {
+      provider: "openai",
+      model: process.env.SPEECH_MODEL ?? "gpt-4o-transcribe",
+    };
+  return null;
+}
 export async function transcribe(bytes: Buffer, mimeType: string) {
-  const key = process.env.SARVAM_API_KEY;
-  if (!key) throw new Error("Speech provider is not configured");
+  const speech = speechProvider();
+  if (!speech) throw new Error("Speech provider is not configured");
   const form = new FormData();
   form.set(
     "file",
     new Blob([new Uint8Array(bytes)], { type: mimeType }),
-    `sale.${mimeType.includes("webm") ? "webm" : mimeType.includes("wav") ? "wav" : mimeType.includes("ogg") ? "ogg" : mimeType.includes("mpeg") ? "mp3" : "m4a"}`,
+    audioName(mimeType),
   );
-  form.set("model", "saaras:v3");
-  form.set("mode", "codemix");
-  const r = await fetch("https://api.sarvam.ai/speech-to-text", {
-    method: "POST",
-    headers: { "api-subscription-key": key },
-    body: form,
-    signal: AbortSignal.timeout(30000),
-  });
+  let r: Response;
+  if (speech.provider === "sarvam") {
+    // REST contract: https://docs.sarvam.ai/api-reference/speech-to-text/transcribe
+    form.set("model", speech.model);
+    form.set("mode", "codemix");
+    r = await fetch("https://api.sarvam.ai/speech-to-text", {
+      method: "POST",
+      headers: { "api-subscription-key": process.env.SARVAM_API_KEY! },
+      body: form,
+      signal: AbortSignal.timeout(30000),
+    });
+  } else {
+    // REST contract: https://developers.openai.com/api/docs/guides/speech-to-text
+    form.set("model", speech.model);
+    form.set("response_format", "json");
+    form.set("prompt", SPEECH_HINT);
+    r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: form,
+      signal: AbortSignal.timeout(30000),
+    });
+  }
   if (!r.ok) throw new Error(`Speech provider returned ${r.status}`);
-  const result = z.object({ transcript: z.string() }).parse(await r.json());
-  return result.transcript;
+  const result = z
+    .object({ transcript: z.string() })
+    .or(z.object({ text: z.string() }))
+    .parse(await r.json());
+  return "transcript" in result ? result.transcript : result.text;
 }
 export async function extract(
   kind: "voice" | "invoice",

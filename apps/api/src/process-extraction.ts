@@ -1,7 +1,12 @@
 import { readFile, unlink } from "node:fs/promises";
 import { pool, readState } from "@counterwell/db";
 import { parseExactSaleText } from "@counterwell/core";
-import { extract, transcribe, structureTranscript } from "./providers";
+import {
+  extract,
+  transcribe,
+  structureTranscript,
+  speechProvider,
+} from "./providers";
 export type ExtractionJob = {
   id: string;
   business_id: string;
@@ -35,9 +40,10 @@ export async function processClaimedExtraction(
           await readFile(job.input.filename),
           job.input.mimeType,
         );
+        // Which service and model heard it, for cost reconciliation.
         await pool.query(
           "UPDATE jobs SET input=input || $2::jsonb WHERE id=$1",
-          [job.id, JSON.stringify({ transcript })],
+          [job.id, JSON.stringify({ transcript, speech: speechProvider() })],
         );
         job.input.transcript = transcript;
         // Structure retries now use the persisted transcript, not another STT call.

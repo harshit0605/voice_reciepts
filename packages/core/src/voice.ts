@@ -114,6 +114,17 @@ export function spokenQuantity(value: string): string {
   const n = numbers[v] ?? v;
   return /^(?:[1-9]\d{0,5}|0)(?:\.\d{1,3})?$/.test(n) && Number(n) > 0 ? n : "";
 }
+/**
+ * Spoken strengths often drop the unit ("Dolo 650" for 650 mg). A bare number agrees with a
+ * catalogue strength that starts with that number; anything else must match exactly.
+ */
+export function sameStrength(spoken: string, catalogue: string) {
+  const heard = normalVoice(spoken);
+  if (heard === normalVoice(catalogue)) return true;
+  if (!/^\d+(?:\.\d+)?$/.test(heard)) return false;
+  const first = catalogue.match(/\d+(?:\.\d+)?/)?.[0];
+  return first !== undefined && Number(first) === Number(heard);
+}
 export function voiceCandidates(
   products: Product[],
   item: SpokenItem,
@@ -140,8 +151,7 @@ export function voiceCandidates(
                   ? 35
                   : 0;
       const strengthConflict =
-        !!item.strength &&
-        normalVoice(item.strength) !== normalVoice(p.strength);
+        !!item.strength && !sameStrength(item.strength, p.strength);
       const formConflict =
         !!item.form && normalVoice(item.form) !== normalVoice(p.form);
       if (strengthConflict) score -= 30;

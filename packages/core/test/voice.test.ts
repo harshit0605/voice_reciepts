@@ -5,6 +5,7 @@ import {
   spokenQuantity,
   parseExactSaleText,
   voiceCandidates,
+  sameStrength,
   emptyVoice,
   applyVoiceResult,
   consumeVoiceItem,
@@ -78,6 +79,23 @@ describe("Voice-assisted entry", () => {
     expect(
       voiceCandidates(products, { ...item, name: "nonexistent medicine" }),
     ).toEqual([]);
+  });
+  it("treats a spoken strength without its unit as the same strength, and still flags a different one", () => {
+    expect(sameStrength("650", "650 mg")).toBe(true);
+    expect(sameStrength("६५०", "650 mg")).toBe(true);
+    expect(sameStrength("10", "10% · 100 ml")).toBe(true);
+    expect(sameStrength("500", "650 mg")).toBe(false);
+    expect(sameStrength("650 ml", "650 mg")).toBe(false);
+    expect(sameStrength("65", "650 mg")).toBe(false);
+    const [top] = voiceCandidates(
+      [
+        state.products.dolo,
+        { ...state.products.dolo, id: "dolo500", strength: "500 mg" },
+      ],
+      { ...item, strength: "650" },
+    );
+    expect(top.product.id).toBe("dolo");
+    expect(top.strengthConflict).toBe(false);
   });
   it("imports an API job only once, preserving pending items", () => {
     let id = 0;
