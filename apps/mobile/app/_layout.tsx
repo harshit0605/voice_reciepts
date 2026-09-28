@@ -9,7 +9,9 @@ import {
   DMSans_600SemiBold,
 } from "@expo-google-fonts/dm-sans";
 export default function Layout() {
-  useFonts({ DMSans_400Regular, DMSans_600SemiBold });
+  // Text laid out before the font arrives keeps the fallback font's width on iOS and gets clipped.
+  const [loaded, failed] = useFonts({ DMSans_400Regular, DMSans_600SemiBold });
+  if (!loaded && !failed) return null;
   return (
     <SafeAreaProvider>
       <SessionProvider>
