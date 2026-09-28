@@ -16,6 +16,9 @@ import {
   type Operation,
   type Actor,
   type Invoice,
+  refundQuote,
+  returnable,
+  returnBaseQuantity,
 } from "../src";
 const now = "2026-09-23T09:00:00.000Z";
 const owner: Actor = {
@@ -505,18 +508,169 @@ describe("retail ledger", () => {
   it("rejects returns larger than the original quantity", () => {
     let s = apply(order(), checkout());
     const i = Object.values(s.invoices)[0];
+    // Refused when asked, so the owner never sees a return that cannot be paid out.
+    expect(() =>
+      approve(s, "refund", {
+        invoiceId: i.id,
+        lines: [{ index: 0, quantity: "11" }],
+      }),
+    ).toThrow("exceeds");
+  });
+  it("prices a return from what was paid and says the exact refund when the amount is wrong", () => {
+    let s = apply(order(), checkout());
+    const i = Object.values(s.invoices)[0];
+    // 10 tablets for ₹28: returning 3 then 7 pays ₹8.40 then ₹19.60, never more than the line.
+    const first = refundQuote(s, i, [{ index: 0, quantity: "3" }]);
+    expect(first).toMatchObject({ totalPaise: 840, payablePaise: 840 });
     s = approve(s, "refund", {
       invoiceId: i.id,
-      lines: [{ index: 0, quantity: "11" }],
+      lines: [{ index: 0, quantity: "3" }],
     });
     expect(() =>
       apply(s, {
         type: "refund.execute",
         approvalId: "approval-1",
-        cashPaise: 3080,
+        cashPaise: 900,
         upiPaise: 0,
       }),
-    ).toThrow("exceeds");
+    ).toThrow("Refund ₹8.40");
+    s = apply(s, {
+      type: "refund.execute",
+      approvalId: "approval-1",
+      cashPaise: 840,
+      upiPaise: 0,
+    });
+    const rest = refundQuote(s, i, [{ index: 0, quantity: "7" }]);
+    expect(rest.totalPaise + first.totalPaise).toBe(i.lines[0].netPaise);
+    expect(returnable(s, i)[0].remaining.toFixed()).toBe("7");
+  });
+  it("allows one open return request per bill", () => {
+    let s = apply(order(), checkout());
+    const i = Object.values(s.invoices)[0];
+    s = approve(s, "refund", {
+      invoiceId: i.id,
+      lines: [{ index: 0, quantity: "2" }],
+    });
+    expect(() =>
+      apply(s, {
+        type: "approval.request",
+        approvalId: "approval-2",
+        kind: "refund",
+        payload: { invoiceId: i.id, lines: [{ index: 0, quantity: "2" }] },
+        reason: "Asked twice",
+      }),
+    ).toThrow("already waiting");
+  });
+  it("lets the employee who asked hand back an approved refund, and nobody else", () => {
+    let s = apply(order(), checkout());
+    s.members["other-employee"] = {
+      ...s.members[employee.id],
+      id: "other-employee",
+    };
+    const i = Object.values(s.invoices)[0];
+    s = apply(
+      s,
+      {
+        type: "approval.request",
+        approvalId: "return-1",
+        kind: "refund",
+        payload: { invoiceId: i.id, lines: [{ index: 0, quantity: "10" }] },
+        reason: "Doctor changed the prescription",
+      },
+      employee,
+    );
+    const refund: Operation = {
+      type: "refund.execute",
+      approvalId: "return-1",
+      cashPaise: 2800,
+      upiPaise: 0,
+    };
+    expect(() => apply(s, refund, employee)).toThrow("unused owner approval");
+    s = apply(s, {
+      type: "approval.decide",
+      approvalId: "return-1",
+      approve: true,
+    });
+    expect(() =>
+      apply(s, refund, { ...employee, id: "other-employee" }),
+    ).toThrow("Owner approval required");
+    expect(() => apply(s, refund, { ...employee, canCollect: false })).toThrow(
+      "Owner approval required",
+    );
+    s = apply(s, refund, employee);
+    expect(Object.values(s.refunds)[0].executedBy).toBe(employee.id);
+    // The employee's phone sees the return on a bill it can see, so it cannot offer it again.
+    const view = employeeView(s, employee.id);
+    expect(Object.keys(view.refunds)).toEqual([]);
+    const own = employeeView(
+      { ...s, invoices: { [i.id]: { ...i, collectorId: employee.id } } },
+      employee.id,
+    );
+    expect(Object.keys(own.refunds)).toHaveLength(1);
+    expect(returnable(own, own.invoices[i.id])[0].remaining.toFixed()).toBe(
+      "0",
+    );
+    expect(totals(s).cashCollectedPaise).toBe(0);
+  });
+  it("cancels what the customer still owes before handing back money", () => {
+    let s = demoState(undefined, undefined, undefined, now);
+    s = apply(s, {
+      type: "order.save",
+      orderId: "order-1",
+      version: 0,
+      lines: [line],
+      customerId: "customer-1",
+      counterId: "counter-1",
+    });
+    s = approve(s, "credit", {
+      orderId: "order-1",
+      orderVersion: 1,
+      customerId: "customer-1",
+      amountPaise: 1800,
+    });
+    s = apply(
+      s,
+      checkout({
+        cashPaise: 1000,
+        creditPaise: 1800,
+        creditApprovalId: "approval-1",
+      }),
+    );
+    const i = Object.values(s.invoices)[0];
+    expect(refundQuote(s, i, [{ index: 0, quantity: "10" }])).toMatchObject({
+      totalPaise: 2800,
+      creditReductionPaise: 1800,
+      payablePaise: 1000,
+    });
+    s = approve(
+      s,
+      "refund",
+      { invoiceId: i.id, lines: [{ index: 0, quantity: "10" }] },
+      "approval-2",
+    );
+    expect(() =>
+      apply(s, {
+        type: "refund.execute",
+        approvalId: "approval-2",
+        cashPaise: 2800,
+        upiPaise: 0,
+      }),
+    ).toThrow("₹18.00 is taken off what the customer owes");
+    s = apply(s, {
+      type: "refund.execute",
+      approvalId: "approval-2",
+      cashPaise: 1000,
+      upiPaise: 0,
+    });
+    expect(balance(s, "customer-1")).toBe(0);
+  });
+  it("converts a returned strip to tablets and refuses part of a tablet", () => {
+    const s = apply(order(), checkout());
+    const i = Object.values(s.invoices)[0];
+    expect(returnBaseQuantity(s, i, 0, "1", "strip")).toBe("10");
+    expect(returnBaseQuantity(s, i, 0, "4", "tablet")).toBe("4");
+    expect(() => returnBaseQuantity(s, i, 0, "0.5", "tablet")).toThrow("whole");
+    expect(() => returnBaseQuantity(s, i, 0, "1", "bottle")).toThrow("unit");
   });
   it("releases quarantined returns only through a stock approval", () => {
     let s = demoState(undefined, undefined, undefined, now);

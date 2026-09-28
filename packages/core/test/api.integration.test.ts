@@ -665,6 +665,118 @@ describe.skipIf(!enabled)("PostgreSQL and authenticated API", () => {
     } as Operation);
     expect(duplicate.status).toBe(409);
   });
+  it("runs credit, return and refund end to end as an employee, with the owner deciding", async () => {
+    const employeeDevice = randomUUID();
+    const registered = await req(
+      "/api/v1/devices/register",
+      { id: employeeDevice, name: "Cashier phone", counterId: "counter-1" },
+      employeeCookie,
+    );
+    expect(registered.status).toBe(200);
+    const asEmployee = (operation: Operation) =>
+      req("/api/v1/commands", make(operation), employeeCookie);
+    const orderId = randomUUID();
+    expect(
+      (
+        await asEmployee({
+          type: "order.save",
+          orderId,
+          version: 0,
+          lines: [
+            {
+              batchId: "dolo-b1",
+              quantity: "1",
+              unit: "tablet",
+              confirmed: true,
+            },
+          ],
+          customerId: "customer-1",
+          counterId: "counter-1",
+        })
+      ).status,
+    ).toBe(200);
+    const sale = {
+      type: "checkout",
+      orderId,
+      version: 1,
+      deviceId: employeeDevice,
+      sequence: 1,
+      cashPaise: 100,
+      upiPaise: 0,
+      creditPaise: 180,
+      creditApprovalId: "credit-approval",
+      discountPaise: 0,
+    } as Operation;
+    expect((await asEmployee(sale)).status).toBe(403);
+    expect(
+      (
+        await asEmployee({
+          type: "approval.request",
+          approvalId: "credit-approval",
+          kind: "credit",
+          payload: {
+            orderId,
+            orderVersion: 1,
+            customerId: "customer-1",
+            amountPaise: 180,
+          },
+          reason: "Regular customer",
+        })
+      ).status,
+    ).toBe(200);
+    // The employee cannot approve their own request.
+    expect(
+      (
+        await asEmployee({
+          type: "approval.decide",
+          approvalId: "credit-approval",
+          approve: true,
+        })
+      ).status,
+    ).toBe(403);
+    await command({
+      type: "approval.decide",
+      approvalId: "credit-approval",
+      approve: true,
+    });
+    const billed = await asEmployee(sale);
+    expect(billed.status).toBe(200);
+    const invoiceId = billed.data.result.id;
+    const returnRequest = (approvalId: string) =>
+      asEmployee({
+        type: "approval.request",
+        approvalId,
+        kind: "refund",
+        payload: { invoiceId, lines: [{ index: 0, quantity: "1" }] },
+        reason: "Doctor changed the medicine",
+      });
+    expect((await returnRequest("return-approval")).status).toBe(200);
+    expect((await returnRequest("return-again")).status).toBe(409);
+    await command({
+      type: "approval.decide",
+      approvalId: "return-approval",
+      approve: true,
+    });
+    const refund = await asEmployee({
+      type: "refund.execute",
+      approvalId: "return-approval",
+      cashPaise: 100,
+      upiPaise: 0,
+    });
+    expect(refund.status).toBe(200);
+    expect(refund.data.result).toMatchObject({
+      totalPaise: 280,
+      creditReductionPaise: 180,
+      cashRefundPaise: 100,
+      executedBy: employeeId,
+    });
+    const state = (await req("/api/v1/state")).data as State;
+    const owed = Object.values(state.ledger)
+      .filter((l) => l.invoiceId === invoiceId)
+      .reduce((n, l) => n + l.amountPaise, 0);
+    expect(owed).toBe(0);
+    expect(state.batches["dolo-b1"].quarantined).not.toBe("0");
+  });
   it("imports a full catalogue chunk atomically, owner-only, with a small stored receipt", async () => {
     const products = Array.from({ length: 250 }, (_, i) => ({
       id: `imp-${randomUUID()}`,
@@ -805,7 +917,7 @@ describe.skipIf(!enabled)("PostgreSQL and authenticated API", () => {
   });
   it("syncs only changed records and redacts employee deltas", async () => {
     const before = await db.readState(businessId);
-    await order();
+    const ownerOrder = await order();
     const owner = await req(`/api/v1/sync?since=${before.revision}`);
     expect(owner.data.revision).toBeGreaterThan(before.revision);
     expect(Object.keys(owner.data.changes.orders)).toHaveLength(1);
@@ -816,8 +928,14 @@ describe.skipIf(!enabled)("PostgreSQL and authenticated API", () => {
       employeeCookie,
     );
     expect(employee.data.changes.batches["dolo-b1"].costPaise).toBeUndefined();
+    // The owner's orders are hidden; only orders the employee is part of come through.
+    expect(employee.data.changes.orders[ownerOrder]).toBeNull();
     expect(
-      Object.values(employee.data.changes.orders).every((v) => v === null),
+      Object.values(employee.data.changes.orders).every(
+        (v: any) =>
+          v === null ||
+          [v.collectorId, v.dispenserId, v.offeredTo].includes(employeeId),
+      ),
     ).toBe(true);
     const unchanged = await req(`/api/v1/sync?since=${owner.data.revision}`);
     expect(unchanged.data.unchanged).toBe(true);

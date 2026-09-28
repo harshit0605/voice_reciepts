@@ -8,6 +8,7 @@ import {
   type Approval,
   type Payment,
 } from "./types";
+import { refundQuote, openRefundRequest } from "./returns";
 import {
   D,
   quote,
@@ -17,7 +18,9 @@ import {
   totals,
   indiaDate,
   round,
+  rupees,
 } from "./money";
+type ReturnLineInput = { index: number; quantity: string };
 export class DomainError extends Error {
   constructor(
     public code: string,
@@ -181,6 +184,13 @@ export function execute(
       actorId: actor.id,
       occurredAt: cmd.occurredAt,
     };
+  };
+  const quoteRefund = (invoice: Invoice, lines: ReturnLineInput[]) => {
+    try {
+      return refundQuote(s, invoice, lines);
+    } catch (e) {
+      throw new DomainError("INVALID", (e as Error).message);
+    }
   };
   let result: unknown = { ok: true };
   switch (op.type) {
@@ -596,11 +606,18 @@ export function execute(
           "FORBIDDEN",
         );
       }
-      if (op.kind === "refund")
+      if (op.kind === "refund") {
+        const p = payload as { invoiceId: string; lines: ReturnLineInput[] };
+        const invoice = s.invoices[p.invoiceId];
+        ensure(invoice, "Invoice missing");
+        // Checked now, so the owner is never asked to approve a return that cannot be paid out.
+        quoteRefund(invoice, p.lines);
         ensure(
-          s.invoices[(payload as { invoiceId: string }).invoiceId],
-          "Invoice missing",
+          !values(s.approvals).some((a) => openRefundRequest(a, invoice.id)),
+          "A return for this bill is already waiting for the owner",
+          "CONFLICT",
         );
+      }
       if (op.kind === "stock")
         ensure(
           s.batches[(payload as { batchId: string }).batchId],
@@ -629,52 +646,33 @@ export function execute(
       break;
     }
     case "refund.execute": {
-      owner();
+      // The owner, or the employee who asked, hands the money back once the owner has approved.
+      const request = s.approvals[op.approvalId];
+      ensure(
+        actor.role === "owner" ||
+          (request?.requestedBy === actor.id && actor.canCollect),
+        "Owner approval required",
+        "FORBIDDEN",
+      );
       const a = useApproval(op.approvalId, "refund");
       const p = approvalSchemas.refund.parse(a.payload);
       const invoice = s.invoices[p.invoiceId];
       ensure(invoice, "Invoice missing");
-      const seen = new Set<number>();
-      let total = 0;
-      for (const l of p.lines) {
-        ensure(!seen.has(l.index), "Duplicate return line");
-        seen.add(l.index);
-        const original = invoice.lines[l.index];
-        ensure(original, "Return line missing");
-        const returned = values(s.refunds)
-          .filter((r) => r.invoiceId === invoice.id)
-          .flatMap((r) => r.lines)
-          .filter((r) => r.index === l.index)
-          .reduce((n, r) => n.plus(r.quantity), D(0));
-        ensure(
-          returned.plus(l.quantity).lte(original.baseQuantity),
-          "Return exceeds quantity sold",
-        );
-        const previousAmount = round(
-          D(original.netPaise).mul(returned).div(original.baseQuantity),
-        );
-        const afterAmount = round(
-          D(original.netPaise)
-            .mul(returned.plus(l.quantity))
-            .div(original.baseQuantity),
-        );
-        total += afterAmount - previousAmount;
+      const quoted = quoteRefund(invoice, p.lines);
+      for (const l of p.lines)
         move(
-          original.batchId,
+          invoice.lines[l.index].batchId,
           "0",
           "return",
           invoice.id,
           "Returned stock quarantined",
           l.quantity,
         );
-      }
-      const due = values(s.ledger)
-        .filter((l) => l.invoiceId === invoice.id)
-        .reduce((n, l) => n + l.amountPaise, 0);
-      const reduction = Math.min(Math.max(0, due), total);
+      const total = quoted.totalPaise,
+        reduction = quoted.creditReductionPaise;
       ensure(
-        op.cashPaise + op.upiPaise === total - reduction,
-        "Refund must first reduce unpaid invoice credit",
+        op.cashPaise + op.upiPaise === quoted.payablePaise,
+        `Refund ${rupees(quoted.payablePaise)}${reduction ? ` (${rupees(reduction)} is taken off what the customer owes)` : ""}`,
       );
       if (reduction) {
         const id = `cmd:${cmd.id}:credit-return`;
@@ -1198,6 +1196,11 @@ export function employeeView(state: State, userId: string): State {
       .map((d) => [d.id, d]),
   );
   s.stock = {};
-  s.refunds = {};
+  // Returns on bills this employee can see, so the phone knows what already came back.
+  s.refunds = Object.fromEntries(
+    values(s.refunds)
+      .filter((r) => s.invoices[r.invoiceId])
+      .map((r) => [r.id, r]),
+  );
   return s;
 }
