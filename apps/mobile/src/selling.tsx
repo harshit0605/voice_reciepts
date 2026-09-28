@@ -1104,6 +1104,17 @@ export function ReceiptSheet({
     [printStatus, setPrintStatus] = useState(""),
     [paperChecked, setPaperChecked] = useState(false),
     [reprintReason, setReprintReason] = useState("");
+  // The sheet stays mounted; print state belongs to one bill and must not carry over to the next.
+  const shown = useRef(invoice?.id);
+  shown.current = invoice?.id;
+  useEffect(() => {
+    setError("");
+    setBusy(false);
+    setPrintId("");
+    setPrintStatus("");
+    setPaperChecked(false);
+    setReprintReason("");
+  }, [invoice?.id]);
   async function share() {
     if (!invoice) return;
     try {
@@ -1136,6 +1147,7 @@ export function ReceiptSheet({
         signal: AbortSignal.timeout(10000),
       });
       const result = await r.json();
+      if (shown.current !== invoice.id) return;
       if (!r.ok) throw new Error(result.error);
       setPrintId(result.id);
       setPrintStatus(result.status);
@@ -1166,6 +1178,7 @@ export function ReceiptSheet({
         },
       );
       const result = await r.json();
+      if (shown.current !== invoice.id) return;
       if (!r.ok) throw new Error(result.error);
       setPrintId(result.id);
       setPrintStatus(result.status);

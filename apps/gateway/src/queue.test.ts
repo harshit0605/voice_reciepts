@@ -92,4 +92,36 @@ describe("durable gateway", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+  it("treats the synced copy of an offline bill as the same print", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "counterwell-"));
+    try {
+      const q = new GatewayQueue(dir);
+      const phone = invoice();
+      const job: PrintJob = {
+        id: phone.id,
+        invoiceId: phone.id,
+        businessId: "pilot-pharmacy",
+        actorId: "demo-owner",
+        invoice: phone,
+        status: "queued",
+        createdAt: new Date().toISOString(),
+      };
+      q.add(job);
+      const synced: Invoice = {
+        ...phone,
+        postedAt: "2026-09-24T10:00:00.000Z",
+        business: { ...phone.business, gatewayUrl: "http://10.0.0.9:4101" },
+        lines: phone.lines.map(({ costPaise, ...l }) => l as typeof l),
+      };
+      expect(q.add({ ...job, invoice: synced }).invoice.postedAt).toBe(
+        phone.postedAt,
+      );
+      expect(() =>
+        q.add({ ...job, invoice: { ...synced, totalPaise: 1 } }),
+      ).toThrow("different invoice");
+      q.db.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

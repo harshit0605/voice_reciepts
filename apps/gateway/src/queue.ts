@@ -13,6 +13,20 @@ export type PrintJob = {
   error?: string;
   reprintOf?: string;
 };
+/**
+ * What the paper bill shows. A synced offline bill differs from the phone's
+ * copy only in server posting time, unprinted settings and redacted costs, so
+ * those must not turn a reprint into an ID collision.
+ */
+export function printedBill(invoice: Invoice) {
+  const { postedAt, business, lines, ...bill } = invoice;
+  const { name, address, gstin, drugLicence } = business;
+  return JSON.stringify({
+    ...bill,
+    business: { name, address, gstin, drugLicence },
+    lines: lines.map(({ costPaise, ...line }) => line),
+  });
+}
 export class GatewayQueue {
   readonly db: DatabaseSync;
   constructor(directory: string) {
@@ -49,7 +63,7 @@ export class GatewayQueue {
   add(job: PrintJob) {
     const existing = this.get(job.id);
     if (existing) {
-      if (JSON.stringify(existing.invoice) !== JSON.stringify(job.invoice))
+      if (printedBill(existing.invoice) !== printedBill(job.invoice))
         throw new Error("Print ID reused with a different invoice");
       return existing;
     }
