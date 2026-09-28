@@ -77,3 +77,35 @@ Strict TypeScript and 110 tests across ten suites passed with the PostgreSQL/API
 **Android emulator (Medium Phone, API 36):** the existing debug APK installed and loaded the current JS through `adb reverse` (login screen rendered correctly). Interactive testing was blocked: the host load average reached 73 from unrelated jobs, and the app hit input-dispatch ANRs ("Application does not have a focused window"). Another installed app also opened a system "display over other apps" page mid-test; it was left untouched. **No Android billing evidence yet.**
 
 Not exercised: camera scanning on a device (the simulator has no camera and the browser pane blocks it; scan logic is unit-tested), PDF sharing, gateway printing, and "Set aside".
+
+## Catalogue import and Android checks (28 September 2026)
+
+Strict TypeScript and 129 tests across eleven suites passed with PostgreSQL. New coverage:
+
+- file decoding (UTF-8/BOM, UTF-16, Windows-1252), CSV/TSV/pasted rows and `.xlsx` sheets;
+- header detection, column guessing and pack-to-unit conversion;
+- new/existing/repeat/error planning, including barcode matching, default GST, scientific-notation barcodes and form-aware matching;
+- word search;
+- `catalogue.import` owner-only and all-or-nothing, with a hashed receipt recognised on retry and a 250-product API chunk.
+
+Test data: a synthetic 2,102-row export (`SYNTHETIC MEDICAL STORE` title rows; header on row 4) produced 1,679 new, 1 existing, 420 repeated and 2 error rows. It was generated for this check and is not a real distributor list.
+
+**Web demo:** all 1,679 imported in 0.5 s. Sell showed "Showing 50 of 1,685" and word search worked. "Add as new medicine" prefilled from the sample invoice line and, once saved, mapped the line.
+
+**iPhone 17 Pro simulator (local API):**
+
+- Picked the `.xlsx` through the iOS Files picker; header and columns were detected.
+- Imported 1,679 products in 9 commands in about 7 s. PostgreSQL then held 1,685 distinct products and 9 hashed receipts (the command table is 7.9 KB).
+- After a cold start, Sell listed in-stock items first with "Showing 50 of 1,685" and found `NIMU 350 CAP` by typed words. Its Add is disabled until stock is counted.
+
+**Android emulator (Medium Phone API 36, existing debug APK, JS from Metro, host load about 17):**
+
+- Signed in and loaded all 1,685 products; Hindi and English Sell screens rendered.
+- The basket → checkout → receipt chain worked, with quick cash amounts and change ("Return to customer ₹6.50").
+- **Native encrypted cash sale:** bill `2627-003-000001`, synced once. The server has one invoice, one ₹3.50 cash payment, and Cetirizine stock went 140 → 139.
+- Picking the same `.xlsx` through the Android document picker read it correctly (New 0 / Already added 2,100) in about 5 s on the emulator.
+
+**Evidence boundaries:**
+
+- The Android no-response lock, "Set aside", PDF sharing, printing and camera scanning were not exercised on devices.
+- `uiautomator` crashed several times when inspections overlapped, and taps were briefly ignored during that time. This is test-tool noise, not an app crash, but it should be re-checked on a physical phone.

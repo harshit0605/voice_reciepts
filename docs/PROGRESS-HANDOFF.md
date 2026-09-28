@@ -1,6 +1,6 @@
 # Counterwell — development progress and agent handoff
 
-Snapshot: 28 September 2026, after the manual/barcode checkout and handoff pass (simulator-verified on iOS). Read alongside the user's original **Pharmacy-first retail operations app** plan. This document describes the current implementation and evidence; the plan describes the intended product. Local source and a fresh inspection take precedence if development has continued since this snapshot.
+Snapshot: 28 September 2026, after the checkout pass and catalogue import (verified on iOS simulator and Android emulator). Read alongside the user's original **Pharmacy-first retail operations app** plan. This document describes the current implementation and evidence; the plan describes the intended product. Local source and a fresh inspection take precedence if development has continued since this snapshot.
 
 ## Start here
 
@@ -8,7 +8,8 @@ Snapshot: 28 September 2026, after the manual/barcode checkout and handoff pass 
 - An implemented pilot monorepo already exists. Continue it; do not scaffold a replacement app.
 - **Git was initialised on 23 September 2026** (local `main`, no remote). The first commit is the pre-existing implementation; later commits are the checkout pass. `.data/`, `.env` and generated native projects stay ignored. Preserve the private local data.
 - Completed passes: **supplier-invoice receiving**, then **voice-assisted selling**. Their implementation and local checks are complete, but their live-provider and physical-device acceptance is not.
-- **Checkout/handoff pass: done except Android device checks** (see "Checkout pass, part 2"). Next: repeat the device checks on Android, then payments/credit/returns.
+- **Code is on GitHub:** `git@github.com:harshit0605/voice_reciepts.git` (`main`, **public repository**). Secrets and `.data/` are git-ignored and were scanned before the first push.
+- **Checkout/handoff pass and catalogue import: done**, device-checked on iOS and Android (see "Catalogue import"). Next: opening stock counts for imported products, then payments/credit/returns.
 - No production deployment, store cutover, paid-provider evaluation, TestFlight upload or Play internal release has happened.
 
 Suggested reading order: this document → [README](../README.md) → [architecture/API](ARCHITECTURE.md) → [verification evidence](VERIFICATION.md) → [feature sequence](FEATURE-PASSES.md) → [AI costs](AI-COSTS.md) → [pilot gates](PILOT.md).
@@ -211,7 +212,7 @@ Each item is its own commit on `main`:
 
 Still open in this pass:
 
-- Android: the emulator run was blocked by host load (see VERIFICATION.md). Rebuild the debug APK and repeat the iOS checks there.
+- Android: done on 28 September (see VERIFICATION.md). The native cash sale synced once; the no-response lock was checked on iOS only.
 - A basket is locked while its own payment has no answer; "Set aside" is covered by tests but was not exercised on a device.
 - Tap count could drop further with a one-tap "exact cash" path and search-as-you-type add; measure with staff first.
 - iOS `Share PDF` and the gateway print path were not exercised (no printer configured).
@@ -228,6 +229,27 @@ Original checklist for the pass:
 
 Longer-term blockers before selling as a primary system remain: real shop configuration and recordkeeping review; measured provider quality/cost; physical multi-phone recovery and hardware tests; secure hosting/monitoring/backups; signing/distribution; realistic data-volume performance; and production dependency/security review. The gateway currently uses HMAC verification on a trusted appliance; consider asymmetric verification before distributing appliances to unrelated operators.
 
+## Catalogue import (done, 28 September 2026)
+
+Main files: `packages/core/src/catalogue.ts` (pure, tested), `apps/mobile/src/catalogue-import.tsx`, `apps/mobile/src/product-form.tsx`, and the `catalogue.import` operation in `contracts.ts` and `engine.ts`.
+
+- **Where:** Inventory → Import catalogue (owner only).
+- **Input:** choose an `.xlsx` or CSV/TSV file (≤15 MB, ≤20,000 rows), or paste spreadsheet rows. Old `.xls` files are refused with a "save as .xlsx or CSV" message. `.xlsx` is read with `fflate` (MIT, no dependencies).
+- **Columns:** the header is found below report titles and columns are guessed from common Indian pharmacy export names. The owner can move the header row and re-map any column (Hindi labels included).
+- **Units:** pack text (`10's`, `1x15`, `10x10`, `100ML`) becomes the base unit plus strip/box conversions. Unknown forms are sold per piece, with a warning.
+- **Review:** New / Check / Already added / Repeated / Errors, with spreadsheet row numbers and reasons.
+  - Matching uses brand, strength and form ("DOLO 650 TAB" = "Dolo" + "650 mg" tablet; a syrup and a suspension stay different) and barcodes.
+  - The same medicine with a different pack is skipped with a warning, never merged.
+  - GST comes only from the file, or from an explicit default that is flagged.
+  - Barcodes in Excel scientific notation are dropped with a warning.
+  - No schedule column means OTC, with a warning to mark H/H1 afterwards.
+- **Saving:** chunks of 200 via `catalogue.import` (≤250 per command, owner-only, all-or-nothing, never changes existing products). An interrupted import can be re-run; it sends only what is left. Command records larger than 4 KB now store a hash instead of the full body; `sameFingerprint` accepts old full records.
+- **Unmatched invoice lines:** receiving offers "Add as new medicine", prefilled from the invoice line; saving maps the line.
+- **Large lists:** Sell and Inventory group batches once and render 50 products (in stock first). Search matches every typed word.
+- **Not done:** stock quantities are not imported (opening counts stay per batch and physical). Selling/MRP prices come with stock, not the catalogue.
+
+Next: a fast opening-count flow for thousands of imported products (search, scan, count, expiry, price per batch), then payments/credit/returns.
+
 ## Suggested prompt for the next agent
 
-> Continue development of Counterwell in this existing workspace. Read my original plan and docs/PROGRESS-HANDOFF.md first, then inspect the actual code. Supplier receiving and voice-assisted selling have been implemented and locally refined; do not rebuild them. Start the next pass on manual/barcode checkout and cashier handoff, improving the phone UI and validating backend permissions, concurrency, idempotency and recovery end to end. Preserve all existing files and local data, keep AI costs bounded and manual paths usable, and distinguish local/mock checks from real-provider and physical-device acceptance. Update the progress and verification documents when finished.
+> Continue development of Counterwell in this existing workspace (git remote `origin`, branch `main`). Read my original plan and docs/PROGRESS-HANDOFF.md first, then inspect the actual code. Receiving, voice selling, checkout/handoff and catalogue import are implemented and device-checked on simulators; do not rebuild them. Next, build a fast opening-stock count flow for imported products, then the payments/credit/returns pass. Preserve local data, keep AI costs bounded and manual paths usable, and distinguish simulator checks from physical-device and real-shop acceptance. Update the progress and verification documents when finished.
