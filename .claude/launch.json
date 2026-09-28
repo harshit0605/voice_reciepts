@@ -4,20 +4,42 @@
     {
       "name": "api",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:api"],
+      "runtimeArgs": [
+        "run",
+        "dev:api"
+      ],
       "port": 4100
     },
     {
       "name": "gateway",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:gateway"],
+      "runtimeArgs": [
+        "run",
+        "dev:gateway"
+      ],
       "port": 4101
     },
     {
       "name": "mobile",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "web", "-w", "@counterwell/mobile"],
+      "runtimeArgs": [
+        "run",
+        "web",
+        "-w",
+        "@counterwell/mobile"
+      ],
       "port": 8081
+    },
+    {
+      "name": "gateway-test-printer",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "PRINTER_HOST=127.0.0.1:8090",
+        "npm",
+        "run",
+        "dev:gateway"
+      ],
+      "port": 4101
     }
   ]
 }

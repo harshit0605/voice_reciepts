@@ -1,13 +1,24 @@
 import React, { useMemo, useRef, useState } from "react";
 import { View, Pressable } from "react-native";
 import { useSession, uid } from "./session";
-import { Txt, Button, Field, Row, Chip, Badge, colors, styles } from "./ui";
+import {
+  Txt,
+  Button,
+  Field,
+  Row,
+  Chip,
+  Badge,
+  colors,
+  styles,
+  useSheet,
+} from "./ui";
 import { useBarcodeScanner, CAMERA_OFF } from "./scanner";
 import {
   openingCount,
   packUnit,
   matchScan,
   matchesSearch,
+  bySearch,
   groupBatches,
   indiaDate,
   rupees,
@@ -201,6 +212,7 @@ export function StockCount() {
     ),
     [notice, setNotice] = useState("");
   const today = indiaDate(new Date().toISOString());
+  const sheet = useSheet();
   const byProduct = useMemo(() => groupBatches(state.batches), [state.batches]);
   const active = Object.values(state.products).filter((p) => p.active);
   const counted = active.filter((p) => byProduct.has(p.id)).length;
@@ -211,7 +223,7 @@ export function StockCount() {
           (p) =>
             (!uncounted || !byProduct.has(p.id)) && matchesSearch(p, query),
         )
-        .sort((a, b) => a.name.localeCompare(b.name)),
+        .sort(bySearch(query)),
     [state.products, byProduct, query, uncounted],
   );
   function choose(p: Product, fill?: { code?: string; expiry?: string }) {
@@ -219,6 +231,7 @@ export function StockCount() {
     setSaved(null);
     setPrefill(fill);
     setProduct(p);
+    sheet.scrollToTop();
   }
   const scanner = useBarcodeScanner((raw) => {
     const m = matchScan(state, raw, today);
@@ -247,7 +260,10 @@ export function StockCount() {
           secondary
           small
           icon="arrow-back"
-          onPress={() => setProduct(null)}
+          onPress={() => {
+            setProduct(null);
+            sheet.scrollToTop();
+          }}
         >
           {hi ? "सूची पर वापस" : "Back to list"}
         </Button>
@@ -259,6 +275,7 @@ export function StockCount() {
             setSaved({ message, product });
             setProduct(null);
             setQuery("");
+            sheet.scrollToTop();
           }}
         />
         {scanner.sheet}

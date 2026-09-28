@@ -12,6 +12,7 @@ import {
   productFromInvoiceLine,
   chunks,
   matchesSearch,
+  bySearch,
   commandFingerprint,
   sameFingerprint,
   demoState,
@@ -244,6 +245,38 @@ describe("planning an import", () => {
     expect(matchesSearch(dolo, "paracetamol tab")).toBe(true);
     expect(matchesSearch(dolo, "dolo 500")).toBe(false);
     expect(matchesSearch(dolo, "  ")).toBe(true);
+    expect(matchesSearch(dolo, "650mg")).toBe(true);
+  });
+  it("matches numbers from the start and ranks exact words first", () => {
+    const base = demoState(undefined, undefined, undefined, now).products.dolo;
+    const named = (name: string) => ({
+      ...base,
+      id: name,
+      name,
+      strength: "",
+      generic: "",
+      aliases: [],
+    });
+    const list = [
+      "PARACET 150 TAB",
+      "PARACET 50 TAB",
+      "PARACET 500 TAB",
+      "PARACET 100 TAB",
+    ].map(named);
+    const found = list
+      .filter((p) => matchesSearch(p, "paracet 50 tab"))
+      .sort(bySearch("paracet 50 tab"));
+    expect(found.map((p) => p.name)).toEqual([
+      "PARACET 50 TAB",
+      "PARACET 500 TAB",
+    ]);
+    expect(list.sort(bySearch("")).map((p) => p.name)).toEqual([
+      "PARACET 50 TAB",
+      "PARACET 100 TAB",
+      "PARACET 150 TAB",
+      "PARACET 500 TAB",
+    ]);
+    expect(matchesSearch(named("CROCIN"), "rocin")).toBe(true);
   });
   it("splits large imports into bounded chunks", () => {
     expect(chunks([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);

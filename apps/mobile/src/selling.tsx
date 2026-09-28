@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system";
 import { useSession, uid } from "./session";
 import { useSaleEntry } from "./sale-entry";
 import { VoiceEntry } from "./voice-entry";
@@ -54,6 +55,7 @@ import {
   type Order,
   groupBatches,
   matchesSearch,
+  bySearch,
 } from "@counterwell/core";
 function exactPaise(input: string) {
   const amount = D(input || 0).mul(100);
@@ -215,6 +217,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
   const stockOf = (id: string) =>
     (sellable.get(id) ?? []).reduce((n, b) => n + Number(b.quantity), 0);
   const products = useMemo(() => {
+    const rank = bySearch(query);
     return Object.values(state.products)
       .filter(
         (p) =>
@@ -224,8 +227,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
       )
       .sort(
         (a, b) =>
-          Number(sellable.has(b.id)) - Number(sellable.has(a.id)) ||
-          a.name.localeCompare(b.name),
+          Number(sellable.has(b.id)) - Number(sellable.has(a.id)) || rank(a, b),
       );
   }, [state.products, sellable, query, filter]);
   let total = 0,
@@ -269,9 +271,10 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
       );
       if (!saved) return;
       setSelected(null);
+      // Start the next item with an empty search.
+      setQuery("");
       if (activeVoice) {
         setActiveVoice(null);
-        setQuery("");
         setVoiceOpen(true);
       }
     } catch (e) {
@@ -295,7 +298,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
           detail={t("emptyHelp")}
         />
       ) : (
-        <ScrollView style={{ flex: 1 }}>
+        <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
           {basket.map((line, i) => {
             const b = state.batches[line.batchId],
               p = b ? state.products[b.productId] : undefined;
@@ -561,6 +564,9 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 20 }}
+          // After a search, the first tap on Add must add, not just close the keyboard.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           {products.length > SHOWN_PRODUCTS && (
             <Txt size={11} muted style={{ marginTop: 12 }}>
@@ -1250,7 +1256,18 @@ export function ReceiptSheet({
         const file = await Print.printToFileAsync({
           html: receiptHtml(invoice),
         });
-        await Sharing.shareAsync(file.uri, { mimeType: "application/pdf" });
+        // Name the PDF after the bill so WhatsApp and Files show "Bill 2627-002-000003.pdf".
+        const named = new FileSystem.File(
+          FileSystem.Paths.cache,
+          `Bill ${invoice.number}.pdf`,
+        );
+        if (named.exists) named.delete();
+        new FileSystem.File(file.uri).move(named);
+        await Sharing.shareAsync(named.uri, {
+          mimeType: "application/pdf",
+          UTI: "com.adobe.pdf",
+          dialogTitle: `Bill ${invoice.number}`,
+        });
       }
     } catch (e) {
       setError((e as Error).message);

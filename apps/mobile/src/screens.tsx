@@ -46,6 +46,7 @@ import {
   type State,
   groupBatches,
   matchesSearch,
+  bySearch,
 } from "@counterwell/core";
 const money = (value: string) => {
   const d = D(value || 0).mul(100);
@@ -58,6 +59,7 @@ function Page({ title, subtitle, action, children }: any) {
     <ScrollView
       contentContainerStyle={{ padding: 24, paddingBottom: 50 }}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
     >
       <Row style={{ justifyContent: "space-between", marginBottom: 26 }}>
         <View style={{ flex: 1 }}>
@@ -813,7 +815,7 @@ export function StockScreen({ manage = false }: { manage?: boolean }) {
   const matching = useMemo(() => {
     return Object.values(state.products)
       .filter((p) => matchesSearch(p, search))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort(bySearch(search));
   }, [state.products, search]);
   return (
     <Page

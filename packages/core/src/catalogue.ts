@@ -693,11 +693,58 @@ export function groupBatches(batches: Record<string, Batch>) {
     list.sort((a, b) => a.expiry.localeCompare(b.expiry));
   return out;
 }
-/** Every typed word must appear somewhere in the product's names, salt, strength, barcodes or aliases. */
-export function matchesSearch(p: Product, query: string) {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!words.length) return true;
-  const text =
-    `${p.name} ${p.generic} ${p.strength} ${p.form} ${p.barcode} ${p.aliases.join(" ")}`.toLowerCase();
-  return words.every((w) => text.includes(w));
+const wordCache = new WeakMap<Product, string[]>();
+/** Product records are replaced, not mutated, when they change, so their words can be cached. */
+function productWords(p: Product) {
+  let words = wordCache.get(p);
+  if (!words) {
+    words = searchWords(
+      `${p.name} ${p.generic} ${p.strength} ${p.form} ${p.barcode} ${p.aliases.join(" ")}`,
+    );
+    wordCache.set(p, words);
+  }
+  return words;
+}
+const collator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+});
+const searchWords = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/(\d)([a-z])/g, "$1 $2")
+    .split(/[^\p{L}\p{N}.%]+/u)
+    .filter(Boolean);
+/**
+ * How well a typed query matches a product; 0 means it does not. Every typed word
+ * must match a word of the product: exactly, as its start ("para" → paracetamol),
+ * or, for words of three or more letters, anywhere inside. Numbers only match from
+ * the start, so "50" finds 50 and 500 mg but not 150.
+ */
+export function searchScore(p: Product, query: string): number {
+  const typed = searchWords(query);
+  if (!typed.length) return 1;
+  const words = productWords(p);
+  let score = 1;
+  for (const w of typed) {
+    if (words.includes(w)) score += 3;
+    else if (words.some((t) => t.startsWith(w))) score += 2;
+    else if (!/\d/.test(w) && w.length >= 3 && words.some((t) => t.includes(w)))
+      score += 1;
+    else return 0;
+  }
+  return score;
+}
+export const matchesSearch = (p: Product, query: string) =>
+  searchScore(p, query) > 0;
+/** Best matches first, then names in natural order (50 before 100). */
+export function bySearch(query: string) {
+  const scores = new Map<Product, number>();
+  const score = (p: Product) => {
+    let v = scores.get(p);
+    if (v === undefined) scores.set(p, (v = searchScore(p, query)));
+    return v;
+  };
+  return (a: Product, b: Product) =>
+    score(b) - score(a) || collator.compare(a.name, b.name);
 }

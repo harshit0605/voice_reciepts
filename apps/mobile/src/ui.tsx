@@ -1,4 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   Text,
   View,
@@ -9,6 +15,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSession } from "./session";
@@ -248,12 +255,19 @@ export function Section({ title, action, children }: any) {
 }
 /** Long product lists render this many rows; search narrows the rest. */
 export const SHOWN_PRODUCTS = 50;
+const SheetContext = createContext({ scrollToTop: () => {} });
+/** Lets sheet content bring its own top back into view, for example after a step changes. */
+export const useSheet = () => useContext(SheetContext);
 export function Sheet({ title, visible, onClose, children }: any) {
   const t = useText();
   // A second tap on the button that opened the sheet can land on whatever sits under it
   // in the new sheet (for example Hold order under Review & collect). Ignore touches
   // until the sheet has settled.
   const [settled, setSettled] = useState(false);
+  const scroller = useRef<ScrollView>(null);
+  const sheet = useRef({
+    scrollToTop: () => scroller.current?.scrollTo({ y: 0, animated: false }),
+  }).current;
   useEffect(() => {
     setSettled(false);
     if (!visible) return;
@@ -267,7 +281,11 @@ export function Sheet({ title, visible, onClose, children }: any) {
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
+      {/* On iOS the keyboard would otherwise cover the lower part of the sheet (search results, form fields). */}
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
         <View style={styles.sheet} pointerEvents={settled ? "auto" : "none"}>
           <Row
             style={{
@@ -289,13 +307,17 @@ export function Sheet({ title, visible, onClose, children }: any) {
             </Pressable>
           </Row>
           <ScrollView
+            ref={scroller}
             contentContainerStyle={{ padding: 22, paddingBottom: 40 }}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
           >
-            {children}
+            <SheetContext.Provider value={sheet}>
+              {children}
+            </SheetContext.Provider>
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

@@ -401,6 +401,7 @@ function Login() {
           padding: 28,
         }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <View style={{ width: "100%", maxWidth: 390 }}>
           <Row style={{ justifyContent: "space-between" }}>
