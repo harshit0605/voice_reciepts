@@ -1,4 +1,4 @@
-import { totals } from "./money";
+import { eodSnapshot } from "./drawer";
 import type { State } from "./types";
 /** Each live phone must acknowledge a completed sync after the report cutoff.
  * A recent heartbeat before close cannot prove the phone has no queued cash sale.
@@ -26,17 +26,11 @@ export function confirmEodSynchronisation(state: State, now: string) {
       Object.values(state.quarantine).some((q) => q.status === "pending")
     )
       continue;
-    const revision = latest.revision + 1,
-      id = `${date}:${revision}`;
-    state.eods[id] = {
-      id,
-      date,
-      revision,
-      createdAt: now,
+    const eod = eodSnapshot(state, date, now, {
       syncCutoffAt: cutoff,
       syncCutoffRevision: latest.syncCutoffRevision,
-      totals: totals(state, date),
       provisional: false,
-    };
+    });
+    state.eods[eod.id] = eod;
   }
 }

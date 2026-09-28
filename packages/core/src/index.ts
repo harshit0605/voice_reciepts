@@ -14,3 +14,5 @@ export * from "./fingerprint";
 export * from "./catalogue";
 export * from "./opening";
 export * from "./returns";
+export * from "./drawer";
+export * from "./report-html";

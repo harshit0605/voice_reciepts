@@ -10,6 +10,13 @@ import {
 } from "./types";
 import { refundQuote, openRefundRequest } from "./returns";
 import {
+  closingReports,
+  denominationTotal,
+  eodSnapshot,
+  lastClosedDrawer,
+  openDrawerSession,
+} from "./drawer";
+import {
   D,
   quote,
   invoiceNumber,
@@ -77,6 +84,20 @@ export function execute(
     ensure(actor.role === "owner", "Owner approval required", "FORBIDDEN");
   const collector = () =>
     ensure(actor.canCollect, "Payment collection is not enabled", "FORBIDDEN");
+  // Anyone who takes money can open, count and close the shared drawer; each act carries their name.
+  const drawerHand = () =>
+    ensure(
+      actor.role === "owner" || actor.canCollect,
+      "Drawer access needs payment collection",
+      "FORBIDDEN",
+    );
+  const counted = (paise: number, d?: Record<string, number>) => {
+    if (d)
+      ensure(
+        denominationTotal(d) === paise,
+        "The note count does not add up to the total",
+      );
+  };
   const audit = (action: string, referenceId: string, detail = "") => {
     const id = `${cmd.id}:audit:${Object.keys(s.audit).length}`;
     s.audit[id] = {
@@ -389,6 +410,7 @@ export function execute(
       o.status = "cancelled";
       o.cancelReason = op.reason;
       o.cancelledAt = cmd.occurredAt;
+      o.cancelledBy = actor.id;
       o.version++;
       audit("order.cancel", o.id, op.reason);
       result = o;
@@ -764,34 +786,90 @@ export function execute(
       break;
     }
     case "drawer.open": {
-      owner();
-      ensure(
-        !values(s.drawers).some((d) => !d.closedAt),
-        "A drawer session is already open",
-      );
+      drawerHand();
+      ensure(!openDrawerSession(s), "A drawer session is already open");
       ensure(!s.drawers[op.drawerId], "Drawer session exists");
+      counted(op.openingPaise, op.denominations);
+      const previous = lastClosedDrawer(s);
       s.drawers[op.drawerId] = {
         id: op.drawerId,
         openingPaise: op.openingPaise,
         openedAt: cmd.occurredAt,
         openedBy: actor.id,
+        ...(op.denominations ? { openingDenominations: op.denominations } : {}),
+        // Cash left overnight should be what the next person finds.
+        ...(previous?.keptPaise !== undefined
+          ? { openingDifferencePaise: op.openingPaise - previous.keptPaise }
+          : {}),
       };
-      result = s.drawers[op.drawerId];
+      // Staff are answered without the figures they must not see.
+      result =
+        actor.role === "owner"
+          ? s.drawers[op.drawerId]
+          : { id: op.drawerId, openingPaise: op.openingPaise };
+      break;
+    }
+    case "drawer.count": {
+      drawerHand();
+      const d = s.drawers[op.drawerId];
+      ensure(d && !d.closedAt, "Drawer not open");
+      counted(op.countedPaise, op.denominations);
+      const expected = expectedCash(s, d.id);
+      d.checks = [
+        ...(d.checks ?? []),
+        {
+          at: cmd.occurredAt,
+          by: actor.id,
+          countedPaise: op.countedPaise,
+          expectedPaise: expected,
+          differencePaise: op.countedPaise - expected,
+          ...(op.denominations ? { denominations: op.denominations } : {}),
+          ...(op.note ? { note: op.note } : {}),
+        },
+      ];
+      result =
+        actor.role === "owner"
+          ? d.checks.at(-1)
+          : { countedPaise: op.countedPaise };
       break;
     }
     case "drawer.close": {
-      owner();
+      drawerHand();
       const d = s.drawers[op.drawerId];
       ensure(d && !d.closedAt, "Drawer not open");
+      counted(op.countedPaise, op.denominations);
+      ensure(
+        op.keptPaise === undefined || op.keptPaise <= op.countedPaise,
+        "Cash left in the drawer cannot be more than was counted",
+      );
       d.closedAt = cmd.occurredAt;
+      d.closedBy = actor.id;
       d.countedPaise = op.countedPaise;
+      if (op.keptPaise !== undefined) d.keptPaise = op.keptPaise;
+      if (op.denominations) d.closingDenominations = op.denominations;
       d.expectedAtClose = expectedCash(s, d.id);
       d.discrepancyPaise = op.countedPaise - d.expectedAtClose;
-      result = d;
+      // Closing the last drawer closes the day: the owner gets a report for each day it was open.
+      if (!openDrawerSession(s))
+        for (const eod of closingReports(
+          s,
+          indiaDate(d.openedAt),
+          indiaDate(cmd.occurredAt),
+          now,
+        ))
+          s.eods[eod.id] = eod;
+      result =
+        actor.role === "owner"
+          ? {
+              countedPaise: d.countedPaise,
+              expectedPaise: d.expectedAtClose,
+              differencePaise: d.discrepancyPaise,
+            }
+          : { countedPaise: op.countedPaise };
       break;
     }
     case "cash.move": {
-      owner();
+      drawerHand();
       ensure(
         s.drawers[op.drawerId] && !s.drawers[op.drawerId].closedAt,
         "Drawer not open",
@@ -997,22 +1075,9 @@ export function execute(
     }
     case "eod.close": {
       owner();
-      const previous = values(s.eods).filter((e) => e.date === op.date);
-      const id = `${op.date}:${previous.length + 1}`;
-      const t = totals(s, op.date);
-      s.eods[id] = {
-        id,
-        date: op.date,
-        revision: previous.length + 1,
-        createdAt: now,
-        totals: t,
-        syncCutoffAt: now,
-        syncCutoffRevision: s.revision + 1,
-        provisional:
-          values(s.devices).some((d) => !d.revoked) ||
-          values(s.quarantine).some((q) => q.status === "pending"),
-      };
-      result = s.eods[id];
+      const eod = eodSnapshot(s, op.date, now);
+      s.eods[eod.id] = eod;
+      result = eod;
       break;
     }
     case "device.revoke": {
@@ -1081,28 +1146,19 @@ export function execute(
     ].includes(op.type)
   ) {
     const date = indiaDate(cmd.occurredAt);
-    const reports = values(s.eods).filter((e) => e.date === date);
-    if (reports.length) {
-      const rev = Math.max(...reports.map((e) => e.revision)) + 1;
-      const id = `${date}:${rev}`;
-      const t = totals(s, date);
-      s.eods[id] = {
-        id,
-        date,
-        revision: rev,
-        createdAt: now,
-        totals: t,
-        syncCutoffAt: now,
-        syncCutoffRevision: s.revision + 1,
-        provisional:
-          values(s.devices).some((d) => !d.revoked) ||
-          values(s.quarantine).some((q) => q.status === "pending"),
-      };
+    const latest = values(s.eods)
+      .filter((e) => e.date === date)
+      .sort((a, b) => b.revision - a.revision)[0];
+    // Only something that happened before the report but arrived after it (an offline sale synced
+    // late) revises it. Trading after the report is picked up when the day is closed again.
+    if (latest && cmd.occurredAt <= (latest.syncCutoffAt ?? latest.createdAt)) {
+      const eod = eodSnapshot(s, date, now);
+      s.eods[eod.id] = eod;
       review(
         "late_transaction",
         cmd.id,
         "EOD report revised",
-        `A transaction updated ${date}; revision ${rev} preserves earlier reports.`,
+        `A transaction updated ${date}; revision ${eod.revision} preserves earlier reports.`,
       );
     }
     for (const observation of values(s.observations)) {
@@ -1156,7 +1212,21 @@ export function employeeView(state: State, userId: string): State {
   s.suppliers = {};
   s.purchases = {};
   s.eods = {};
-  s.cash = {};
+  // Staff count the drawer blind: they never see what it should hold or how far off it was.
+  for (const d of values(s.drawers)) {
+    delete d.expectedAtClose;
+    delete d.discrepancyPaise;
+    delete d.openingDifferencePaise;
+    delete d.keptPaise;
+    d.checks = (d.checks ?? [])
+      .filter((c) => c.by === userId)
+      .map(({ expectedPaise, differencePaise, ...c }) => c) as typeof d.checks;
+  }
+  s.cash = Object.fromEntries(
+    values(s.cash)
+      .filter((m) => m.actorId === userId)
+      .map((m) => [m.id, m]),
+  );
   s.audit = {};
   s.reviews = {};
   s.observations = {};

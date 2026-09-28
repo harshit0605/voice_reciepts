@@ -1,3 +1,4 @@
+import type { DayReport } from "./drawer";
 export type Role = "owner" | "employee";
 export type Entity = { id: string };
 export type Product = Entity & {
@@ -66,6 +67,7 @@ export type Order = Entity & {
   offeredTo?: string;
   cancelReason?: string;
   cancelledAt?: string;
+  cancelledBy?: string;
   createdAt: string;
   prescription?: {
     patient: string;
@@ -161,12 +163,32 @@ export type Approval = Entity & {
   decidedAt?: string;
   reason: string;
 };
+/** Notes and coins counted: { "500": 3, "200": 1, coins: 1250 } (coins in paise). */
+export type Denominations = Record<string, number>;
+/** A count of the drawer while it is open. Staff never see the expected figure. */
+export type DrawerCheck = {
+  at: string;
+  by: string;
+  countedPaise: number;
+  expectedPaise: number;
+  differencePaise: number;
+  denominations?: Denominations;
+  note?: string;
+};
 export type DrawerSession = Entity & {
   openedAt: string;
   openedBy: string;
   openingPaise: number;
+  openingDenominations?: Denominations;
+  /** Opening count minus what was left in the drawer at the previous close. */
+  openingDifferencePaise?: number;
+  checks?: DrawerCheck[];
   closedAt?: string;
+  closedBy?: string;
   countedPaise?: number;
+  closingDenominations?: Denominations;
+  /** Cash left in the drawer for the next opening; the rest was taken out at close. */
+  keptPaise?: number;
   expectedAtClose?: number;
   discrepancyPaise?: number;
 };
@@ -257,6 +279,8 @@ export type Eod = Entity & {
   revision: number;
   createdAt: string;
   totals: ReturnTypeTotals;
+  /** The full day as it stood at this revision (absent on reports made before it existed). */
+  report?: DayReport;
   provisional: boolean;
   syncCutoffAt?: string;
   syncCutoffRevision?: number;

@@ -6,6 +6,13 @@ const id = z
   .max(120)
   .regex(/^[a-zA-Z0-9_.:-]+$/);
 const money = z.number().int().min(0).max(100_000_000);
+/** Note and coin counts; coins are entered as a paise amount. */
+const denominations = z
+  .partialRecord(
+    z.enum(["2000", "500", "200", "100", "50", "20", "10", "coins"]),
+    z.number().int().min(0).max(100_000_000),
+  )
+  .refine((d) => Object.keys(d).length > 0, "Enter at least one count");
 const qty = z.string().regex(/^(0|[1-9]\d{0,8})(\.\d{1,3})?$/);
 const positive = qty.refine((v) => Number(v) > 0, "Quantity must be positive");
 const date = z
@@ -199,11 +206,21 @@ const data = z.discriminatedUnion("type", [
     type: z.literal("drawer.open"),
     drawerId: id,
     openingPaise: money,
+    denominations: denominations.optional(),
+  }),
+  z.object({
+    type: z.literal("drawer.count"),
+    drawerId: id,
+    countedPaise: money,
+    denominations: denominations.optional(),
+    note: z.string().max(200).optional(),
   }),
   z.object({
     type: z.literal("drawer.close"),
     drawerId: id,
     countedPaise: money,
+    keptPaise: money.optional(),
+    denominations: denominations.optional(),
   }),
   z.object({
     type: z.literal("cash.move"),

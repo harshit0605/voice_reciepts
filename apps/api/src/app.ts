@@ -13,6 +13,7 @@ import {
   DomainError,
   totals,
   receiptHtml,
+  dayReport,
   sameFingerprint,
   type Actor,
   type State,
@@ -536,8 +537,10 @@ app.post("/api/v1/recovery/:id", async (c) => {
 app.get("/api/v1/reports", (c) => {
   if (c.get("actor").role !== "owner")
     return c.json({ error: "Owner only" }, 403);
+  const date = c.req.query("date");
   return c.json({
-    totals: totals(c.get("state"), c.req.query("date")),
+    totals: totals(c.get("state"), date),
+    ...(date ? { report: dayReport(c.get("state"), date) } : {}),
     eods: Object.values(c.get("state").eods),
   });
 });

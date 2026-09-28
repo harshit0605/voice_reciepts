@@ -621,11 +621,44 @@ describe.skipIf(!enabled)("PostgreSQL and authenticated API", () => {
     ).toBe(403);
   });
   it("prevents employee privilege escalation in commands", async () => {
-    const r = await command(
-      { type: "drawer.close", drawerId: "drawer-demo", countedPaise: 0 },
+    // Staff may count and close the shared drawer, but not close the day or change prices.
+    for (const operation of [
+      { type: "eod.close", date: "2026-09-23" },
+      {
+        type: "batch.price",
+        batchId: "dolo-b1",
+        pricePaise: 1,
+        reason: "Cheaper",
+      },
+    ] as Operation[])
+      expect((await command(operation, employeeCookie)).status).toBe(403);
+  });
+  it("gives staff a blind drawer count and the owner the difference", async () => {
+    const counted = await command(
+      {
+        type: "drawer.count",
+        drawerId: "drawer-demo",
+        countedPaise: 150000,
+        denominations: { "500": 3 },
+      },
       employeeCookie,
     );
-    expect(r.status).toBe(403);
+    expect(counted.status).toBe(200);
+    const staff = await req("/api/v1/state", undefined, employeeCookie);
+    const mine = staff.data.drawers["drawer-demo"].checks.at(-1);
+    expect(mine.countedPaise).toBe(150000);
+    expect(mine).not.toHaveProperty("expectedPaise");
+    expect(mine).not.toHaveProperty("differencePaise");
+    const ownerView = await req("/api/v1/state");
+    expect(
+      ownerView.data.drawers["drawer-demo"].checks.at(-1).differencePaise,
+    ).toBeLessThan(0);
+    const today = new Date(Date.now() + 330 * 60_000)
+      .toISOString()
+      .slice(0, 10);
+    const report = await req(`/api/v1/reports?date=${today}`);
+    expect(report.status).toBe(200);
+    expect(report.data.report.drawers.length).toBeGreaterThan(0);
   });
   it("handles five concurrent device checkouts without lost stock", async () => {
     const before = await db.readState(businessId);

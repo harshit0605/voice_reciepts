@@ -19,6 +19,9 @@ import {
   refundQuote,
   returnable,
   returnBaseQuantity,
+  dayReport,
+  dayReportHtml,
+  differenceText,
 } from "../src";
 const now = "2026-09-23T09:00:00.000Z";
 const owner: Actor = {
@@ -720,9 +723,9 @@ describe("retail ledger", () => {
       apply(
         s,
         { type: "drawer.close", drawerId: "drawer-demo", countedPaise: 0 },
-        employee,
+        { ...employee, canCollect: false },
       ),
-    ).toThrow("Owner");
+    ).toThrow("Drawer access");
   });
   it("sizes the shared PDF like a receipt and says what was paid", () => {
     const s = apply(order(), checkout());
@@ -805,6 +808,265 @@ describe("offline and evidence", () => {
     ).state;
     expect(Object.values(out.invoices)[0].totalPaise).toBe(2800);
     expect(Object.values(out.reviews)[0].kind).toBe("offline_price");
+  });
+  describe("shared drawer", () => {
+    const sale = () => apply(order(), checkout());
+    it("lets staff who take money count and close blind, while the owner sees the difference", () => {
+      let s = sale();
+      // 2,000 opening + 28 cash sale.
+      s = apply(
+        s,
+        {
+          type: "drawer.count",
+          drawerId: "drawer-demo",
+          countedPaise: 201800,
+          denominations: { "500": 4, "10": 1, coins: 800 },
+        },
+        employee,
+      );
+      const answered = execute(
+        s,
+        cmd({
+          type: "drawer.count",
+          drawerId: "drawer-demo",
+          countedPaise: 1,
+          denominations: { coins: 1 },
+        }),
+        employee,
+        now,
+      ).result;
+      expect(answered).toEqual({ countedPaise: 1 });
+      const check = s.drawers["drawer-demo"].checks![0];
+      expect(check).toMatchObject({
+        by: employee.id,
+        expectedPaise: 202800,
+        differencePaise: -1000,
+      });
+      const view = employeeView(s, employee.id).drawers["drawer-demo"];
+      expect(view.checks![0]).not.toHaveProperty("expectedPaise");
+      expect(view.checks![0]).not.toHaveProperty("differencePaise");
+      expect(() =>
+        apply(
+          s,
+          {
+            type: "drawer.count",
+            drawerId: "drawer-demo",
+            countedPaise: 5000,
+            denominations: { "500": 1 },
+          },
+          employee,
+        ),
+      ).toThrow("does not add up");
+      s = apply(
+        s,
+        {
+          type: "drawer.close",
+          drawerId: "drawer-demo",
+          countedPaise: 202800,
+          keptPaise: 200000,
+        },
+        employee,
+      );
+      const closed = s.drawers["drawer-demo"];
+      expect(closed).toMatchObject({
+        closedBy: employee.id,
+        expectedAtClose: 202800,
+        discrepancyPaise: 0,
+        keptPaise: 200000,
+      });
+      const blind = employeeView(s, employee.id).drawers["drawer-demo"];
+      expect(blind.expectedAtClose).toBeUndefined();
+      expect(blind.discrepancyPaise).toBeUndefined();
+      expect(blind.keptPaise).toBeUndefined();
+      // Closing the last drawer made the day's report.
+      const report = s.eods["2026-09-23:1"].report!;
+      expect(report.sales).toMatchObject({
+        bills: 1,
+        netPaise: 2800,
+        cashPaise: 2800,
+      });
+      expect(report.drawers[0]).toMatchObject({
+        openingPaise: 200000,
+        expectedPaise: 202800,
+        countedPaise: 202800,
+        differencePaise: 0,
+        closedBy: "Aarav",
+      });
+      expect(report.drawers[0].checks[0].differencePaise).toBe(-1000);
+    });
+    it("shares the day report with names and reasons escaped", () => {
+      let s = sale();
+      s = apply(
+        s,
+        {
+          type: "cash.move",
+          drawerId: "drawer-demo",
+          kind: "withdrawal",
+          amountPaise: 20000,
+          reason: "<img src=x onerror=alert(1)>",
+        },
+        employee,
+      );
+      const html = dayReportHtml(
+        dayReport(s, "2026-09-23", now),
+        "Shop <b>",
+        2,
+        true,
+      );
+      expect(html).not.toContain("<img");
+      expect(html).toContain("&lt;img");
+      expect(html).toContain("Shop &lt;b&gt;");
+      expect(html).toContain("revision 2");
+      expect(html).toContain("Paid out");
+      expect(differenceText(-5000)).toBe("₹50.00 short");
+      expect(differenceText(0)).toBe("matches");
+    });
+    it("compares the next opening with what was left in the drawer", () => {
+      let s = apply(sale(), {
+        type: "drawer.close",
+        drawerId: "drawer-demo",
+        countedPaise: 202800,
+        keptPaise: 50000,
+      });
+      s = apply(
+        s,
+        { type: "drawer.open", drawerId: "next", openingPaise: 45000 },
+        employee,
+      );
+      expect(s.drawers.next.openingDifferencePaise).toBe(-5000);
+      expect(
+        employeeView(s, employee.id).drawers.next.openingDifferencePaise,
+      ).toBeUndefined();
+      expect(() =>
+        apply(s, { type: "drawer.open", drawerId: "again", openingPaise: 0 }),
+      ).toThrow("already open");
+      expect(() =>
+        apply(s, {
+          type: "drawer.close",
+          drawerId: "next",
+          countedPaise: 100,
+          keptPaise: 200,
+        }),
+      ).toThrow("more than was counted");
+    });
+    it("still reports the day before when the drawer is closed after midnight", () => {
+      // Sale at 2:30 pm on the 23rd; drawer closed at 12:30 am on the 24th.
+      const lateNight = "2026-09-23T19:00:00.000Z";
+      let s = execute(
+        sale(),
+        cmd(
+          {
+            type: "drawer.close",
+            drawerId: "drawer-demo",
+            countedPaise: 202800,
+            keptPaise: 100000,
+          },
+          lateNight,
+        ),
+        employee,
+        lateNight,
+      ).state;
+      expect(s.eods["2026-09-23:1"].report!.sales.bills).toBe(1);
+      expect(s.eods["2026-09-23:1"].report!.drawers[0].countedPaise).toBe(
+        202800,
+      );
+      expect(s.eods["2026-09-24:1"].report!.sales.bills).toBe(0);
+      // The next night's close revises only the day that changed.
+      const morning = "2026-09-24T03:30:00.000Z";
+      const night = "2026-09-24T16:00:00.000Z";
+      s = execute(
+        s,
+        cmd(
+          { type: "drawer.open", drawerId: "day-2", openingPaise: 100000 },
+          morning,
+        ),
+        employee,
+        morning,
+      ).state;
+      s = execute(
+        s,
+        cmd(
+          { type: "drawer.close", drawerId: "day-2", countedPaise: 100000 },
+          night,
+        ),
+        employee,
+        night,
+      ).state;
+      expect(s.eods["2026-09-24:2"]).toBeDefined();
+      expect(s.eods["2026-09-23:2"]).toBeUndefined();
+    });
+    it("names who recorded each cash movement and cancellation in the day report", () => {
+      let s = sale();
+      s = apply(
+        s,
+        {
+          type: "cash.move",
+          drawerId: "drawer-demo",
+          kind: "withdrawal",
+          amountPaise: 20000,
+          reason: "Paid delivery boy",
+        },
+        employee,
+      );
+      s = apply(s, {
+        type: "order.save",
+        orderId: "order-2",
+        version: 0,
+        lines: [line],
+        counterId: "counter-1",
+      });
+      s = apply(s, {
+        type: "order.cancel",
+        orderId: "order-2",
+        version: 1,
+        reason: "Customer left",
+      });
+      const r = dayReport(s, "2026-09-23", now);
+      expect(r.movements).toEqual([
+        expect.objectContaining({
+          name: "Aarav",
+          kind: "withdrawal",
+          amountPaise: 20000,
+          reason: "Paid delivery boy",
+        }),
+      ]);
+      expect(r.cancelled[0]).toMatchObject({
+        name: "Shop owner",
+        reason: "Customer left",
+        valuePaise: 2800,
+      });
+      const staff = Object.fromEntries(r.staff.map((x) => [x.name, x]));
+      expect(staff["Shop owner"]).toMatchObject({
+        bills: 1,
+        cashInPaise: 2800,
+        cancelled: 1,
+      });
+      expect(staff["Aarav"]).toMatchObject({ cashOutPaise: 20000 });
+      expect(r.drawers[0].expectedPaise).toBe(182800);
+      // Staff see only their own movements.
+      expect(Object.keys(employeeView(s, owner.id).cash)).toHaveLength(0);
+      expect(Object.keys(employeeView(s, employee.id).cash)).toHaveLength(1);
+    });
+    it("does not revise a report for sales made after it, only for ones that arrive late", () => {
+      let s = apply(sale(), { type: "eod.close", date: "2026-09-23" });
+      s = execute(
+        s,
+        {
+          id: "after",
+          occurredAt: "2026-09-23T09:10:00.000Z",
+          operation: {
+            type: "cash.move",
+            drawerId: "drawer-demo",
+            kind: "introduced",
+            amountPaise: 5000,
+            reason: "Change from the bank",
+          } as Operation,
+        },
+        owner,
+        "2026-09-23T09:10:00.000Z",
+      ).state;
+      expect(Object.keys(s.eods)).toEqual(["2026-09-23:1"]);
+    });
   });
   it("appends EOD revision for late sales", () => {
     let s = demoState(undefined, undefined, undefined, now);
