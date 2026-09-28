@@ -127,6 +127,12 @@ export function blankReceivingLine(id: string, batchId: string): ReceivingLine {
     confirmed: false,
   };
 }
+// Printed quantities arrive as "1." or "1,200"; printed batches can wrap onto two lines. The source
+// line keeps what was read; the editable fields start in the form the receiving checks accept.
+const printedQuantity = (value: string | null) =>
+  (value ?? "").replace(/[\s,]/g, "").replace(/\.$/, "");
+const printedCode = (value: string | null) =>
+  (value ?? "").replace(/\s+/g, " ").trim();
 export function importInvoiceDraft(
   extracted: InvoiceDraft,
   id: () => string,
@@ -151,10 +157,10 @@ export function importInvoiceDraft(
     lines: d.lines.map((source) => ({
       ...blankReceivingLine(id(), id()),
       source,
-      code: source.batchCode ?? "",
+      code: printedCode(source.batchCode),
       expiry: source.expiry ?? "",
-      quantity: source.quantity ?? "",
-      bonus: source.bonusQuantity ?? "0",
+      quantity: printedQuantity(source.quantity),
+      bonus: printedQuantity(source.bonusQuantity) || "0",
       mrp:
         source.mrpPaise === null ? "" : D(source.mrpPaise).div(100).toFixed(),
       total:

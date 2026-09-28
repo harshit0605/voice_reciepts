@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { pool } from "@counterwell/db";
 import { DomainError, type Actor } from "@counterwell/core";
-export const EXTRACTION_VERSION = "receiving-v2";
+export const EXTRACTION_VERSION = "receiving-v3";
 export function voiceAudioLimit() {
   const n = Number(process.env.VOICE_MONTHLY_RESERVED_SECONDS ?? 18000);
   if (!Number.isSafeInteger(n) || n < 0)

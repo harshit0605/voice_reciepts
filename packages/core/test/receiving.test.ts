@@ -124,6 +124,44 @@ describe("Supplier invoice receiving", () => {
     });
     expect(imported.supplierGstin).toBe("09ABC");
   });
+  it("starts printed quantities and batches in a form the checks accept, keeping what was read", () => {
+    const raw: InvoiceDraft = {
+      supplierName: "Test",
+      supplierGstin: null,
+      invoiceNumber: "1",
+      invoiceDate: null,
+      totalPaise: null,
+      lines: [
+        {
+          name: "Face Mask (pack of\n10)",
+          strength: null,
+          batchCode: " M90\n87 ",
+          expiry: "2027-11-30",
+          quantity: "1.",
+          bonusQuantity: "1,200",
+          unit: null,
+          packSize: null,
+          mrpPaise: null,
+          lineTotalPaise: 10500,
+          taxBps: 500,
+        },
+      ],
+      warnings: [],
+    };
+    const imported = importInvoiceDraft(raw, () => "id");
+    expect(imported.lines[0]).toMatchObject({
+      quantity: "1",
+      bonus: "1200",
+      code: "M90 87",
+    });
+    expect(imported.lines[0].source).toEqual(raw.lines[0]);
+    expect(
+      importInvoiceDraft(
+        { ...raw, lines: [{ ...raw.lines[0], bonusQuantity: null }] },
+        () => "id",
+      ).lines[0].bonus,
+    ).toBe("0");
+  });
   it("rejects fractional-paise conversion and incomplete expiry", () => {
     const { state, line } = fixture();
     expect(() =>
