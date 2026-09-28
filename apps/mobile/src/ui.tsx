@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Text,
   View,
@@ -248,6 +248,16 @@ export function Section({ title, action, children }: any) {
 }
 export function Sheet({ title, visible, onClose, children }: any) {
   const t = useText();
+  // A second tap on the button that opened the sheet can land on whatever sits under it
+  // in the new sheet (for example Hold order under Review & collect). Ignore touches
+  // until the sheet has settled.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    setSettled(false);
+    if (!visible) return;
+    const timer = setTimeout(() => setSettled(true), 400);
+    return () => clearTimeout(timer);
+  }, [visible]);
   return (
     <Modal
       visible={visible}
@@ -256,7 +266,7 @@ export function Sheet({ title, visible, onClose, children }: any) {
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <View style={styles.sheet}>
+        <View style={styles.sheet} pointerEvents={settled ? "auto" : "none"}>
           <Row
             style={{
               justifyContent: "space-between",
