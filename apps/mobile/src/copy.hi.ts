@@ -399,4 +399,54 @@ export const hindiCopy: Record<string, string> = {
   "Short by": "कम है",
   "Return to customer": "ग्राहक को लौटाएँ",
   "Cash received is less than the bill total": "मिला नकद बिल की रकम से कम है",
+  "Load products from an Excel (.xlsx) or CSV export of your billing software or distributor, or paste rows copied from a spreadsheet. Nothing is saved until you review the rows and confirm.":
+    "बिलिंग सॉफ़्टवेयर या डिस्ट्रीब्यूटर की Excel (.xlsx) या CSV फ़ाइल से सामान जोड़ें, या स्प्रेडशीट से कॉपी की गई पंक्तियाँ पेस्ट करें। पंक्तियाँ जाँचकर पुष्टि करने तक कुछ भी सेव नहीं होता।",
+  "Columns it understands: item name, pack (10's, 1x15, 100ML), GST %, HSN, barcode, generic or salt, strength, form, schedule and company. Stock quantities are not imported here; record counted stock separately.":
+    "समझे जाने वाले कॉलम: सामान का नाम, पैक (10's, 1x15, 100ML), GST %, HSN, बारकोड, जेनेरिक या साल्ट, ताकत, रूप, शेड्यूल और कंपनी। स्टॉक की मात्रा यहाँ नहीं जुड़ती; गिना हुआ स्टॉक अलग से दर्ज करें।",
+  "Choose Excel or CSV file": "Excel या CSV फ़ाइल चुनें",
+  "Or paste rows, including the header row":
+    "या पंक्तियाँ पेस्ट करें, हेडर पंक्ति सहित",
+  "Use pasted rows": "पेस्ट की गई पंक्तियाँ इस्तेमाल करें",
+  "Choose another file": "दूसरी फ़ाइल चुनें",
+  "Match columns": "कॉलम मिलाएँ",
+  "Not in file": "फ़ाइल में नहीं",
+  "GST % for rows without one (optional)":
+    "जिन पंक्तियों में GST नहीं है उनके लिए GST % (वैकल्पिक)",
+  "Choose the column with product names": "सामान के नाम वाला कॉलम चुनें",
+  "No schedule column: every medicine will be marked OTC. Mark H and H1 medicines afterwards so the prescription register is required.":
+    "शेड्यूल का कॉलम नहीं है: हर दवा OTC मानी जाएगी। बाद में H और H1 दवाएँ चिह्नित करें ताकि पर्चे का रजिस्टर ज़रूरी हो।",
+  "No rows here.": "यहाँ कोई पंक्ति नहीं।",
+  Done: "हो गया",
+  "Rows with errors, repeated rows and products already in the catalogue are skipped. Existing products are never changed by an import.":
+    "गलती वाली, दोहराई गई और कैटलॉग में पहले से मौजूद पंक्तियाँ छोड़ दी जाती हैं। इम्पोर्ट से मौजूदा सामान कभी नहीं बदलता।",
+  "Import catalogue": "कैटलॉग इम्पोर्ट करें",
+  "Split the file into parts of 20,000 rows or fewer":
+    "फ़ाइल को 20,000 या कम पंक्तियों के हिस्सों में बाँटें",
+  "No product rows found in the file":
+    "फ़ाइल में सामान की कोई पंक्ति नहीं मिली",
+  "Choose a file smaller than 15 MB": "15 MB से छोटी फ़ाइल चुनें",
+  "Old .xls files cannot be read. Save it as .xlsx or CSV.":
+    "पुरानी .xls फ़ाइल नहीं पढ़ी जा सकती। इसे .xlsx या CSV में सेव करें।",
+  "The spreadsheet has no readable sheet":
+    "स्प्रेडशीट में पढ़ने लायक शीट नहीं है",
+  "Name is missing": "नाम नहीं है",
+  "GST rate is not a valid number": "GST दर सही संख्या नहीं है",
+  "GST rate is missing": "GST दर नहीं है",
+  "GST from the default rate: check it": "GST डिफ़ॉल्ट दर से लिया गया: जाँचें",
+  "Unusual GST rate: check it": "असामान्य GST दर: जाँचें",
+  "No schedule given: marked OTC": "शेड्यूल नहीं दिया: OTC माना गया",
+  "Schedule X: sales stay blocked": "शेड्यूल X: बिक्री बंद रहेगी",
+  "Barcode was saved in Excel scientific notation and was ignored":
+    "बारकोड Excel में वैज्ञानिक रूप (E+) में सेव था, इसलिए छोड़ा गया",
+  "HSN code was not 4 to 8 digits and was left blank":
+    "HSN कोड 4 से 8 अंकों का नहीं था, इसलिए खाली छोड़ा गया",
+  "Row could not be read as a product":
+    "यह पंक्ति सामान के रूप में नहीं पढ़ी जा सकी",
+  "Unit could not be worked out: sold per piece":
+    "इकाई तय नहीं हो सकी: प्रति नग बिकेगा",
+  "Strip size unknown: add it before selling by strip":
+    "पत्ते का साइज़ पता नहीं: पत्ते से बेचने से पहले जोड़ें",
+  "Enter the product name": "सामान का नाम भरें",
+  "Confirm the GST rate": "GST दर की पुष्टि करें",
+  "Capsules per strip": "प्रति पत्ता कैप्सूल",
 };

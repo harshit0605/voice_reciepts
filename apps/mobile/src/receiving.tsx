@@ -7,6 +7,7 @@ import { useSession, uid } from "./session";
 import * as storage from "./storage";
 import { API_URL, cookieHeaders } from "./auth";
 import { Txt, Button, Field, Row, Chip, Badge, colors, styles } from "./ui";
+import { ProductForm } from "./product-form";
 import {
   catalogueSignature,
   signedPaise,
@@ -22,6 +23,7 @@ import {
   type ReceivingDraft,
   type ReceivingLine,
   type Product,
+  productFromInvoiceLine,
 } from "@counterwell/core";
 
 function fresh(): ReceivingDraft {
@@ -708,6 +710,7 @@ function ReceivingItem({
   const { language } = useSession();
   const t = (en: string, hi: string) => (language === "hi" ? hi : en);
   const [search, setSearch] = useState(line.source?.name ?? "");
+  const [newProduct, setNewProduct] = useState<Product | null>(null);
   const product = products.find((p) => p.id === line.productId);
   const validReview =
     line.confirmed &&
@@ -814,13 +817,72 @@ function ReceivingItem({
               </Txt>
             </Pressable>
           ))}
-          {!productSuggestions(products, search).length && (
-            <Txt muted>
-              {t(
-                "No match. Save this draft, then add the product in Inventory.",
-                "कोई मिलान नहीं। ड्राफ्ट सहेजकर इन्वेंटरी में सामान जोड़ें।",
-              )}
-            </Txt>
+          {!productSuggestions(products, search).length && !newProduct && (
+            <View style={{ gap: 8 }}>
+              <Txt muted>
+                {t(
+                  "No catalogue product matches this line.",
+                  "इस लाइन से कैटलॉग का कोई सामान नहीं मिलता।",
+                )}
+              </Txt>
+              <Button
+                secondary
+                small
+                icon="add"
+                onPress={() =>
+                  setNewProduct(
+                    productFromInvoiceLine(
+                      line.source ?? {
+                        name: search,
+                        strength: null,
+                        packSize: null,
+                        unit: null,
+                        taxBps: null,
+                      },
+                      uid(),
+                    ),
+                  )
+                }
+              >
+                {t("Add as new medicine", "नई दवा के रूप में जोड़ें")}
+              </Button>
+            </View>
+          )}
+          {newProduct && (
+            <View
+              style={{
+                padding: 12,
+                borderWidth: 1,
+                borderColor: colors.line,
+                borderRadius: 8,
+              }}
+            >
+              <Txt bold style={{ marginBottom: 10 }}>
+                {t(
+                  "New medicine from this invoice line: check every field",
+                  "इस बिल लाइन से नई दवा: हर जानकारी जाँचें",
+                )}
+              </Txt>
+              <ProductForm
+                product={null}
+                draft={newProduct}
+                onDone={(saved) => {
+                  setNewProduct(null);
+                  if (saved)
+                    change({
+                      productId: saved.id,
+                      unit: "",
+                      priceUnit: "",
+                      price: "",
+                      cost: "",
+                    });
+                }}
+              />
+              <View style={{ height: 10 }} />
+              <Button secondary small onPress={() => setNewProduct(null)}>
+                {t("Cancel", "रद्द करें")}
+              </Button>
+            </View>
           )}
           {product && (
             <>

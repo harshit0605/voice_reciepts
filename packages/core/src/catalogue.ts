@@ -1,7 +1,7 @@
 import { unzipSync } from "fflate";
 import { productSchema } from "./contracts";
 import { barcodesOf, normalCode } from "./scan";
-import type { Product, State } from "./types";
+import type { Batch, Product, State } from "./types";
 
 // ---------- reading files ----------
 
@@ -428,20 +428,42 @@ const normal = (s: string) =>
     .replace(/(\d)\s+(mg|mcg|g|gm|ml|iu|%)\b/g, "$1$2")
     .replace(/[^a-z0-9.%]+/g, " ")
     .trim();
-const formWords = new Set(
-  "tab tabs tablet tablets cap caps capsule capsules syp syr syrup susp suspension inj injection cream gel oint ointment drop drops sachet".split(
-    " ",
-  ),
-);
-/** Same product when brand name and strength agree, however they were typed ("DOLO 650 TAB" + "650mg" = "Dolo" + "650 mg"). */
-export function productKey(name: string, strength: string) {
-  const s = normal(strength);
-  const number = /^(\d+(?:\.\d+)?)[a-z%]*$/.exec(s)?.[1];
-  const tokens = normal(name)
+const canonical: Record<string, string> = {
+  tab: "tablet",
+  tabs: "tablet",
+  tablets: "tablet",
+  cap: "capsule",
+  caps: "capsule",
+  capsules: "capsule",
+  syp: "syrup",
+  syr: "syrup",
+  susp: "suspension",
+  inj: "injection",
+  oint: "ointment",
+  crm: "cream",
+  drop: "drops",
+  drp: "drops",
+  sachets: "sachet",
+};
+const tokens = (s: string) =>
+  normal(s)
     .split(" ")
-    .filter((t) => t && !formWords.has(t) && t !== s && t !== number);
-  return [...tokens, s].filter(Boolean).join(" ");
+    .filter(Boolean)
+    .map(
+      (t) =>
+        canonical[t] ?? t.replace(/^(\d+(?:\.\d+)?)(mg|mcg|g|gm|ml|iu)$/, "$1"),
+    );
+/**
+ * Same medicine when brand, strength and form agree however they were typed:
+ * "DOLO 650 TAB" = "Dolo" + "650 mg" (tablet), but a syrup and a suspension differ.
+ */
+export function productKey(name: string, strength: string, form: string) {
+  return [...new Set([...tokens(name), ...tokens(strength), ...tokens(form)])]
+    .sort()
+    .join(" ");
 }
+const packOf = (units: Record<string, string>) =>
+  JSON.stringify(Object.entries(units).sort(([a], [b]) => a.localeCompare(b)));
 function gstBps(raw: string): { bps?: number; problem?: string } {
   const v = raw.replace(/gst|igst|%|\s/gi, "");
   if (!v) return {};
@@ -485,14 +507,15 @@ export function planImport(
   state: Pick<State, "products">,
   options: { defaultGst?: string; idFor: (line: number) => string },
 ): ImportPlan {
-  const byKey = new Map<string, string>(),
-    byCode = new Map<string, string>();
+  const byKey = new Map<string, Product>(),
+    byCode = new Map<string, Product>();
   for (const p of Object.values(state.products)) {
-    byKey.set(productKey(p.name, p.strength), p.id);
-    for (const c of barcodesOf(p)) byCode.set(c, p.id);
+    byKey.set(productKey(p.name, p.strength, p.form), p);
+    for (const c of barcodesOf(p)) byCode.set(c, p);
   }
-  const seenKey = new Map<string, number>(),
-    seenCode = new Map<string, number>();
+  const seenKey = new Map<string, Product>(),
+    seenCode = new Map<string, Product>(),
+    lineOf = new Map<Product, number>();
   const fallback = options.defaultGst?.trim() ? gstBps(options.defaultGst) : {};
   const rows: ImportRowPlan[] = [];
   const create: Product[] = [];
@@ -526,8 +549,6 @@ export function planImport(
     if (tax.bps !== undefined && ![0, 500, 1200, 1800, 2800].includes(tax.bps))
       warnings.push("Unusual GST rate: check it");
     const sched = schedule(cell("schedule"));
-    if (mapping.schedule !== undefined && !sched)
-      warnings.push("No schedule given: marked OTC");
     if (sched === "X") warnings.push("Schedule X: sales stay blocked");
     const rawCodes = cell("barcode");
     let codes: string[] = [];
@@ -577,28 +598,44 @@ export function planImport(
       });
       return;
     }
-    const k = productKey(name, strength);
-    const existingId =
+    const k = productKey(name, strength, pack.form);
+    const existing =
       byKey.get(k) ?? codes.map((c) => byCode.get(c)).find(Boolean);
-    if (existingId) {
+    if (existing) {
+      if (packOf(existing.units) !== packOf(product.units))
+        warnings.push(
+          "Already in the catalogue with a different pack: not changed",
+        );
       rows.push({
         line,
         name,
         status: "existing",
-        existingId,
+        existingId: existing.id,
         errors,
         warnings,
       });
       return;
     }
-    const repeatOf =
+    const earlier =
       seenKey.get(k) ?? codes.map((c) => seenCode.get(c)).find(Boolean);
-    if (repeatOf) {
-      rows.push({ line, name, status: "repeat", repeatOf, errors, warnings });
+    if (earlier) {
+      if (packOf(earlier.units) !== packOf(product.units))
+        warnings.push(
+          "Same medicine as an earlier row with a different pack: skipped",
+        );
+      rows.push({
+        line,
+        name,
+        status: "repeat",
+        repeatOf: lineOf.get(earlier),
+        errors,
+        warnings,
+      });
       return;
     }
-    seenKey.set(k, line);
-    for (const c of codes) if (!seenCode.has(c)) seenCode.set(c, line);
+    seenKey.set(k, product);
+    lineOf.set(product, line);
+    for (const c of codes) if (!seenCode.has(c)) seenCode.set(c, product);
     rows.push({ line, name, status: "new", product, errors, warnings });
     create.push(product);
   });
@@ -643,4 +680,24 @@ export function productFromInvoiceLine(
     schedule: "OTC",
     active: true,
   };
+}
+/** Batches per product, earliest expiry first; one pass instead of a filter per product. */
+export function groupBatches(batches: Record<string, Batch>) {
+  const out = new Map<string, Batch[]>();
+  for (const b of Object.values(batches)) {
+    const list = out.get(b.productId);
+    if (list) list.push(b);
+    else out.set(b.productId, [b]);
+  }
+  for (const list of out.values())
+    list.sort((a, b) => a.expiry.localeCompare(b.expiry));
+  return out;
+}
+/** Every typed word must appear somewhere in the product's names, salt, strength, barcodes or aliases. */
+export function matchesSearch(p: Product, query: string) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const text =
+    `${p.name} ${p.generic} ${p.strength} ${p.form} ${p.barcode} ${p.aliases.join(" ")}`.toLowerCase();
+  return words.every((w) => text.includes(w));
 }

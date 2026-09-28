@@ -246,6 +246,8 @@ export function Section({ title, action, children }: any) {
     </View>
   );
 }
+/** Long product lists render this many rows; search narrows the rest. */
+export const SHOWN_PRODUCTS = 50;
 export function Sheet({ title, visible, onClose, children }: any) {
   const t = useText();
   // A second tap on the button that opened the sheet can land on whatever sits under it

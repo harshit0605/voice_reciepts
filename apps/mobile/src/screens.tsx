@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   ScrollView,
@@ -24,8 +24,11 @@ import {
   colors,
   styles,
   useText,
+  SHOWN_PRODUCTS,
 } from "./ui";
 import { Checkout } from "./selling";
+import { ProductForm } from "./product-form";
+import { CatalogueImport } from "./catalogue-import";
 import {
   D,
   rupees,
@@ -40,6 +43,8 @@ import {
   type Batch,
   type Approval,
   type State,
+  groupBatches,
+  matchesSearch,
 } from "@counterwell/core";
 const money = (value: string) => {
   const d = D(value || 0).mul(100);
@@ -787,6 +792,7 @@ export function StockScreen({ manage = false }: { manage?: boolean }) {
     [editing, setEditing] = useState<Product | null | undefined>(),
     [batchProduct, setBatchProduct] = useState<Product | null>(null),
     [purchase, setPurchase] = useState(false),
+    [importing, setImporting] = useState(false),
     [adjust, setAdjust] = useState<Batch | null>(null),
     [delta, setDelta] = useState(""),
     [reason, setReason] = useState(""),
@@ -798,6 +804,15 @@ export function StockScreen({ manage = false }: { manage?: boolean }) {
       | "release"
       | "quarantine_disposal"
     >("correction");
+  const batchesByProduct = useMemo(
+    () => groupBatches(state.batches),
+    [state.batches],
+  );
+  const matching = useMemo(() => {
+    return Object.values(state.products)
+      .filter((p) => matchesSearch(p, search))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [state.products, search]);
   return (
     <Page
       title={manage ? t("inventory") : t("stock")}
@@ -816,72 +831,81 @@ export function StockScreen({ manage = false }: { manage?: boolean }) {
     >
       <Field value={search} onChange={setSearch} placeholder={t("search")} />
       {manage && (
-        <Row style={{ marginBottom: 18 }}>
+        <Row style={{ marginBottom: 18, flexWrap: "wrap" }}>
           <Button small secondary onPress={() => setEditing(null)} icon="add">
             Add medicine
           </Button>
+          <Button
+            small
+            secondary
+            onPress={() => setImporting(true)}
+            icon="cloud-upload-outline"
+          >
+            Import catalogue
+          </Button>
         </Row>
       )}
-      {Object.values(state.products)
-        .filter((p) =>
-          `${p.name} ${p.generic}`.toLowerCase().includes(search.toLowerCase()),
-        )
-        .map((p) => (
-          <View key={p.id} style={{ marginBottom: 24 }}>
-            <Row style={{ justifyContent: "space-between", marginBottom: 8 }}>
-              <Txt bold size={17}>
-                {p.name} <Txt muted>{p.strength}</Txt>
-              </Txt>
-              {manage && (
-                <Pressable onPress={() => setEditing(p)}>
-                  <Icon name="create-outline" />
-                </Pressable>
-              )}
-            </Row>
-            {Object.values(state.batches)
-              .filter((b) => b.productId === p.id)
-              .map((b) => (
-                <Pressable
-                  key={b.id}
-                  onPress={() => {
-                    setAdjust(b);
-                    setDelta("");
-                  }}
-                  style={styles.listRow}
-                >
-                  <Row style={{ justifyContent: "space-between" }}>
-                    <View>
-                      <Txt size={12} bold>
-                        {b.code} · {b.expiry}
-                      </Txt>
-                      <Txt size={11} muted style={{ marginTop: 5 }}>
-                        {rupees(b.pricePaise)} / {p.baseUnit} · {b.quarantined}{" "}
-                        quarantined
-                      </Txt>
-                    </View>
-                    <Badge
-                      warning={
-                        Number(b.quantity) <= Number(p.reorderAt) ||
-                        b.expiry < indiaDate(new Date().toISOString())
-                      }
-                    >
-                      {b.quantity} {p.baseUnit}
-                    </Badge>
-                  </Row>
-                </Pressable>
-              ))}
+      {matching.length > SHOWN_PRODUCTS && (
+        <Txt size={11} muted style={{ marginBottom: 12 }}>
+          {s.language === "hi"
+            ? `${matching.length.toLocaleString("en-IN")} में से ${SHOWN_PRODUCTS} दिख रहे हैं · खोजकर ढूँढें`
+            : `Showing ${SHOWN_PRODUCTS} of ${matching.length.toLocaleString("en-IN")} · search to find others`}
+        </Txt>
+      )}
+      {matching.slice(0, SHOWN_PRODUCTS).map((p) => (
+        <View key={p.id} style={{ marginBottom: 24 }}>
+          <Row style={{ justifyContent: "space-between", marginBottom: 8 }}>
+            <Txt bold size={17}>
+              {p.name} <Txt muted>{p.strength}</Txt>
+            </Txt>
             {manage && (
-              <Pressable
-                onPress={() => setBatchProduct(p)}
-                style={{ paddingVertical: 12 }}
-              >
-                <Txt size={11} style={{ color: colors.accent }}>
-                  + Record opening batch count
-                </Txt>
+              <Pressable onPress={() => setEditing(p)}>
+                <Icon name="create-outline" />
               </Pressable>
             )}
-          </View>
-        ))}
+          </Row>
+          {(batchesByProduct.get(p.id) ?? []).map((b) => (
+            <Pressable
+              key={b.id}
+              onPress={() => {
+                setAdjust(b);
+                setDelta("");
+              }}
+              style={styles.listRow}
+            >
+              <Row style={{ justifyContent: "space-between" }}>
+                <View>
+                  <Txt size={12} bold>
+                    {b.code} · {b.expiry}
+                  </Txt>
+                  <Txt size={11} muted style={{ marginTop: 5 }}>
+                    {rupees(b.pricePaise)} / {p.baseUnit} · {b.quarantined}{" "}
+                    quarantined
+                  </Txt>
+                </View>
+                <Badge
+                  warning={
+                    Number(b.quantity) <= Number(p.reorderAt) ||
+                    b.expiry < indiaDate(new Date().toISOString())
+                  }
+                >
+                  {b.quantity} {p.baseUnit}
+                </Badge>
+              </Row>
+            </Pressable>
+          ))}
+          {manage && (
+            <Pressable
+              onPress={() => setBatchProduct(p)}
+              style={{ paddingVertical: 12 }}
+            >
+              <Txt size={11} style={{ color: colors.accent }}>
+                + Record opening batch count
+              </Txt>
+            </Pressable>
+          )}
+        </View>
+      ))}
       <Sheet
         visible={editing !== undefined}
         title={editing ? "Edit medicine" : "Add medicine"}
@@ -967,6 +991,13 @@ export function StockScreen({ manage = false }: { manage?: boolean }) {
       >
         {purchase && <PurchaseForm onDone={() => setPurchase(false)} />}
       </Sheet>
+      <Sheet
+        visible={importing}
+        title="Import catalogue"
+        onClose={() => setImporting(false)}
+      >
+        {importing && <CatalogueImport onDone={() => setImporting(false)} />}
+      </Sheet>
     </Page>
   );
 }
@@ -1002,120 +1033,6 @@ function PriceForm({ batch }: { batch: Batch }) {
         Update selling price
       </Button>
     </View>
-  );
-}
-function ProductForm({
-  product,
-  onDone,
-}: {
-  product: Product | null;
-  onDone: () => void;
-}) {
-  const s = useSession(),
-    run = useRun();
-  const [extraUnits, EU] = useState(
-    Object.entries(product?.units ?? {})
-      .filter(([u]) => u !== product?.baseUnit && u !== "strip")
-      .map(([k, v]) => `${k}=${v}`)
-      .join(", "),
-  );
-  const [reorder, RO] = useState(product?.reorderAt ?? "10"),
-    [form, F] = useState(product?.form ?? "tablet");
-  const [name, S] = useState(product?.name ?? ""),
-    [generic, G] = useState(product?.generic ?? ""),
-    [strength, T] = useState(product?.strength ?? ""),
-    [unit, U] = useState(product?.baseUnit ?? "tablet"),
-    [pack, P] = useState(product?.units.strip ?? "10"),
-    [tax, X] = useState(product ? String(product.taxBps / 100) : ""),
-    [hsn, H] = useState(product?.hsn ?? ""),
-    [barcode, B] = useState(product?.barcode ?? ""),
-    [aliases, A] = useState(product?.aliases.join(", ") ?? ""),
-    [schedule, R] = useState<Product["schedule"]>(product?.schedule ?? "OTC");
-  return (
-    <>
-      <Field label="Brand / product name" value={name} onChange={S} />
-      <Field label="Generic / salt" value={generic} onChange={G} />
-      <Field label="Strength and formulation" value={strength} onChange={T} />
-      <Field label="Formulation" value={form} onChange={F} />
-      <Field label="Base unit" value={unit} onChange={U} />
-      <Field
-        label="Extra units (box=100, pack=20)"
-        value={extraUnits}
-        onChange={EU}
-      />
-      <Field
-        label="Reorder level in base units"
-        value={reorder}
-        onChange={RO}
-        number
-      />
-      {unit === "tablet" && (
-        <Field label="Tablets per strip" value={pack} onChange={P} number />
-      )}
-      <Field
-        label="GST rate (%) · verify from invoice"
-        value={tax}
-        onChange={X}
-        number
-      />
-      <Field label="HSN" value={hsn} onChange={H} />
-      <Field label="Barcodes (comma separated)" value={barcode} onChange={B} />
-      <Field
-        label="Search aliases (comma separated)"
-        value={aliases}
-        onChange={A}
-      />
-      <Row style={{ marginBottom: 20 }}>
-        {(["OTC", "H", "H1", "X"] as const).map((r) => (
-          <Chip key={r} active={schedule === r} onPress={() => R(r)}>
-            {r}
-          </Chip>
-        ))}
-      </Row>
-      <Button
-        onPress={() =>
-          void run(async () => {
-            if (!tax) throw new Error("Confirm the GST rate");
-            await s.command({
-              type: "product.save",
-              product: {
-                id: product?.id ?? uid(),
-                name,
-                generic,
-                strength,
-                form,
-                hsn,
-                barcode,
-                aliases: aliases
-                  .split(",")
-                  .map((v) => v.trim())
-                  .filter(Boolean),
-                units: {
-                  ...(unit === "tablet"
-                    ? { tablet: "1", strip: pack }
-                    : { [unit]: "1" }),
-                  ...Object.fromEntries(
-                    extraUnits
-                      .split(",")
-                      .map((x) => x.trim())
-                      .filter(Boolean)
-                      .map((x) => x.split("=").map((v) => v.trim())),
-                  ),
-                },
-                baseUnit: unit,
-                taxBps: Math.round(Number(tax) * 100),
-                schedule,
-                reorderAt: reorder,
-                active: true,
-              },
-            });
-            onDone();
-          })
-        }
-      >
-        Save medicine
-      </Button>
-    </>
   );
 }
 function BatchForm({

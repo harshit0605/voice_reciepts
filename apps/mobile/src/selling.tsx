@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   View,
   ScrollView,
@@ -28,6 +28,7 @@ import {
   colors,
   styles,
   useText,
+  SHOWN_PRODUCTS,
 } from "./ui";
 import {
   D,
@@ -51,6 +52,8 @@ import {
   type State,
   type Batch,
   type Order,
+  groupBatches,
+  matchesSearch,
 } from "@counterwell/core";
 function exactPaise(input: string) {
   const amount = D(input || 0).mul(100);
@@ -195,7 +198,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
       return;
     }
     const product = m.products[0];
-    const stock = batches.filter((b) => b.productId === product.id);
+    const stock = sellable.get(product.id) ?? [];
     if (!stock.length) {
       setScanNotice({
         message: "No sellable stock is recorded for this product.",
@@ -216,24 +219,32 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
             : "",
     );
   }
-  const batches = Object.values(state.batches)
-    .filter(
-      (b) =>
-        D(b.quantity).gt(0) && b.expiry >= indiaDate(new Date().toISOString()),
-    )
-    .sort((a, b) => a.expiry.localeCompare(b.expiry));
-  const products = Object.values(state.products).filter(
-    (p) =>
-      p.active &&
-      (!query ||
-        `${p.name} ${p.generic} ${p.strength} ${p.barcode} ${p.aliases.join(" ")}`
-          .toLowerCase()
-          .includes(query.toLowerCase())) &&
-      (filter !== "low" ||
-        batches
-          .filter((b) => b.productId === p.id)
-          .reduce((n, b) => n + Number(b.quantity), 0) <= Number(p.reorderAt)),
-  );
+  // Sellable (in stock, unexpired) batches per product, earliest expiry first.
+  const sellable = useMemo(() => {
+    const out = groupBatches(state.batches);
+    for (const [id, list] of out) {
+      const ok = list.filter((b) => D(b.quantity).gt(0) && b.expiry >= today);
+      if (ok.length) out.set(id, ok);
+      else out.delete(id);
+    }
+    return out;
+  }, [state.batches, today]);
+  const stockOf = (id: string) =>
+    (sellable.get(id) ?? []).reduce((n, b) => n + Number(b.quantity), 0);
+  const products = useMemo(() => {
+    return Object.values(state.products)
+      .filter(
+        (p) =>
+          p.active &&
+          matchesSearch(p, query) &&
+          (filter !== "low" || stockOf(p.id) <= Number(p.reorderAt)),
+      )
+      .sort(
+        (a, b) =>
+          Number(sellable.has(b.id)) - Number(sellable.has(a.id)) ||
+          a.name.localeCompare(b.name),
+      );
+  }, [state.products, sellable, query, filter]);
   let total = 0,
     basketValid = true;
   try {
@@ -568,8 +579,15 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 20 }}
         >
-          {products.map((p) => {
-            const available = batches.filter((b) => b.productId === p.id);
+          {products.length > SHOWN_PRODUCTS && (
+            <Txt size={11} muted style={{ marginTop: 12 }}>
+              {s.language === "hi"
+                ? `${products.length.toLocaleString("en-IN")} में से ${SHOWN_PRODUCTS} दिख रहे हैं · नाम, साल्ट या बारकोड से खोजें`
+                : `Showing ${SHOWN_PRODUCTS} of ${products.length.toLocaleString("en-IN")} · search by name, salt or barcode`}
+            </Txt>
+          )}
+          {products.slice(0, SHOWN_PRODUCTS).map((p) => {
+            const available = sellable.get(p.id) ?? [];
             const count = available.reduce((n, b) => n + Number(b.quantity), 0);
             return (
               <View
@@ -716,19 +734,17 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
               Select the batch printed on the medicine you are supplying.
             </Txt>
             <ScrollView horizontal style={{ marginBottom: 20 }}>
-              {batches
-                .filter((b) => b.productId === selected.productId)
-                .map((b) => (
-                  <Chip
-                    key={b.id}
-                    active={selected.id === b.id}
-                    onPress={() => {
-                      setSelected(b);
-                    }}
-                  >
-                    {b.code} · {b.expiry}
-                  </Chip>
-                ))}
+              {(sellable.get(selected.productId) ?? []).map((b) => (
+                <Chip
+                  key={b.id}
+                  active={selected.id === b.id}
+                  onPress={() => {
+                    setSelected(b);
+                  }}
+                >
+                  {b.code} · {b.expiry}
+                </Chip>
+              ))}
             </ScrollView>
             {voiceItem && (
               <View style={{ gap: 8, marginBottom: 14 }}>
@@ -835,7 +851,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
         visible={voiceOpen}
         close={() => setVoiceOpen(false)}
         onPick={(id, productId) => {
-          const batch = batches.find((b) => b.productId === productId),
+          const batch = sellable.get(productId)?.[0],
             spoken = selling.entry.voice.items.find((i) => i.id === id);
           if (!batch) {
             s.setError("No eligible stock is available for this product");

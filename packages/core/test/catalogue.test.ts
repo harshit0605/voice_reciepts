@@ -11,6 +11,7 @@ import {
   productKey,
   productFromInvoiceLine,
   chunks,
+  matchesSearch,
   commandFingerprint,
   sameFingerprint,
   demoState,
@@ -142,11 +143,22 @@ describe("columns and units", () => {
       "sachet",
     );
   });
-  it("treats the same brand and strength typed differently as one product", () => {
-    expect(productKey("DOLO 650 TAB", "650mg")).toBe(
-      productKey("Dolo", "650 mg"),
+  it("treats the same medicine typed differently as one product, but not other forms", () => {
+    expect(productKey("DOLO 650 TAB", "650mg", "tablet")).toBe(
+      productKey("Dolo", "650 mg", "tablet"),
     );
-    expect(productKey("Dolo 500", "")).not.toBe(productKey("Dolo 650", ""));
+    expect(productKey("DOLO 650 TAB", "", "tablet")).toBe(
+      productKey("Dolo", "650 mg", "tablet"),
+    );
+    expect(productKey("PARACET 50 SYP", "", "syrup")).not.toBe(
+      productKey("PARACET 50 SUSP", "", "syrup"),
+    );
+    expect(productKey("PARACET 50 TAB", "", "tablet")).not.toBe(
+      productKey("PARACET 50 CAP", "", "capsule"),
+    );
+    expect(productKey("Dolo 500", "", "tablet")).not.toBe(
+      productKey("Dolo 650", "", "tablet"),
+    );
   });
 });
 describe("planning an import", () => {
@@ -225,6 +237,13 @@ describe("planning an import", () => {
       status: "existing",
       existingId: "cetirizine",
     });
+  });
+  it("finds products by every typed word in any order", () => {
+    const dolo = demoState(undefined, undefined, undefined, now).products.dolo;
+    expect(matchesSearch(dolo, "650 dolo")).toBe(true);
+    expect(matchesSearch(dolo, "paracetamol tab")).toBe(true);
+    expect(matchesSearch(dolo, "dolo 500")).toBe(false);
+    expect(matchesSearch(dolo, "  ")).toBe(true);
   });
   it("splits large imports into bounded chunks", () => {
     expect(chunks([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
