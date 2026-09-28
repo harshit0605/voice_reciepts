@@ -168,13 +168,21 @@ Strict TypeScript, 113 unit tests and the 26-test PostgreSQL/API suite passed. N
 
 It has **not** run on a real Windows PC yet. The one-line version downloads the script from GitHub at a pinned commit; its SHA-256 matched the local file.
 
-**Invoice reading from real-looking images: blocked.**
+**Invoice reading from real-looking images (OpenRouter, Gemini 2.5 Flash, through the real upload → job → worker path):**
 
-- `GEMINI_API_KEY` in `.env` is empty, so the worker marks every invoice job "Document/structure provider is not configured". This was confirmed with two uploads.
-- Test images are in `.data/real-invoices` (git-ignored; not ours to publish):
-  - Busy's three public sample pharmacy invoices, each with the same three lines (paracetamol, cough syrup, face mask) and batch, expiry, HSN, discount and GST;
-  - phone-photo versions of them (skewed, rotated, uneven light, JPEG quality 58).
-- These are vendor templates, not a dense real distributor bill with PTR, free quantity and 20+ lines. That still needs a real bill from the shop.
-- Once a key is set, restart the worker and run `python3 .data/real-invoices/run-extraction.py .data/real-invoices/*.png .data/real-invoices/photo-*.jpg`.
+- **Images:** Busy's three public sample pharmacy invoices and phone-photo versions of them (skewed, rotated, uneven light, JPEG quality 58). They are in `.data/real-invoices` (git-ignored; not ours to publish). Each has the same three lines, with batch, expiry, HSN, discount and GST.
+- **First run failed on every file:** Google refused the invoice schema as too complex for constrained decoding. The cause was the 500-line limit and zod's safe-integer bounds. The direct Gemini path sends the same schema, so it had never worked live either. The model now gets the shape only; zod still enforces every limit, and malformed replies are still rejected without a second call.
+- **Second run:** the instruction said to leave month-only expiry blank, and the model ignored it. It also filled MRP from "List Price" on one run but not another, which could turn a purchase rate into the MRP. The instruction now:
+  - takes MRP only from a column labelled MRP;
+  - reads `12/26` as `2026-12-31`, as the stock count does;
+  - puts free quantity in bonus.
+    The extraction version is now `receiving-v3`.
+- **Final run, all six images:**
+  - Supplier, GSTIN, invoice number and date, the ₹231 total, names with strength, quantities, GST and line amounts were right on every image.
+  - MRP was left blank, which is correct because there is no MRP column.
+  - Batch numbers were right except on the "Modern" template, which itself prints two batches on one row. Staff review would catch it.
+  - Cost was $0.0014–0.0022 and time 3.6–5.6 s per invoice.
+- **Flash-Lite** read the same fields at about $0.0005, but copied `1.` quantities and line breaks literally. Importing a draft now cleans those.
+- **Not established:** a dense real distributor bill (20+ lines, free quantity, PTR), multi-page PDFs and handwritten corrections. `npm run evaluate:invoices -- <files>` reruns this on any bill.
 
 **Android:** the emulator booted, but the host load average stayed between 55 and 95. The guest reported a load of 53 and did not bring the app to the foreground within 2 minutes. No Android evidence for this pass.

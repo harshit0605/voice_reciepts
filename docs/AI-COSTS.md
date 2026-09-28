@@ -21,6 +21,19 @@ Illustrative 30-day months using ₹30/hour (no rounding/minimums assumed):
 
 Do not offer unlimited AI in a ₹499 plan based on these examples. Track actual use first; choose included audio minutes/pages and a paid allowance after field measurements. Search, barcode, manual receiving, arithmetic, permissions and reconciliation need no AI calls. Gboard dictation can provide text through the normal keyboard field, but it is not a guaranteed free/offline cross-platform speech SDK.
 
+## Measured (28 September 2026)
+
+Six images of Busy's public sample pharmacy invoice (three layouts, clean and as skewed phone photos; 3 lines each) through OpenRouter:
+
+| Model                 | Cost per invoice                  | Time      | Result                                                                                                                                 |
+| --------------------- | --------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Gemini 2.5 Flash      | $0.0014–0.0022 (about ₹0.12–0.19) | 3.6–5.6 s | Header, total, names, quantities, GST and line amounts right on all six; batches right except where the template prints two on one row |
+| Gemini 2.5 Flash-Lite | about $0.0005 (₹0.04)             | 3.9–6.6 s | Same fields; copied "1." quantities and line breaks literally (now cleaned when the draft is imported)                                 |
+
+These are simple 3-line templates. A dense real distributor bill (20+ lines, free quantity, PTR) still needs measuring; expect more tokens and more errors. At 10 invoices a day, Flash is about ₹50 a month.
+
+Through OpenRouter, requests ask for providers that honour the JSON schema and do not keep data (`data_collection: "deny"`), send PDFs to the model itself rather than a paid OCR plugin, and turn thinking off.
+
 ## Controls implemented
 
 - Invoice content hashes reuse prior jobs/results within one business; voice reuse is additionally scoped to the employee and sale draft, so identical utterances for different customers remain separate. Concurrent identical uploads create one job.

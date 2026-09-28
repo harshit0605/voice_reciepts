@@ -22,6 +22,7 @@
     "dev:worker": "npm run worker -w @counterwell/api",
     "test:integration": "RUN_DB_TESTS=1 vitest run",
     "evaluate:voice": "tsx scripts/evaluate-voice.ts",
+    "evaluate:invoices": "tsx scripts/evaluate-invoices.ts",
     "verify:backup": "tsx --env-file=.env scripts/verify-backup.ts",
     "format": "prettier --write apps packages scripts docs README.md *.json .github/workflows/*.yml"
   },
