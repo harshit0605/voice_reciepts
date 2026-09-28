@@ -42,7 +42,7 @@ const labelsHi: Record<CatalogueField, string> = {
 };
 const MAX_BYTES = 15 * 1024 * 1024,
   MAX_ROWS = 20000,
-  SHOWN = 50;
+  FIRST = 10;
 const count = (n: number) => n.toLocaleString("en-IN");
 /** Owner-only: load products from an Excel/CSV export or pasted spreadsheet rows. */
 export function CatalogueImport({ onDone }: { onDone: () => void }) {
@@ -62,7 +62,8 @@ export function CatalogueImport({ onDone }: { onDone: () => void }) {
     [progress, setProgress] = useState<{ done: number; total: number } | null>(
       null,
     ),
-    [added, setAdded] = useState<number | null>(null);
+    [added, setAdded] = useState<number | null>(null),
+    [limit, setLimit] = useState(FIRST);
   // Product IDs stay the same while the mapping is adjusted.
   const ids = useRef(new Map<number, string>()),
     running = useRef(false);
@@ -193,7 +194,7 @@ export function CatalogueImport({ onDone }: { onDone: () => void }) {
         ? r.status === "new" && r.warnings.length
         : r.status === filter,
     )
-    .slice(0, SHOWN);
+    .slice(0, limit);
   const c = plan?.counts;
   const label = (f: CatalogueField) => (hi ? labelsHi : labels)[f];
   const column = (i: number | undefined) =>
@@ -291,34 +292,86 @@ export function CatalogueImport({ onDone }: { onDone: () => void }) {
       {c && (
         <>
           <Row style={{ flexWrap: "wrap" }}>
-            <Chip active={filter === "new"} onPress={() => setFilter("new")}>
+            <Chip
+              active={filter === "new"}
+              onPress={() => {
+                setFilter("new");
+                setLimit(FIRST);
+              }}
+            >
               {`${hi ? "नए" : "New"} · ${count(c.new)}`}
             </Chip>
             <Chip
               active={filter === "warnings"}
-              onPress={() => setFilter("warnings")}
+              onPress={() => {
+                setFilter("warnings");
+                setLimit(FIRST);
+              }}
             >
               {`${hi ? "जाँचें" : "Check"} · ${count(c.warnings)}`}
             </Chip>
             <Chip
               active={filter === "existing"}
-              onPress={() => setFilter("existing")}
+              onPress={() => {
+                setFilter("existing");
+                setLimit(FIRST);
+              }}
             >
               {`${hi ? "पहले से हैं" : "Already added"} · ${count(c.existing)}`}
             </Chip>
             <Chip
               active={filter === "repeat"}
-              onPress={() => setFilter("repeat")}
+              onPress={() => {
+                setFilter("repeat");
+                setLimit(FIRST);
+              }}
             >
               {`${hi ? "दोहराए" : "Repeated"} · ${count(c.repeat)}`}
             </Chip>
             <Chip
               active={filter === "error"}
-              onPress={() => setFilter("error")}
+              onPress={() => {
+                setFilter("error");
+                setLimit(FIRST);
+              }}
             >
               {`${hi ? "गलतियाँ" : "Errors"} · ${count(c.error)}`}
             </Chip>
           </Row>
+          {!!error && <Txt style={{ color: colors.red }}>{error}</Txt>}
+          {progress && (
+            <Txt>
+              {hi
+                ? `${count(progress.done)} / ${count(progress.total)} जोड़े गए`
+                : `Added ${count(progress.done)} of ${count(progress.total)}`}
+            </Txt>
+          )}
+          {added !== null && !plan?.create.length ? (
+            <Button onPress={onDone} icon="checkmark">
+              Done
+            </Button>
+          ) : (
+            <Button
+              disabled={
+                busy || !plan?.create.length || mapping.name === undefined
+              }
+              onPress={() => void importAll()}
+              icon="cloud-upload-outline"
+            >
+              {busy
+                ? hi
+                  ? "जोड़ रहे हैं…"
+                  : "Adding…"
+                : hi
+                  ? `${count(plan?.create.length ?? 0)} दवाएँ जोड़ें`
+                  : `Add ${count(plan?.create.length ?? 0)} medicines`}
+            </Button>
+          )}
+          <Txt size={11} muted>
+            Rows with errors, repeated rows and products already in the
+            catalogue are skipped. Existing products are never changed by an
+            import.
+          </Txt>
           {shown.map((r) => (
             <View key={r.line} style={styles.listRow}>
               <Row style={{ justifyContent: "space-between" }}>
@@ -374,46 +427,15 @@ export function CatalogueImport({ onDone }: { onDone: () => void }) {
             </View>
           ))}
           {!shown.length && <Txt muted>No rows here.</Txt>}
-          {(filter === "warnings" ? c.warnings : c[filter]) > SHOWN && (
-            <Txt size={11} muted>
+          {(filter === "warnings" ? c.warnings : c[filter]) > limit && (
+            <Button secondary small onPress={() => setLimit(limit + 40)}>
               {hi
-                ? `पहली ${SHOWN} पंक्तियाँ दिख रही हैं`
-                : `Showing the first ${SHOWN} rows`}
-            </Txt>
+                ? `${limit} पंक्तियाँ दिख रही हैं · और दिखाएँ`
+                : `Showing ${limit} rows · show more`}
+            </Button>
           )}
         </>
       )}
-      {!!error && <Txt style={{ color: colors.red }}>{error}</Txt>}
-      {progress && (
-        <Txt>
-          {hi
-            ? `${count(progress.done)} / ${count(progress.total)} जोड़े गए`
-            : `Added ${count(progress.done)} of ${count(progress.total)}`}
-        </Txt>
-      )}
-      {added !== null && !plan?.create.length ? (
-        <Button onPress={onDone} icon="checkmark">
-          Done
-        </Button>
-      ) : (
-        <Button
-          disabled={busy || !plan?.create.length || mapping.name === undefined}
-          onPress={() => void importAll()}
-          icon="cloud-upload-outline"
-        >
-          {busy
-            ? hi
-              ? "जोड़ रहे हैं…"
-              : "Adding…"
-            : hi
-              ? `${count(plan?.create.length ?? 0)} दवाएँ जोड़ें`
-              : `Add ${count(plan?.create.length ?? 0)} medicines`}
-        </Button>
-      )}
-      <Txt size={11} muted>
-        Rows with errors, repeated rows and products already in the catalogue
-        are skipped. Existing products are never changed by an import.
-      </Txt>
     </View>
   );
 }
