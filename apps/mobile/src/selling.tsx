@@ -30,6 +30,7 @@ import {
   styles,
   useText,
   SHOWN_PRODUCTS,
+  useWord,
 } from "./ui";
 import {
   D,
@@ -79,6 +80,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
   const s = useSession(),
     state = s.state!,
     t = useText(),
+    w = useWord(),
     wide = useWindowDimensions().width >= 1180;
   const [query, setQuery] = useState(""),
     [filter, setFilter] = useState("all"),
@@ -632,7 +634,9 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                         }}
                       />
                       <Txt size={10} muted>
-                        {count} {p.baseUnit}s available
+                        {s.language === "hi"
+                          ? `${count} ${w(p.baseUnit)} उपलब्ध`
+                          : `${count} ${p.baseUnit}${count === 1 ? "" : "s"} available`}
                       </Txt>
                       {p.schedule !== "OTC" && (
                         <Txt size={10} muted>

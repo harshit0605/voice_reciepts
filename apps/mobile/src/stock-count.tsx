@@ -11,6 +11,7 @@ import {
   colors,
   styles,
   useSheet,
+  useWord,
 } from "./ui";
 import { useBarcodeScanner, CAMERA_OFF } from "./scanner";
 import {
@@ -47,7 +48,8 @@ export function CountForm({
 }) {
   const s = useSession(),
     state = s.state!,
-    hi = s.language === "hi";
+    hi = s.language === "hi",
+    w = useWord();
   const pack = packUnit(product);
   const [code, setCode] = useState(prefill?.code ?? ""),
     [expiry, setExpiry] = useState(printed(prefill?.expiry)),
@@ -84,7 +86,7 @@ export function CountForm({
         reason: "Owner verified physical opening count",
       });
       onSaved(
-        `${product.name} ${product.strength} · ${batch.code} · ${batch.quantity} ${product.baseUnit}`,
+        `${product.name} ${product.strength} · ${batch.code} · ${batch.quantity} ${w(product.baseUnit)}`,
       );
     } catch (e) {
       setError((e as Error).message);
@@ -100,9 +102,9 @@ export function CountForm({
         {product.name} {product.strength}
       </Txt>
       <Txt muted size={12} style={{ marginTop: 4, marginBottom: 12 }}>
-        {product.form} ·{" "}
+        {w(product.form)} ·{" "}
         {Object.entries(product.units)
-          .map(([u, n]) => (n === "1" ? u : `${u} = ${n}`))
+          .map(([u, n]) => (n === "1" ? w(u) : `${w(u)} = ${n}`))
           .join(", ")}{" "}
         · GST {product.taxBps / 100}%
       </Txt>
@@ -113,7 +115,7 @@ export function CountForm({
           </Txt>
           {existing.map((b) => (
             <Txt key={b.id} size={12} muted>
-              {b.code} · {b.expiry} · {b.quantity} {product.baseUnit}
+              {b.code} · {b.expiry} · {b.quantity} {w(product.baseUnit)}
             </Txt>
           ))}
         </View>
@@ -133,7 +135,7 @@ export function CountForm({
       <Row style={{ flexWrap: "wrap", marginBottom: 12 }}>
         {units.map((u) => (
           <Chip key={u} active={unit === u} onPress={() => setUnit(u)}>
-            {u}
+            {w(u)}
           </Chip>
         ))}
       </Row>
@@ -150,7 +152,7 @@ export function CountForm({
             active={priceUnit === u}
             onPress={() => setPriceUnit(u)}
           >
-            {hi ? `प्रति ${u}` : `per ${u}`}
+            {hi ? `प्रति ${w(u)}` : `per ${u}`}
           </Chip>
         ))}
       </Row>
@@ -177,7 +179,7 @@ export function CountForm({
           }}
         >
           <Txt bold>
-            {`${preview.batch.quantity} ${product.baseUnit} · ${rupees(preview.batch.pricePaise)} / ${product.baseUnit}`}
+            {`${preview.batch.quantity} ${w(product.baseUnit)} · ${rupees(preview.batch.pricePaise)} / ${w(product.baseUnit)}`}
           </Txt>
           <Txt size={12} muted>
             {`${hi ? "एक्सपायरी" : "Expires"} ${shortDate(preview.batch.expiry)}`}
@@ -202,7 +204,8 @@ export function CountForm({
 export function StockCount() {
   const s = useSession(),
     state = s.state!,
-    hi = s.language === "hi";
+    hi = s.language === "hi",
+    w = useWord();
   const [query, setQuery] = useState(""),
     [uncounted, setUncounted] = useState(true),
     [product, setProduct] = useState<Product | null>(null),
@@ -351,12 +354,12 @@ export function StockCount() {
                 </Txt>
                 <Txt size={11} muted style={{ marginTop: 4 }}>
                   {p.generic ? `${p.generic} · ` : ""}
-                  {p.form}
+                  {w(p.form)}
                 </Txt>
               </View>
               <Badge warning={!batches.length}>
                 {batches.length
-                  ? `${stock} ${p.baseUnit}`
+                  ? `${stock} ${w(p.baseUnit)}`
                   : hi
                     ? "गिनें"
                     : "Count"}

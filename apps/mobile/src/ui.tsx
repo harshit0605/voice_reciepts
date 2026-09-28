@@ -27,6 +27,12 @@ const englishToHindi: Record<string, string> = {
   ),
   ...hindiCopy,
 };
+/** A single word such as a unit name, in the current language, for use inside a longer text. */
+export function useWord() {
+  const { language } = useSession();
+  return (word: string) =>
+    language === "hi" ? (englishToHindi[word] ?? word) : word;
+}
 function translateCopy(value: any, language: string): any {
   if (language !== "hi") return value;
   if (typeof value === "string") {
