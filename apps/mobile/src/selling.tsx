@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
   Platform,
   Alert,
+  Linking,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Print from "expo-print";
@@ -38,6 +39,7 @@ import {
   billsLocally,
   orderMatches,
   commandOrderId,
+  matchScan,
   type CheckoutAttempt,
   type SpokenItem,
   quote,
@@ -135,6 +137,74 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
     );
   }
   const [permission, requestPermission] = useCameraPermissions();
+  const today = indiaDate(new Date().toISOString());
+  const [scanNotice, setScanNotice] = useState<{
+    message: string;
+    detail?: string;
+    settings?: boolean;
+  } | null>(null);
+  const [scanWarning, setScanWarning] = useState("");
+  // The camera reports the same code many times while it is in view; handle one per opening.
+  const scanned = useRef(false);
+  async function openScanner() {
+    setScanNotice(null);
+    if (!permission?.granted) {
+      const p = await requestPermission();
+      if (!p.granted) {
+        setScanNotice({
+          message:
+            "Camera access is off. Allow it in Settings to scan, or search by name.",
+          settings: !p.canAskAgain && Platform.OS !== "web",
+        });
+        return;
+      }
+    }
+    scanned.current = false;
+    setScanner(true);
+  }
+  function onScan(raw: string) {
+    if (scanned.current) return;
+    scanned.current = true;
+    setScanner(false);
+    const m = matchScan(state, raw, today);
+    if (!m.products.length) {
+      setScanNotice({
+        message:
+          "No product has this barcode. Search by name, or ask the owner to add the barcode.",
+        detail: m.key,
+      });
+      return;
+    }
+    if (m.products.length > 1) {
+      setQuery(m.key);
+      setScanNotice({
+        message:
+          "Several products share this barcode. Choose the one you are supplying.",
+      });
+      return;
+    }
+    const product = m.products[0];
+    const stock = batches.filter((b) => b.productId === product.id);
+    if (!stock.length) {
+      setScanNotice({
+        message: "No sellable stock is recorded for this product.",
+        detail: `${product.name} ${product.strength}`,
+      });
+      return;
+    }
+    setActiveVoice(null);
+    const exact = m.batch && stock.find((b) => b.id === m.batch!.id);
+    select(exact ?? stock[0], null);
+    setScanWarning(
+      m.batchIssue === "expired"
+        ? "The scanned pack's batch is expired. Do not supply it."
+        : m.batchIssue === "no_stock"
+          ? "The scanned pack's batch has no recorded stock. Check the pack and choose the batch you are supplying."
+          : m.batchIssue === "unrecorded"
+            ? "The scanned pack's batch is not in stock records. Check the pack and choose the batch you are supplying."
+            : "",
+    );
+  }
   const batches = Object.values(state.batches)
     .filter(
       (b) =>
@@ -168,6 +238,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
     spoken: SpokenItem | null | undefined = voiceItem,
   ) => {
     setSelected(batch);
+    setScanWarning("");
     const product = state.products[batch.productId];
     setQty(spoken ? spokenQuantity(spoken.quantity) : "1");
     setUnit(
@@ -344,13 +415,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
           />
           <Pressable
             accessibilityLabel="Scan barcode"
-            onPress={async () => {
-              if (!permission?.granted) {
-                const p = await requestPermission();
-                if (!p.granted) return;
-              }
-              setScanner(true);
-            }}
+            onPress={() => void openScanner()}
             style={{ padding: 6 }}
           >
             <Icon name="barcode-outline" color={colors.accent} />
@@ -378,6 +443,37 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
             >
               Retry saving draft
             </Button>
+          </View>
+        )}
+        {scanNotice && (
+          <View
+            style={{
+              padding: 12,
+              backgroundColor: colors.amberBg,
+              gap: 8,
+              marginBottom: 12,
+            }}
+          >
+            <Txt>{scanNotice.message}</Txt>
+            {!!scanNotice.detail && (
+              <Txt muted size={12}>
+                {scanNotice.detail}
+              </Txt>
+            )}
+            <Row style={{ flexWrap: "wrap" }}>
+              {scanNotice.settings && (
+                <Button
+                  secondary
+                  small
+                  onPress={() => void Linking.openSettings()}
+                >
+                  Open Settings
+                </Button>
+              )}
+              <Button secondary small onPress={() => setScanNotice(null)}>
+                Dismiss
+              </Button>
+            </Row>
           </View>
         )}
         {selling.reviewRecovery && (
@@ -595,6 +691,11 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
       >
         {selected && (
           <>
+            {!!scanWarning && (
+              <Txt style={{ color: colors.red, marginBottom: 12 }}>
+                {scanWarning}
+              </Txt>
+            )}
             <Txt muted size={12} style={{ marginBottom: 14 }}>
               Select the batch printed on the medicine you are supplying.
             </Txt>
@@ -709,12 +810,19 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
           <CameraView
             style={{ height: 320 }}
             barcodeScannerSettings={{
-              barcodeTypes: ["ean13", "ean8", "code128", "qr"],
+              barcodeTypes: [
+                "ean13",
+                "ean8",
+                "upc_a",
+                "upc_e",
+                "code128",
+                "code39",
+                "itf14",
+                "datamatrix",
+                "qr",
+              ],
             }}
-            onBarcodeScanned={(event) => {
-              setQuery(event.data);
-              setScanner(false);
-            }}
+            onBarcodeScanned={(event) => onScan(event.data)}
           />
         )}
       </Sheet>

@@ -378,4 +378,21 @@ export const hindiCopy: Record<string, string> = {
     "रद्द करने से पहले सौंपा गया ऑर्डर वापस लें",
   "Order was cancelled": "ऑर्डर रद्द हो चुका है",
   "Offered to": "सौंपा गया:",
+  "Camera access is off. Allow it in Settings to scan, or search by name.":
+    "कैमरे की अनुमति बंद है। स्कैन करने के लिए सेटिंग्स में अनुमति दें, या नाम से खोजें।",
+  "No product has this barcode. Search by name, or ask the owner to add the barcode.":
+    "इस बारकोड का कोई सामान नहीं मिला। नाम से खोजें, या मालिक से बारकोड जुड़वाएँ।",
+  "Several products share this barcode. Choose the one you are supplying.":
+    "यह बारकोड कई सामानों पर है। जो सामान दे रहे हैं, वही चुनें।",
+  "No sellable stock is recorded for this product.":
+    "इस सामान का बिक्री योग्य स्टॉक दर्ज नहीं है।",
+  "The scanned pack's batch is expired. Do not supply it.":
+    "स्कैन किए पैक का बैच एक्सपायर है। इसे न दें।",
+  "The scanned pack's batch has no recorded stock. Check the pack and choose the batch you are supplying.":
+    "स्कैन किए पैक के बैच का स्टॉक दर्ज नहीं है। पैक जाँचें और वही बैच चुनें जो दे रहे हैं।",
+  "The scanned pack's batch is not in stock records. Check the pack and choose the batch you are supplying.":
+    "स्कैन किए पैक का बैच स्टॉक रिकॉर्ड में नहीं है। पैक जाँचें और वही बैच चुनें जो दे रहे हैं।",
+  "Open Settings": "सेटिंग्स खोलें",
+  Dismiss: "बंद करें",
+  "Barcodes (comma separated)": "बारकोड (कॉमा से अलग करें)",
 };

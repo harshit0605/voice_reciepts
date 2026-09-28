@@ -1059,7 +1059,7 @@ function ProductForm({
         number
       />
       <Field label="HSN" value={hsn} onChange={H} />
-      <Field label="Barcode" value={barcode} onChange={B} />
+      <Field label="Barcodes (comma separated)" value={barcode} onChange={B} />
       <Field
         label="Search aliases (comma separated)"
         value={aliases}

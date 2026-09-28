@@ -9,3 +9,4 @@ export * from "./reconciliation";
 export * from "./receiving";
 export * from "./voice";
 export * from "./checkout-recovery";
+export * from "./scan";

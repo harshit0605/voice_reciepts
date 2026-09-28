@@ -41,7 +41,8 @@ const product = z
     form: z.string().max(60),
     hsn: z.string().max(12),
     aliases: z.array(z.string().max(100)).max(30),
-    barcode: z.string().max(60),
+    /** One or more pack barcodes, separated by commas or spaces. */
+    barcode: z.string().max(300),
     units: z.record(z.string(), positive),
     baseUnit: z.string().min(1),
     taxBps: z.number().int().min(0).max(10000),
