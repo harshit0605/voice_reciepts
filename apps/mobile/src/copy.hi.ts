@@ -449,4 +449,39 @@ export const hindiCopy: Record<string, string> = {
   "Enter the product name": "सामान का नाम भरें",
   "Confirm the GST rate": "GST दर की पुष्टि करें",
   "Capsules per strip": "प्रति पत्ता कैप्सूल",
+  "Count stock": "स्टॉक गिनें",
+  "Scan the pack": "पैक स्कैन करें",
+  "Batch number on the pack": "पैक पर छपा बैच नंबर",
+  "Expiry as printed (for example 04/27)": "छपी हुई एक्सपायरी (जैसे 04/27)",
+  "Counted quantity": "गिनी गई मात्रा",
+  "MRP printed on the pack (₹)": "पैक पर छपा एमआरपी (₹)",
+  "Selling price (₹), if below MRP": "बिक्री कीमत (₹), अगर एमआरपी से कम हो",
+  "Purchase cost (₹), if known": "खरीद कीमत (₹), अगर पता हो",
+  "Enter the batch number printed on the pack": "पैक पर छपा बैच नंबर भरें",
+  "Batch number is too long": "बैच नंबर बहुत लंबा है",
+  "This batch is already in stock. Use a stock adjustment to correct its count.":
+    "यह बैच पहले से स्टॉक में है। गिनती सुधारने के लिए स्टॉक समायोजन करें।",
+  "Enter the expiry as printed, for example 04/27":
+    "छपी हुई एक्सपायरी भरें, जैसे 04/27",
+  "This batch has expired. Keep it aside for return or disposal; it is not added as sellable stock.":
+    "यह बैच एक्सपायर हो चुका है। इसे वापसी या नष्ट करने के लिए अलग रखें; यह बिक्री के स्टॉक में नहीं जुड़ता।",
+  "Expires within 3 months": "3 महीने के अंदर एक्सपायर होगा",
+  "Choose the counted unit and price unit": "गिनती और कीमत की इकाई चुनें",
+  "Enter the counted quantity": "गिनी गई मात्रा भरें",
+  "Counted quantity must be more than zero":
+    "गिनी गई मात्रा शून्य से अधिक होनी चाहिए",
+  "Counted quantity is too large": "गिनी गई मात्रा बहुत बड़ी है",
+  "Counted quantity is too precise":
+    "गिनी गई मात्रा में बहुत ज़्यादा दशमलव हैं",
+  "Selling price cannot be more than MRP":
+    "बिक्री कीमत एमआरपी से अधिक नहीं हो सकती",
+  "Selling price must be more than zero":
+    "बिक्री कीमत शून्य से अधिक होनी चाहिए",
+  "Enter the MRP printed on the pack": "पैक पर छपा एमआरपी भरें",
+  "Enter the MRP in rupees, up to two decimals":
+    "एमआरपी रुपये में भरें, अधिकतम दो दशमलव",
+  "Enter the selling price in rupees, up to two decimals":
+    "बिक्री कीमत रुपये में भरें, अधिकतम दो दशमलव",
+  "Enter the purchase cost in rupees, up to two decimals":
+    "खरीद कीमत रुपये में भरें, अधिकतम दो दशमलव",
 };

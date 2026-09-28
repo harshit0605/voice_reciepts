@@ -29,6 +29,7 @@ import {
 import { Checkout } from "./selling";
 import { ProductForm } from "./product-form";
 import { CatalogueImport } from "./catalogue-import";
+import { StockCount, CountForm } from "./stock-count";
 import {
   D,
   rupees,
@@ -793,6 +794,7 @@ export function StockScreen({ manage = false }: { manage?: boolean }) {
     [batchProduct, setBatchProduct] = useState<Product | null>(null),
     [purchase, setPurchase] = useState(false),
     [importing, setImporting] = useState(false),
+    [counting, setCounting] = useState(false),
     [adjust, setAdjust] = useState<Batch | null>(null),
     [delta, setDelta] = useState(""),
     [reason, setReason] = useState(""),
@@ -842,6 +844,14 @@ export function StockScreen({ manage = false }: { manage?: boolean }) {
             icon="cloud-upload-outline"
           >
             Import catalogue
+          </Button>
+          <Button
+            small
+            secondary
+            onPress={() => setCounting(true)}
+            icon="clipboard-outline"
+          >
+            Count stock
           </Button>
         </Row>
       )}
@@ -921,9 +931,9 @@ export function StockScreen({ manage = false }: { manage?: boolean }) {
         onClose={() => setBatchProduct(null)}
       >
         {batchProduct && (
-          <BatchForm
+          <CountForm
             product={batchProduct}
-            onDone={() => setBatchProduct(null)}
+            onSaved={() => setBatchProduct(null)}
           />
         )}
       </Sheet>
@@ -992,6 +1002,13 @@ export function StockScreen({ manage = false }: { manage?: boolean }) {
         {purchase && <PurchaseForm onDone={() => setPurchase(false)} />}
       </Sheet>
       <Sheet
+        visible={counting}
+        title="Count stock"
+        onClose={() => setCounting(false)}
+      >
+        {counting && <StockCount />}
+      </Sheet>
+      <Sheet
         visible={importing}
         title="Import catalogue"
         onClose={() => setImporting(false)}
@@ -1033,84 +1050,6 @@ function PriceForm({ batch }: { batch: Batch }) {
         Update selling price
       </Button>
     </View>
-  );
-}
-function BatchForm({
-  product,
-  onDone,
-}: {
-  product: Product;
-  onDone: () => void;
-}) {
-  const s = useSession(),
-    run = useRun();
-  const [code, C] = useState(""),
-    [expiry, E] = useState(""),
-    [quantity, Q] = useState(""),
-    [price, P] = useState(""),
-    [mrp, M] = useState(""),
-    [cost, V] = useState(""),
-    [verified, S] = useState(false);
-  return (
-    <>
-      <Txt muted style={{ marginBottom: 20 }}>
-        Count actual {product.baseUnit}s on the shelf. Use a separate batch for
-        each expiry or price.
-      </Txt>
-      <Field label="Batch code" value={code} onChange={C} />
-      <Field label="Expiry (YYYY-MM-DD)" value={expiry} onChange={E} />
-      <Field
-        label={`Counted ${product.baseUnit}s`}
-        value={quantity}
-        onChange={Q}
-        number
-      />
-      <Field
-        label="Selling price per base unit (₹)"
-        value={price}
-        onChange={P}
-        number
-      />
-      <Field label="MRP per base unit (₹)" value={mrp} onChange={M} number />
-      <Field
-        label="Purchase cost per base unit (₹), if known"
-        value={cost}
-        onChange={V}
-        number
-      />
-      <Pressable onPress={() => S(!verified)} style={{ marginBottom: 20 }}>
-        <Row>
-          <Icon name={verified ? "checkbox" : "square-outline"} />
-          <Txt>I physically counted this stock</Txt>
-        </Row>
-      </Pressable>
-      <Button
-        disabled={!verified}
-        onPress={() =>
-          void run(async () => {
-            await s.command({
-              type: "stock.opening",
-              batch: {
-                id: uid(),
-                productId: product.id,
-                code,
-                expiry,
-                quantity,
-                quarantined: "0",
-                pricePaise: money(price),
-                mrpPaise: money(mrp),
-                costPaise: cost ? money(cost) : undefined,
-                verifiedCost: !!cost,
-              },
-              reason: "Owner verified physical opening count",
-            });
-            onDone();
-          })
-        }
-      >
-        Post opening count
-      </Button>
-    </>
   );
 }
 export function MoneyScreen() {

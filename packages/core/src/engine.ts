@@ -259,6 +259,16 @@ export function execute(
         "CONFLICT",
       );
       ensure(op.batch.pricePaise <= op.batch.mrpPaise, "Price exceeds MRP");
+      const code = op.batch.code.trim().toUpperCase();
+      ensure(
+        !values(s.batches).some(
+          (b) =>
+            b.productId === op.batch.productId &&
+            b.code.trim().toUpperCase() === code,
+        ),
+        "This batch is already in stock. Use a stock adjustment to correct its count.",
+        "CONFLICT",
+      );
       s.batches[op.batch.id] = { ...op.batch, quantity: "0", quarantined: "0" };
       move(op.batch.id, op.batch.quantity, "opening", op.batch.id, op.reason);
       result = s.batches[op.batch.id];

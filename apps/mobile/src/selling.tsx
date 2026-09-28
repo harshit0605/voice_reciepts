@@ -9,12 +9,12 @@ import {
   Alert,
   Linking,
 } from "react-native";
-import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { useSession, uid } from "./session";
 import { useSaleEntry } from "./sale-entry";
 import { VoiceEntry } from "./voice-entry";
+import { useBarcodeScanner, CAMERA_OFF } from "./scanner";
 import {
   Txt,
   Icon,
@@ -85,7 +85,6 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
     [unit, setUnit] = useState(""),
     [checkout, setCheckout] = useState(false),
     [basketOpen, setBasketOpen] = useState(false),
-    [scanner, setScanner] = useState(false),
     [voiceOpen, setVoiceOpen] = useState(false);
   const [activeVoice, setActiveVoice] = useState<string | null>(null);
   const selling = useSaleEntry(
@@ -150,7 +149,6 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
       "Sale set aside. It will be confirmed automatically when the connection returns. Do not bill these items again; check Orders later.",
     );
   }
-  const [permission, requestPermission] = useCameraPermissions();
   const today = indiaDate(new Date().toISOString());
   const [scanNotice, setScanNotice] = useState<{
     message: string;
@@ -158,28 +156,13 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
     settings?: boolean;
   } | null>(null);
   const [scanWarning, setScanWarning] = useState("");
-  // The camera reports the same code many times while it is in view; handle one per opening.
-  const scanned = useRef(false);
+  const scanner = useBarcodeScanner((raw) => onScan(raw));
   async function openScanner() {
     setScanNotice(null);
-    if (!permission?.granted) {
-      const p = await requestPermission();
-      if (!p.granted) {
-        setScanNotice({
-          message:
-            "Camera access is off. Allow it in Settings to scan, or search by name.",
-          settings: !p.canAskAgain && Platform.OS !== "web",
-        });
-        return;
-      }
-    }
-    scanned.current = false;
-    setScanner(true);
+    const r = await scanner.open();
+    if (!r.opened) setScanNotice({ message: CAMERA_OFF, settings: r.settings });
   }
   function onScan(raw: string) {
-    if (scanned.current) return;
-    scanned.current = true;
-    setScanner(false);
     const m = matchScan(state, raw, today);
     if (!m.products.length) {
       setScanNotice({
@@ -818,31 +801,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
           onHeld={() => void finishEntry()}
         />
       </Sheet>
-      <Sheet
-        visible={scanner}
-        title="Scan product barcode"
-        onClose={() => setScanner(false)}
-      >
-        {scanner && (
-          <CameraView
-            style={{ height: 320 }}
-            barcodeScannerSettings={{
-              barcodeTypes: [
-                "ean13",
-                "ean8",
-                "upc_a",
-                "upc_e",
-                "code128",
-                "code39",
-                "itf14",
-                "datamatrix",
-                "qr",
-              ],
-            }}
-            onBarcodeScanned={(event) => onScan(event.data)}
-          />
-        )}
-      </Sheet>
+      {scanner.sheet}
       <VoiceEntry
         work={selling.entry.voice}
         change={(change) =>
