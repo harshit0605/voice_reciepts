@@ -34,6 +34,13 @@ import { CatalogueImport } from "./catalogue-import";
 import { StockCount, CountForm } from "./stock-count";
 import { ReturnForm, RefundForm, amountOf } from "./payments";
 import {
+  DrawerPanel,
+  DayReportView,
+  clock,
+  dayLabel,
+  differenceColour,
+} from "./drawer";
+import {
   D,
   rupees,
   totals,
@@ -53,6 +60,9 @@ import {
   returnable,
   refundQuote,
   billDue,
+  dayReport,
+  differenceText,
+  openDrawerSession,
   type ReturnLine,
 } from "@counterwell/core";
 const money = (value: string) => {
@@ -141,10 +151,15 @@ function useRun() {
     }
   };
 }
-export function OverviewScreen() {
+export function OverviewScreen({
+  navigate,
+}: {
+  navigate: (page: string) => void;
+}) {
   const s = useSession(),
     state = s.state!,
-    t = useText();
+    t = useText(),
+    hi = s.language === "hi";
   const [operations, O] = useState<any>(null);
   useEffect(() => {
     if (!s.demo)
@@ -153,102 +168,340 @@ export function OverviewScreen() {
         .then(O)
         .catch(() => {});
   }, [state.revision, s.demo]);
-  const today = indiaDate(new Date().toISOString()),
-    data = totals(state, today);
-  const [period, setPeriod] = useState<"today" | "all">("today");
-  const metrics = period === "today" ? data : totals(state);
-  const invoices = Object.values(state.invoices)
-    .filter((i) => period === "all" || indiaDate(i.occurredAt) === today)
-    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
-  const low = Object.values(state.products).filter((p) =>
-    Object.values(state.batches)
-      .filter((b) => b.productId === p.id)
-      .reduce((n, b) => n.plus(b.quantity), D(0))
-      .lte(p.reorderAt),
+  const [day, setDay] = useState<"today" | "yesterday">("today");
+  const now = Date.now();
+  const today = indiaDate(new Date(now).toISOString()),
+    yesterday = indiaDate(new Date(now - 86_400_000).toISOString());
+  const date = day === "today" ? today : yesterday;
+  const r = useMemo(
+    () => dayReport(state, date),
+    [state.revision, state, date],
   );
+  const drawer = openDrawerSession(state);
+  const lastClose = Object.values(state.drawers)
+    .filter((d) => d.closedAt)
+    .sort((a, b) => b.closedAt!.localeCompare(a.closedAt!))[0];
+  const lastCount = drawer?.checks?.at(-1);
+  const sinceCount =
+    drawer && now - Date.parse(lastCount?.at ?? drawer.openedAt);
+  const soon = indiaDate(new Date(now + 90 * 86_400_000).toISOString());
+  // Only medicines the shop has stocked; imported ones never counted are not "running low".
+  const low = Object.values(state.products).filter((p) => {
+    const batches = Object.values(state.batches).filter(
+      (b) => b.productId === p.id,
+    );
+    return (
+      p.active &&
+      batches.length > 0 &&
+      batches.reduce((n, b) => n.plus(b.quantity), D(0)).lte(p.reorderAt)
+    );
+  }).length;
+  const expiring = Object.values(state.batches).filter(
+    (b) => D(b.quantity).gt(0) && b.expiry <= soon,
+  ).length;
+  const waiting = Object.values(state.approvals).filter(
+    (a) => a.status === "pending",
+  ).length;
+  const openReviews = Object.values(state.reviews).filter(
+    (r) => r.status === "open",
+  ).length;
+  const attention: {
+    icon: any;
+    text: string;
+    page: string;
+    alert?: boolean;
+  }[] = [
+    ...(waiting
+      ? [
+          {
+            icon: "checkmark-circle-outline",
+            text: hi
+              ? `${waiting} अनुरोध आपकी मंज़ूरी का इंतज़ार कर रहे हैं`
+              : `${waiting} ${waiting === 1 ? "request is" : "requests are"} waiting for your approval`,
+            page: "reviews",
+            alert: true,
+          },
+        ]
+      : []),
+    ...(drawer && indiaDate(drawer.openedAt) < today
+      ? [
+          {
+            icon: "alert-circle-outline",
+            text: hi
+              ? `दराज़ ${dayLabel(indiaDate(drawer.openedAt), hi)} से खुली है — गिनकर बंद करें`
+              : `The drawer has been open since ${dayLabel(indiaDate(drawer.openedAt))}; count and close it`,
+            page: "money",
+            alert: true,
+          },
+        ]
+      : sinceCount && sinceCount > 4 * 3_600_000
+        ? [
+            {
+              icon: "time-outline",
+              text: hi
+                ? `${Math.floor(sinceCount / 3_600_000)} घंटे से नकदी नहीं गिनी गई`
+                : `Cash not counted for ${Math.floor(sinceCount / 3_600_000)} hours`,
+              page: "money",
+            },
+          ]
+        : []),
+    ...(drawer?.openingDifferencePaise
+      ? [
+          {
+            icon: "moon-outline",
+            text: hi
+              ? `आज खोलते समय रात की नकदी से ${differenceText(drawer.openingDifferencePaise)}`
+              : `Today's opening was ${differenceText(drawer.openingDifferencePaise)} against last night's cash`,
+            page: "money",
+            alert: drawer.openingDifferencePaise < 0,
+          },
+        ]
+      : []),
+    ...(lastClose?.discrepancyPaise
+      ? [
+          {
+            icon: "wallet-outline",
+            text: hi
+              ? `आख़िरी बार बंद करते समय दराज़ ${differenceText(lastClose.discrepancyPaise)}`
+              : `The last close was ${differenceText(lastClose.discrepancyPaise)}`,
+            page: "money",
+            alert: lastClose.discrepancyPaise < 0,
+          },
+        ]
+      : []),
+    ...(r.pendingDevices
+      ? [
+          {
+            icon: "sync-outline",
+            text: hi
+              ? `${r.pendingDevices} फ़ोन पर बिक्री भेजनी बाकी`
+              : `${r.pendingDevices} ${r.pendingDevices === 1 ? "phone has" : "phones have"} sales not yet sent`,
+            page: "reviews",
+          },
+        ]
+      : []),
+    ...(openReviews
+      ? [
+          {
+            icon: "shield-checkmark-outline",
+            text: hi
+              ? `${openReviews} जाँच खुली हैं`
+              : `${openReviews} ${openReviews === 1 ? "exception is" : "exceptions are"} open`,
+            page: "reviews",
+          },
+        ]
+      : []),
+    ...(expiring
+      ? [
+          {
+            icon: "hourglass-outline",
+            text: hi
+              ? `${expiring} बैच 90 दिन में एक्सपायर`
+              : `${expiring} ${expiring === 1 ? "batch expires" : "batches expire"} within 90 days`,
+            page: "inventory",
+          },
+        ]
+      : []),
+    ...(low
+      ? [
+          {
+            icon: "cube-outline",
+            text: hi
+              ? `${low} दवाएँ दोबारा मँगाने के स्तर पर`
+              : `${low} ${low === 1 ? "medicine is" : "medicines are"} at reorder level`,
+            page: "inventory",
+          },
+        ]
+      : []),
+  ];
+  const closes = Object.values(state.drawers)
+    .filter((d) => d.closedAt)
+    .sort((a, b) => b.closedAt!.localeCompare(a.closedAt!))
+    .slice(0, 7);
+  const invoices = Object.values(state.invoices)
+    .filter((i) => indiaDate(i.occurredAt) === date)
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
   return (
     <Page
       title={t("overview")}
-      subtitle="A clear view of sales, collections, and what needs attention."
-      action={
-        <Row>
-          <Chip active={period === "today"} onPress={() => setPeriod("today")}>
-            {t("today")}
-          </Chip>
-          <Chip active={period === "all"} onPress={() => setPeriod("all")}>
-            All time
-          </Chip>
-        </Row>
+      subtitle={
+        hi
+          ? "नकदी, बिक्री और स्टाफ़ एक नज़र में।"
+          : "Cash, sales and staff at a glance."
       }
     >
-      <View
+      <Pressable
+        onPress={() => navigate("money")}
         style={{
           backgroundColor: colors.accent,
           borderRadius: 16,
-          padding: 28,
-          marginBottom: 28,
+          padding: 24,
+          marginBottom: 22,
         }}
       >
-        <Txt style={{ color: "#BFE1CE" }} size={12}>
-          {t("sales")}
-        </Txt>
-        <Txt
-          size={44}
-          bold
-          style={{ color: "white", marginTop: 10, letterSpacing: -1.5 }}
-        >
-          {rupees(metrics.netSalesPaise)}
-        </Txt>
-        <Txt size={12} style={{ color: "#BFE1CE", marginTop: 10 }}>
-          {metrics.invoiceCount} completed bills · after returns
-        </Txt>
-      </View>
-      <Row
-        style={{
-          justifyContent: "space-between",
-          paddingBottom: 26,
-          borderBottomWidth: 1,
-          borderColor: colors.line,
-          flexWrap: "wrap",
-          gap: 22,
-        }}
-      >
-        {[
-          ["Cash collected", metrics.cashCollectedPaise],
-          ["UPI collected", metrics.upiCollectedPaise],
-          ["Customer dues", metrics.creditOutstandingPaise],
-        ].map(([label, value]) => (
-          <View key={label}>
-            <Txt size={11} muted>
-              {label}
+        {drawer ? (
+          <>
+            <Txt style={{ color: "#BFE1CE" }} size={12}>
+              {hi ? "दराज़ में होना चाहिए" : "Should be in the drawer now"}
             </Txt>
-            <Txt size={22} bold style={{ marginTop: 8 }}>
-              {rupees(Number(value))}
+            <Txt
+              size={40}
+              bold
+              style={{ color: "white", marginTop: 8, letterSpacing: -1.2 }}
+            >
+              {rupees(expectedCash(state, drawer.id))}
+            </Txt>
+            <Txt size={12} style={{ color: "#BFE1CE", marginTop: 8 }}>
+              {lastCount
+                ? hi
+                  ? `आख़िरी गिनती ${clock(lastCount.at)} · ${state.members[lastCount.by]?.name ?? ""} · ${differenceText(lastCount.differencePaise)}`
+                  : `Last counted ${clock(lastCount.at)} by ${state.members[lastCount.by]?.name ?? "someone"}: ${differenceText(lastCount.differencePaise)}`
+                : hi
+                  ? `${indiaDate(drawer.openedAt) !== today ? `${dayLabel(indiaDate(drawer.openedAt), hi)} ` : ""}${clock(drawer.openedAt)} पर खुली · अभी गिनी नहीं`
+                  : `Opened ${indiaDate(drawer.openedAt) !== today ? `${dayLabel(indiaDate(drawer.openedAt))} ` : ""}${clock(drawer.openedAt)} · not counted since`}
+            </Txt>
+          </>
+        ) : (
+          <>
+            <Txt style={{ color: "#BFE1CE" }} size={12}>
+              {hi ? "दराज़ बंद है" : "The drawer is closed"}
+            </Txt>
+            <Txt size={20} bold style={{ color: "white", marginTop: 8 }}>
+              {lastClose
+                ? `${hi ? "आख़िरी बार" : "Last close"}: ${differenceText(lastClose.discrepancyPaise)}`
+                : hi
+                  ? "पहली बिक्री से पहले खोलें"
+                  : "Open it before the first cash sale"}
+            </Txt>
+          </>
+        )}
+      </Pressable>
+      <Row style={{ marginBottom: 16 }}>
+        <Chip active={day === "today"} onPress={() => setDay("today")}>
+          {t("today")}
+        </Chip>
+        <Chip active={day === "yesterday"} onPress={() => setDay("yesterday")}>
+          {hi ? "कल" : "Yesterday"}
+        </Chip>
+      </Row>
+      <View style={[styles.panel, { marginBottom: 22 }]}>
+        <Txt muted size={12}>
+          {hi ? "शुद्ध बिक्री" : "Net sales"}
+        </Txt>
+        <Txt size={32} bold style={{ marginTop: 6 }}>
+          {rupees(r.sales.netPaise)}
+        </Txt>
+        <Txt muted size={12} style={{ marginTop: 6 }}>
+          {r.sales.bills} {hi ? "बिल" : r.sales.bills === 1 ? "bill" : "bills"}
+          {r.sales.returnsPaise
+            ? ` · ${hi ? "वापसी" : "returns"} ${rupees(r.sales.returnsPaise)}`
+            : ""}
+          {r.sales.discountsPaise
+            ? ` · ${hi ? "छूट" : "discounts"} ${rupees(r.sales.discountsPaise)}`
+            : ""}
+        </Txt>
+        <Row
+          style={{ justifyContent: "space-between", marginTop: 16, gap: 12 }}
+        >
+          {[
+            [hi ? "नकद" : "Cash", r.sales.cashPaise],
+            ["UPI", r.sales.upiPaise],
+            [hi ? "उधार" : "Credit", r.sales.creditPaise],
+          ].map(([label, value]) => (
+            <View key={String(label)}>
+              <Txt size={11} muted>
+                {label}
+              </Txt>
+              <Txt size={18} bold style={{ marginTop: 4 }}>
+                {rupees(Number(value))}
+              </Txt>
+            </View>
+          ))}
+        </Row>
+      </View>
+      {attention.length > 0 && (
+        <Section title={hi ? "ध्यान दें" : "Needs attention"}>
+          {attention.map((a) => (
+            <Pressable
+              key={a.text}
+              onPress={() => navigate(a.page)}
+              style={styles.listRow}
+            >
+              <Row>
+                <Icon
+                  name={a.icon}
+                  color={a.alert ? colors.amber : colors.muted}
+                />
+                <Txt
+                  bold={a.alert}
+                  style={{
+                    flex: 1,
+                    color: a.alert ? colors.amber : colors.ink,
+                  }}
+                >
+                  {a.text}
+                </Txt>
+                <Icon name="chevron-forward" />
+              </Row>
+            </Pressable>
+          ))}
+        </Section>
+      )}
+      <Section title={hi ? "स्टाफ़" : "Staff"}>
+        {r.staff.map((p) => (
+          <View key={p.id} style={styles.listRow}>
+            <Row style={{ justifyContent: "space-between" }}>
+              <Txt bold>{p.name}</Txt>
+              <Txt bold>{rupees(p.salesPaise)}</Txt>
+            </Row>
+            <Txt muted size={12} style={{ marginTop: 5 }}>
+              {[
+                `${p.bills} ${hi ? "बिल" : p.bills === 1 ? "bill" : "bills"}`,
+                `${hi ? "नकद" : "cash"} ${rupees(p.cashInPaise)}`,
+                `UPI ${rupees(p.upiInPaise)}`,
+                p.creditGivenPaise
+                  ? `${hi ? "उधार" : "credit"} ${rupees(p.creditGivenPaise)}`
+                  : "",
+                p.discountsPaise
+                  ? `${hi ? "छूट" : "discount"} ${rupees(p.discountsPaise)}`
+                  : "",
+                p.refundsPaise
+                  ? `${hi ? "वापसी दी" : "refunded"} ${rupees(p.refundsPaise)}`
+                  : "",
+                p.cancelled
+                  ? `${p.cancelled} ${hi ? "रद्द" : "cancelled"}`
+                  : "",
+                p.cashOutPaise
+                  ? `${hi ? "दराज़ से निकाले" : "paid out"} ${rupees(p.cashOutPaise)}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </Txt>
           </View>
         ))}
-      </Row>
-      <View style={{ height: 26 }} />
-      <Section title="Needs attention">
-        <Row style={styles.listRow}>
-          <Icon name="cube-outline" />
-          <View style={{ flex: 1 }}>
-            <Txt bold>{low.length} medicines at reorder level</Txt>
-            <Txt muted size={12} style={{ marginTop: 4 }}>
-              Review quantities before your next supplier order.
-            </Txt>
-          </View>
-        </Row>
-        <Row style={styles.listRow}>
-          <Icon name="sync-outline" />
-          <View style={{ flex: 1 }}>
-            <Txt bold>{metrics.pendingDevices} devices with pending sales</Txt>
-            <Txt muted size={12} style={{ marginTop: 4 }}>
-              EOD remains provisional until every device has synced.
-            </Txt>
-          </View>
-        </Row>
+        {!r.staff.length && (
+          <Txt muted>{hi ? "अभी कोई गतिविधि नहीं" : "No activity yet"}</Txt>
+        )}
       </Section>
+      {closes.length > 0 && (
+        <Section title={hi ? "पिछली दराज़ गिनतियाँ" : "Recent drawer closes"}>
+          {closes.map((d) => (
+            <Row
+              key={d.id}
+              style={[styles.listRow, { justifyContent: "space-between" }]}
+            >
+              <Txt>
+                {dayLabel(indiaDate(d.closedAt!), hi)} ·{" "}
+                {state.members[d.closedBy ?? ""]?.name ?? ""}
+              </Txt>
+              <Txt bold style={{ color: differenceColour(d.discrepancyPaise) }}>
+                {differenceText(d.discrepancyPaise)}
+              </Txt>
+            </Row>
+          ))}
+        </Section>
+      )}
       {operations && (
         <Section title="Shop infrastructure">
           <Txt>
@@ -263,19 +516,9 @@ export function OverviewScreen() {
               : "Not configured"}{" "}
             · {operations.gateway?.details.uncertainPrints ?? 0} uncertain jobs
           </Txt>
-          <Txt muted>
-            Pending extractions:{" "}
-            {operations.jobs
-              .filter((j: any) => ["pending", "running"].includes(j.status))
-              .reduce((n: number, j: any) => n + j.count, 0)}{" "}
-            · Failed:{" "}
-            {operations.jobs
-              .filter((j: any) => j.status === "failed")
-              .reduce((n: number, j: any) => n + j.count, 0)}
-          </Txt>
         </Section>
       )}
-      <Section title="Recent sales">
+      <Section title={hi ? "हाल के बिल" : "Recent sales"}>
         {invoices.slice(0, 8).map((i) => (
           <Row
             key={i.id}
@@ -284,11 +527,8 @@ export function OverviewScreen() {
             <View>
               <Txt bold>{i.number}</Txt>
               <Txt muted size={12} style={{ marginTop: 4 }}>
-                {itemCount(i.lines.length, s.language)} ·{" "}
-                {new Date(i.occurredAt).toLocaleTimeString("en-IN", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {itemCount(i.lines.length, s.language)} · {clock(i.occurredAt)}{" "}
+                · {state.members[i.collectorId]?.name ?? ""}
               </Txt>
             </View>
             <Txt bold>{rupees(i.totalPaise)}</Txt>
@@ -296,18 +536,13 @@ export function OverviewScreen() {
         ))}
         {!invoices.length && (
           <Empty
-            title="Your first bill will appear here"
-            detail="Completed sales update this view. Customer repayments are counted as collections, not new sales."
+            title={hi ? "अभी कोई बिल नहीं" : "No bills yet"}
+            detail={
+              hi ? "पूरे हुए बिल यहाँ दिखेंगे।" : "Completed bills appear here."
+            }
           />
         )}
       </Section>
-      <Txt muted size={11}>
-        Estimated gross margin:{" "}
-        {metrics.estimatedGrossMarginPaise === null
-          ? "Unavailable until costs and returns are reconciled"
-          : rupees(metrics.estimatedGrossMarginPaise)}
-        . This is not net profit.
-      </Txt>
     </Page>
   );
 }
@@ -1279,163 +1514,158 @@ export function MoneyScreen() {
   const s = useSession(),
     state = s.state!,
     t = useText(),
-    run = useRun();
-  const active = Object.values(state.drawers).find((d) => !d.closedAt);
-  const [amount, A] = useState(""),
-    [reason, R] = useState(""),
-    [kind, K] = useState<"introduced" | "withdrawal" | "safe_transfer">(
-      "withdrawal",
-    ),
-    [count, C] = useState("");
+    run = useRun(),
+    hi = s.language === "hi";
+  const [open, setOpen] = useState<string | null>(null);
+  const today = indiaDate(new Date().toISOString());
+  const eods = Object.values(state.eods).sort(
+    (a, b) => b.date.localeCompare(a.date) || b.revision - a.revision,
+  );
+  // The latest revision of each day, newest day first.
+  const days = eods.filter(
+    (e, i) => eods.findIndex((x) => x.date === e.date) === i,
+  );
+  const selected = open && open !== "live" ? state.eods[open] : undefined;
+  const revisions = selected
+    ? eods
+        .filter((e) => e.date === selected.date)
+        .sort((a, b) => a.revision - b.revision)
+    : [];
+  const previous = revisions.find(
+    (e) => selected && e.revision === selected.revision - 1,
+  );
+  const closes = Object.values(state.drawers)
+    .filter((d) => d.closedAt)
+    .sort((a, b) => b.closedAt!.localeCompare(a.closedAt!))
+    .slice(0, 14);
   return (
     <Page
       title={t("money")}
-      subtitle="One shared drawer. Every recorded movement has an actor."
+      subtitle={
+        hi
+          ? "एक साझा दराज़। हर गिनती और लेन-देन पर नाम दर्ज।"
+          : "One shared drawer. Every count and movement carries a name."
+      }
     >
-      {active ? (
-        <>
-          <View style={[styles.panel, { marginBottom: 24 }]}>
-            <Txt muted size={12}>
-              {t("expected")}
-            </Txt>
-            <Txt size={38} bold style={{ marginTop: 9 }}>
-              {rupees(expectedCash(state, active.id))}
-            </Txt>
-            <Txt size={12} muted style={{ marginTop: 10 }}>
-              Opening float {rupees(active.openingPaise)}
-            </Txt>
-          </View>
-          <Section title="Record cash movement">
-            <Row style={{ flexWrap: "wrap", marginBottom: 4 }}>
-              {(["introduced", "withdrawal", "safe_transfer"] as const).map(
-                (k) => (
-                  <Chip key={k} active={kind === k} onPress={() => K(k)}>
-                    {k.replace("_", " ")}
-                  </Chip>
-                ),
-              )}
-            </Row>
-            <Field label="Amount (₹)" value={amount} onChange={A} number />
-            <Field label={t("reason")} value={reason} onChange={R} />
-            <Button
-              onPress={() =>
-                void run(async () => {
-                  await s.command({
-                    type: "cash.move",
-                    drawerId: active.id,
-                    kind,
-                    amountPaise: money(amount),
-                    reason,
-                  });
-                  A("");
-                  R("");
-                })
-              }
-            >
-              Record movement
-            </Button>
-          </Section>
-          <Section title="Close and reconcile drawer">
-            <Field
-              label="Physically counted cash (₹)"
-              value={count}
-              onChange={C}
-              number
-            />
-            <Txt size={12} muted>
-              A difference belongs to the shared drawer, not automatically to a
-              specific employee.
-            </Txt>
-            <Button
-              secondary
-              onPress={() =>
-                void run(() =>
-                  s.command({
-                    type: "drawer.close",
-                    drawerId: active.id,
-                    countedPaise: money(count),
-                  }),
-                )
-              }
-            >
-              Close drawer
-            </Button>
-          </Section>
-        </>
-      ) : (
-        <Section title="Open today's drawer">
-          <Field label="Opening cash (₹)" value={amount} onChange={A} number />
-          <Button
-            onPress={() =>
-              void run(() =>
-                s.command({
-                  type: "drawer.open",
-                  drawerId: uid(),
-                  openingPaise: money(amount),
-                }),
-              )
-            }
-          >
-            Open drawer
-          </Button>
-        </Section>
-      )}
+      <Section title={hi ? "नकद दराज़" : "Cash drawer"}>
+        <DrawerPanel />
+      </Section>
       <Section
-        title="End-of-day reports"
+        title={hi ? "दिन की रिपोर्ट" : "End-of-day reports"}
         action={
-          <Button
-            small
-            secondary
-            onPress={() =>
-              void run(() =>
-                s.command({
-                  type: "eod.close",
-                  date: indiaDate(new Date().toISOString()),
-                }),
-              )
-            }
-          >
-            Create report
+          <Button small secondary onPress={() => setOpen("live")}>
+            {hi ? "आज अब तक" : "Today so far"}
           </Button>
         }
       >
-        {Object.values(state.eods)
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-          .map((e) => (
-            <View key={e.id} style={styles.listRow}>
+        {days.map((e) => {
+          const drawerDiff = e.report?.drawers.find(
+            (d) => d.differencePaise !== undefined,
+          )?.differencePaise;
+          return (
+            <Pressable
+              key={e.id}
+              onPress={() => setOpen(e.id)}
+              style={styles.listRow}
+            >
               <Row style={{ justifyContent: "space-between" }}>
-                <Txt bold>
-                  {e.date} · Revision {e.revision}
-                </Txt>
-                <Badge warning={e.provisional}>
-                  {e.provisional ? "Provisional" : "Synced at close"}
-                </Badge>
+                <View style={{ flex: 1 }}>
+                  <Txt bold>{dayLabel(e.date, hi)}</Txt>
+                  <Txt muted size={12} style={{ marginTop: 4 }}>
+                    {hi ? "संस्करण" : "Revision"} {e.revision} ·{" "}
+                    {e.provisional
+                      ? hi
+                        ? "फ़ोन सिंक बाकी"
+                        : "waiting for phones"
+                      : hi
+                        ? "सिंक पूरा"
+                        : "synced"}
+                    {drawerDiff !== undefined
+                      ? ` · ${hi ? "दराज़" : "drawer"} ${differenceText(drawerDiff)}`
+                      : ""}
+                  </Txt>
+                </View>
+                <Txt bold>{rupees(e.totals.netSalesPaise)}</Txt>
               </Row>
-              <Txt muted size={12} style={{ marginTop: 8 }}>
-                Sales {rupees(e.totals.netSalesPaise)} · Cash{" "}
-                {rupees(e.totals.cashCollectedPaise)} · UPI{" "}
-                {rupees(e.totals.upiCollectedPaise)}
-              </Txt>
-            </View>
-          ))}
+            </Pressable>
+          );
+        })}
+        {!days.length && (
+          <Empty
+            title={hi ? "अभी कोई रिपोर्ट नहीं" : "No reports yet"}
+            detail={
+              hi
+                ? "दराज़ बंद करने पर उस दिन की रिपोर्ट बनती है।"
+                : "Closing the drawer makes that day's report."
+            }
+          />
+        )}
+        <Button
+          small
+          secondary
+          onPress={() =>
+            void run(() => s.command({ type: "eod.close", date: today }))
+          }
+        >
+          {hi ? "आज की रिपोर्ट अभी बनाएँ" : "Make today's report now"}
+        </Button>
       </Section>
-      <Section title="Drawer history">
-        {Object.values(state.drawers)
-          .filter((d) => d.closedAt)
-          .map((d) => (
-            <View key={d.id} style={styles.listRow}>
-              <Txt bold>{indiaDate(d.openedAt)}</Txt>
-              <Txt muted size={12} style={{ marginTop: 6 }}>
-                Counted {rupees(d.countedPaise ?? 0)} · Expected at close{" "}
-                {rupees(d.expectedAtClose ?? 0)} · Current ledger{" "}
-                {rupees(expectedCash(state, d.id))}
+      <Section title={hi ? "दराज़ का इतिहास" : "Drawer history"}>
+        {closes.map((d) => (
+          <View key={d.id} style={styles.listRow}>
+            <Row style={{ justifyContent: "space-between" }}>
+              <Txt bold>
+                {dayLabel(indiaDate(d.closedAt!), hi)} · {clock(d.closedAt)}
               </Txt>
-              <Txt style={{ marginTop: 6, color: colors.amber }}>
-                Difference at close {rupees(d.discrepancyPaise ?? 0)}
+              <Txt bold style={{ color: differenceColour(d.discrepancyPaise) }}>
+                {differenceText(d.discrepancyPaise)}
               </Txt>
-            </View>
-          ))}
+            </Row>
+            <Txt muted size={12} style={{ marginTop: 5 }}>
+              {hi ? "गिना" : "Counted"} {rupees(d.countedPaise ?? 0)} ·{" "}
+              {hi ? "होना था" : "expected"} {rupees(d.expectedAtClose ?? 0)} ·{" "}
+              {state.members[d.closedBy ?? ""]?.name ?? ""}
+              {expectedCash(state, d.id) !== d.expectedAtClose
+                ? ` · ${hi ? "बाद में बदला" : "changed later by"} ${rupees(expectedCash(state, d.id) - (d.expectedAtClose ?? 0))}`
+                : ""}
+            </Txt>
+          </View>
+        ))}
+        {!closes.length && (
+          <Txt muted>
+            {hi ? "अभी कोई बंद दराज़ नहीं" : "No closed drawers yet"}
+          </Txt>
+        )}
       </Section>
+      <Sheet
+        visible={!!open}
+        title={hi ? "दिन की रिपोर्ट" : "Day report"}
+        onClose={() => setOpen(null)}
+      >
+        {open === "live" && <DayReportView report={dayReport(state, today)} />}
+        {selected && (
+          <>
+            {revisions.length > 1 && (
+              <Row style={{ flexWrap: "wrap", marginBottom: 12 }}>
+                {revisions.map((e) => (
+                  <Chip
+                    key={e.id}
+                    active={e.id === selected.id}
+                    onPress={() => setOpen(e.id)}
+                  >
+                    {hi ? "संस्करण" : "Revision"} {e.revision}
+                  </Chip>
+                ))}
+              </Row>
+            )}
+            <DayReportView
+              report={selected.report ?? dayReport(state, selected.date)}
+              eod={selected}
+              previous={previous}
+            />
+          </>
+        )}
+      </Sheet>
     </Page>
   );
 }
@@ -1998,6 +2228,11 @@ export function MoreScreen({ navigate }: { navigate: (p: string) => void }) {
           Assign this counter
         </Button>
       </Section>
+      {s.identity!.actor.role !== "owner" && (
+        <Section title={s.language === "hi" ? "नकद दराज़" : "Cash drawer"}>
+          <DrawerPanel />
+        </Section>
+      )}
       <Section title="My cash collections">
         <Txt size={24} bold>
           {rupees(

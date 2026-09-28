@@ -104,6 +104,11 @@ export const hindiCopy: Record<string, string> = {
   Owner: "मालिक",
   Employee: "कर्मचारी",
   "Set your password": "अपना पासवर्ड बनाएँ",
+  "Total cash (₹)": "कुल नकदी (₹)",
+  Reason: "कारण",
+  "Note, if any": "कोई टिप्पणी हो तो",
+  "Leave in the drawer for the next opening (₹)":
+    "अगली बार खोलने के लिए दराज़ में छोड़ें (₹)",
   "Ask the owner to approve credit": "मालिक से उधार की मंज़ूरी माँगें",
   "Quantity returned": "लौटाई गई मात्रा",
   "Other reason": "दूसरा कारण",

@@ -149,7 +149,7 @@ export default function App() {
     ) : page === "customers" ? (
       <CustomersScreen />
     ) : page === "overview" ? (
-      <OverviewScreen />
+      <OverviewScreen navigate={setPage} />
     ) : page === "money" ? (
       <MoneyScreen />
     ) : page === "reviews" ? (
