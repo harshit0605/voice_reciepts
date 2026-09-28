@@ -124,10 +124,7 @@ app.use("/api/v1/*", async (c, next) => {
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
   if (!session) return c.json({ error: "Sign in required" }, 401);
   c.set("userId", session.user.id);
-  if (
-    c.req.path === "/api/v1/me" ||
-    c.req.path === "/api/v1/account/password"
-  ) {
+  if (c.req.path === "/api/v1/me") {
     await next();
     return;
   }
@@ -160,22 +157,6 @@ app.get("/api/v1/me", async (c) =>
     memberships: await membershipsFor(c.get("userId")),
   }),
 );
-app.post("/api/v1/account/password", async (c) => {
-  const data = z
-    .object({ currentPassword: z.string(), newPassword: z.string().min(12) })
-    .parse(await c.req.json());
-  await auth.api.changePassword({
-    body: { ...data, revokeOtherSessions: true },
-    headers: c.req.raw.headers,
-  });
-  for (const membership of await membershipsFor(c.get("userId")))
-    await transact(membership.businessId, (s) => {
-      const next = structuredClone(s);
-      next.members[c.get("userId")].mustChangePassword = false;
-      return { state: next, result: true };
-    });
-  return c.json({ ok: true });
-});
 app.get("/api/v1/state", (c) =>
   c.json(
     c.get("actor").role === "owner"

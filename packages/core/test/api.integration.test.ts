@@ -534,6 +534,60 @@ describe.skipIf(!enabled)("PostgreSQL and authenticated API", () => {
     ).toBe(403);
     expect((await req("/api/v1/state", undefined, "")).status).toBe(401);
   });
+  it("replaces a temporary password and keeps the phone signed in with the new session", async () => {
+    const username = `temp_${randomUUID().slice(0, 8)}`,
+      temporary = "Temporary-password-2026",
+      replacement = "Replacement-password-2026";
+    const created = await req("/api/v1/employees", {
+      name: "New cashier",
+      username,
+      password: temporary,
+      canCollect: true,
+    });
+    expect(created.status).toBe(201);
+    ids.push(created.data.id);
+    const signedIn = await req(
+      "/api/auth/sign-in/username",
+      { username, password: temporary },
+      "",
+      "",
+    );
+    const cookie = (r: Response) =>
+      r.headers
+        .getSetCookie()
+        .map((x: string) => x.split(";")[0])
+        .join("; ");
+    const temporaryCookie = cookie(signedIn.response);
+    expect(
+      (await req("/api/v1/state", undefined, temporaryCookie)).data.code,
+    ).toBe("PASSWORD_CHANGE_REQUIRED");
+    const wrong = await req(
+      "/api/auth/change-password",
+      { currentPassword: "Not-the-password-1", newPassword: replacement },
+      temporaryCookie,
+      "",
+    );
+    expect(wrong.status).toBe(400);
+    expect(
+      (await req("/api/v1/state", undefined, temporaryCookie)).data.code,
+    ).toBe("PASSWORD_CHANGE_REQUIRED");
+    // The client does not ask for other sessions to be revoked; the server does it anyway.
+    const changed = await req(
+      "/api/auth/change-password",
+      { currentPassword: temporary, newPassword: replacement },
+      temporaryCookie,
+      "",
+    );
+    expect(changed.status).toBe(200);
+    const replacementCookie = cookie(changed.response);
+    expect(replacementCookie).not.toBe("");
+    expect((await req("/api/v1/me", undefined, temporaryCookie)).status).toBe(
+      401,
+    );
+    const state = await req("/api/v1/state", undefined, replacementCookie);
+    expect(state.status).toBe(200);
+    expect(state.data.members[created.data.id].mustChangePassword).toBe(false);
+  });
   it("enforces cross-business isolation and masks employee costs", async () => {
     expect(
       (await req("/api/v1/state", undefined, ownerCookie, otherBusinessId))

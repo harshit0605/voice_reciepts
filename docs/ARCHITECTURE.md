@@ -30,7 +30,7 @@ Online actions retain one uncertain command ID until a retry resolves it. Credit
 
 ## API map
 
-All application routes are under `/api/v1`. Auth uses `/api/auth/*`.
+All application routes are under `/api/v1`. Auth uses `/api/auth/*`. A temporary password is replaced through `POST /api/auth/change-password`: the server always signs out every other session, returns the replacement session cookie, and clears the temporary-password requirement only after a successful change (`apps/api/src/auth.ts`).
 
 | Route                                          | Access / purpose                                                                                                   |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -40,7 +40,6 @@ All application routes are under `/api/v1`. Auth uses `/api/auth/*`.
 | `POST /sync`                                   | Signed, idempotent offline cash ingress; per-entry acknowledgement                                                 |
 | `POST /devices/register`, `/devices/heartbeat` | Register own phone, renew lease, counter assignment, backlog / freshness                                           |
 | `POST /employees`, `PATCH /employees/:id`      | Owner provisioning and collection/access permissions                                                               |
-| `POST /account/password`                       | Replace temporary password and invalidate other auth sessions                                                      |
 | `POST /recovery/import`                        | Owner imports signed local gateway backups into review after phone loss                                            |
 | `GET /operations`                              | Owner queue, device and gateway health                                                                             |
 | `POST /recovery/:id`                           | Owner accepts or rejects a retained offline submission with evidence                                               |

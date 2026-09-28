@@ -197,10 +197,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     await establish();
   }
   async function changePassword(currentPassword: string, newPassword: string) {
-    await request("/account/password", {
-      method: "POST",
-      body: JSON.stringify({ currentPassword, newPassword }),
+    // Through the auth client, so the replacement session cookie is stored: the
+    // change signs out every session, including the one that made it.
+    const r = await authClient.changePassword({
+      currentPassword,
+      newPassword,
+      revokeOtherSessions: true,
     });
+    if (r.error) throw new Error(r.error.message ?? "Password change failed");
     setPasswordRequired(false);
     await establish();
   }
