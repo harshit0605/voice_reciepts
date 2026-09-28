@@ -261,3 +261,37 @@ Strict TypeScript, 128 unit tests and the 28-test PostgreSQL/API suite passed. N
 - a physical printer.
 
 A phone number typed on the iOS simulator was saved as "9"; the same form on Android saved all ten digits, so this looks like the simulator's typing tool.
+
+## Drawer, end of day and owner dashboard (28 September 2026, late night)
+
+Strict TypeScript, 134 unit tests and the 29-test PostgreSQL/API suite passed. New coverage:
+
+- staff count and close blind, with the expected figure and difference stored for the owner only;
+- a note count that does not add up to the total is refused;
+- the next opening is compared with the cash left at the last close;
+- the day report names who recorded each cash movement and cancellation, and escapes names and reasons in the PDF page;
+- trading after a report does not revise it, while a sale made before it and synced after it does;
+- a drawer closed after midnight still gets a report for the day before, and the next night's close revises only the day that changed;
+- through the real API, staff get a blind count and the owner the difference.
+
+**Two phones: cashier on the iPhone 17e simulator, owner on the Android emulator (API 36):**
+
+- **Mid-day check (cashier):** counted ₹2,100 by notes. The phone showed only the count; the server stored an expected ₹2,110.10 and a difference of −₹10.10.
+- **Cash out (cashier):** ₹200 paid out, reason "Delivery charge".
+- **Close (cashier):** counted ₹1,900 and left ₹1,000 for the next opening. The server stored an expected ₹1,910.10 and a difference of −₹10.10.
+- **Day report:** closing the last drawer created `2026-09-28:1`: 7 bills, net ₹125.10 (cash ₹104.10, credit ₹35, returns ₹14), two staff. It stays provisional because the owner's other phone (iPhone 17 Pro, shut down) has not confirmed an empty outbox.
+- **Owner (Android):**
+  - Overview showed "The last close was ₹10.10 short", each person's day (Test Cashier 2: 2 bills, cash ₹35, credit ₹35, refunded ₹14, paid out ₹200; Shop owner: 5 bills, cash ₹89.10) and recent closes.
+  - The report opened from Money; "Share report PDF" produced `Day report 2026-09-28 rev 1.pdf`, two A4 pages.
+- **Next opening (cashier):** counted ₹920 (₹500 × 1, ₹200 × 1, ₹100 × 2, ₹20 × 1). The phone said only "Drawer opened with ₹920.00". The server stored −₹80 against the ₹1,000 left. The owner's Overview listed "Today's opening was ₹80.00 short against last night's cash" above the last close.
+
+**Found and fixed:**
+
+- The report's drawer header showed only a time for a drawer opened days earlier (the demo drawer opened on 23 September). It now shows the date too.
+- A drawer closed after midnight would have left the previous day with no report. Closing now reports every day the drawer was open that has no report or has changed since.
+
+**Not exercised on a device:**
+
+- Hindi on the drawer, report and Overview screens;
+- closing while another phone holds unsent sales;
+- a real drawer routine at the shop.

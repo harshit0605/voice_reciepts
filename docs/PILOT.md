@@ -14,12 +14,12 @@ Do not make Counterwell the sole pharmacy record until this checklist is complet
 
 ## Daily operation
 
-1. Owner opens the shared drawer with counted opening cash. Staff sign in on registered phones and confirm their counter assignment.
+1. The owner, or staff allowed to take money, opens the shared drawer by counting the cash in it. The count is compared with what was left at the last close; only the owner sees the difference. Staff sign in on registered phones and confirm their counter assignment.
 2. Staff capture actual supplied items; confirm medicine, strength, unit, physical batch and quantity. Dictation always remains a draft.
 3. Collect cash, manually verify UPI in the merchant app, or obtain online credit approval. A screenshot/reference is not bank confirmation. Handoff requires a server acknowledgement.
 4. Check unsynced counts before changing devices, signing out or closing. The app blocks sign-out when unresolved actions remain.
 5. Owner decides approvals separately from refund execution. Returned stock remains quarantined until reviewed.
-6. Count the shared drawer; record withdrawals/deposits with reasons. Reconcile at drawer level. Review pending or stale phones and provisional EOD reports. Late postings create a new report revision.
+6. Count the shared drawer during the day and at closing; record cash taken out or put in with a reason. Staff count blind: they never see what the drawer should hold or the difference. Closing the last drawer makes the owner's day report (a closing after midnight also reports the day before). Reconcile at drawer level. Review pending or stale phones and provisional reports. A sale made before a report but synced after it creates a new revision.
 7. Inspect uncertain printer jobs before requesting another copy. Reprints require a reason and a physical-paper check.
 
 ## Acceptance evidence
