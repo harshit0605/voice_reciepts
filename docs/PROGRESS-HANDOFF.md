@@ -1,6 +1,6 @@
 # Counterwell — development progress and agent handoff
 
-Snapshot: 28 September 2026, after the checkout pass and catalogue import (verified on iOS simulator and Android emulator). Read alongside the user's original **Pharmacy-first retail operations app** plan. This document describes the current implementation and evidence; the plan describes the intended product. Local source and a fresh inspection take precedence if development has continued since this snapshot.
+Snapshot: 28 September 2026, after the checkout pass, catalogue import and opening stock count (checked on two iOS simulators; the latest work is not yet re-checked on Android). Read alongside the user's original **Pharmacy-first retail operations app** plan. This document describes the current implementation and evidence; the plan describes the intended product. Local source and a fresh inspection take precedence if development has continued since this snapshot.
 
 ## Start here
 
@@ -9,7 +9,8 @@ Snapshot: 28 September 2026, after the checkout pass and catalogue import (verif
 - **Git was initialised on 23 September 2026** (local `main`, no remote). The first commit is the pre-existing implementation; later commits are the checkout pass. `.data/`, `.env` and generated native projects stay ignored. Preserve the private local data.
 - Completed passes: **supplier-invoice receiving**, then **voice-assisted selling**. Their implementation and local checks are complete, but their live-provider and physical-device acceptance is not.
 - **Code is on GitHub:** `git@github.com:harshit0605/voice_reciepts.git` (`main`, **public repository**). Secrets and `.data/` are git-ignored and were scanned before the first push.
-- **Checkout/handoff pass and catalogue import: done**, device-checked on iOS and Android (see "Catalogue import"). Next: opening stock counts for imported products, then payments/credit/returns.
+- **Checkout/handoff pass and catalogue import: done**, device-checked on iOS and Android (see "Catalogue import").
+- **Opening stock count: done**, checked on iOS with printing, PDF sharing and a two-phone owner → cashier handoff (see "Opening stock count and two-phone checks"). Android re-check is pending. Next: payments/credit/returns.
 - No production deployment, store cutover, paid-provider evaluation, TestFlight upload or Play internal release has happened.
 
 Suggested reading order: this document → [README](../README.md) → [architecture/API](ARCHITECTURE.md) → [verification evidence](VERIFICATION.md) → [feature sequence](FEATURE-PASSES.md) → [AI costs](AI-COSTS.md) → [pilot gates](PILOT.md).
@@ -152,6 +153,9 @@ npm run dev:api
 npm run dev:worker
 npm run dev:gateway
 npm run web -w @counterwell/mobile
+# Printing without a printer: a local ePOS stand-in saves each receipt as a PNG in .data/printer
+node scripts/fake-printer.mjs
+PRINTER_HOST=127.0.0.1:8090 npm run dev:gateway
 ```
 
 Synthetic isolated previews: `http://localhost:8081/?demo=owner` and `?demo=employee`. The prepared connected database uses synthetic `pilot-pharmacy`; it is not a real shop deployment. Native connected cash billing requires an Expo development build with SQLCipher; **Expo Go is unsupported**. On physical phones use a reachable LAN API URL, not localhost; see README for `apps/mobile/.env.local` and trusted origins.
@@ -215,7 +219,7 @@ Still open in this pass:
 - Android: done on 28 September (see VERIFICATION.md). The native cash sale synced once; the no-response lock was checked on iOS only.
 - A basket is locked while its own payment has no answer; "Set aside" is covered by tests but was not exercised on a device.
 - Tap count could drop further with a one-tap "exact cash" path and search-as-you-type add; measure with staff first.
-- iOS `Share PDF` and the gateway print path were not exercised (no printer configured).
+- iOS `Share PDF` and gateway printing (to a local ePOS stand-in, not a physical Epson) were exercised on 28 September; Android was not.
 
 Original checklist for the pass:
 
@@ -248,8 +252,28 @@ Main files: `packages/core/src/catalogue.ts` (pure, tested), `apps/mobile/src/ca
 - **Large lists:** Sell and Inventory group batches once and render 50 products (in stock first). Search matches every typed word.
 - **Not done:** stock quantities are not imported (opening counts stay per batch and physical). Selling/MRP prices come with stock, not the catalogue.
 
-Next: a fast opening-count flow for thousands of imported products (search, scan, count, expiry, price per batch), then payments/credit/returns.
+Next: the opening stock count (below), then payments/credit/returns.
+
+## Opening stock count and two-phone checks (done, 28 September 2026)
+
+Main files: `packages/core/src/opening.ts` (pure, tested) and `apps/mobile/src/stock-count.tsx`; `stock.opening` in `engine.ts` refuses a repeated batch code.
+
+- **Where:** Inventory → Count stock (owner only). The per-product "Record opening batch count" uses the same form.
+- **List:** "X of Y medicines have counted stock", Not counted yet / All, word search, and Scan. A GS1 DataMatrix scan opens the product with batch and expiry filled in.
+- **Form:** batch number, expiry as printed (`04/27`, `EXP 02/2028`, `Apr-27`, `12.2026` or a full date; month-only means month end), counted quantity in strips or tablets, MRP per strip or tablet, optional selling price and purchase cost. A live preview shows the base-unit count and per-tablet price.
+- **Rules:** refuses a batch already in stock (use a stock adjustment instead), an expired batch (keep it aside for return or disposal), fractional tablets, a price above MRP and a missing MRP. Flags stock expiring within 3 months. Per-tablet prices round **down** to whole paise, so a full strip never bills above the printed MRP; the preview says when that happens.
+- **After saving:** "Saved: …" with "Count another batch of this medicine", and the list moves to the next uncounted medicine.
+- **Search ranking** (Sell, Inventory, Count): exact word > word prefix > substring, and numbers only match from the start of a word, so "paracet 50" finds PARACET 50 and 500 but not 150. Scores are cached per product (about 44 ms → 8 ms per keystroke with 1,685 products).
+
+Found and fixed during the iOS device checks:
+
+- **Temporary passwords left the new employee stuck on "Loading shop…"** (every new employee hit this). Changing the password signs out every session, including the phone's own, but the API wrapper dropped the replacement session cookie. The phone now calls Better Auth's `change-password` directly, so the cookie is stored. A server hook always signs out other sessions and clears the temporary-password flag only after a successful change (`apps/api/src/auth.ts`). An integration test covers it and fails without the fix.
+- **Handoffs were invisible to the cashier** for up to 30 s, and then only on the Orders screen. The app now refreshes every 8 s while open, never letting an older answer overwrite newer state. A handoff shows an "An order was handed to you · Open" banner on every screen and a count on the Orders tab. Checked: the banner appeared within 9 s.
+- **Orders showed "1 items · Shop owner"**, with no way to tell orders apart. Rows now list the medicines and total. The collect sheet lists the medicines, batch and quantity, so the cashier can check them before taking money.
+- The keyboard covered search results in sheets, and the first tap after typing was swallowed. Number pads now close by dragging, the saved banner scrolls into view, and PDFs are named `Bill <number>.pdf`. Hindi unit and form names now appear inside composed text.
+
+Known and harmless: in development builds, better-auth's Expo client logs "Cannot find module 'expo-network'" (optional; it assumes online). `tsc -p apps/mobile` alone reports two older type errors (`receiving.tsx` product-from-invoice-line, `signOut()` arguments) that the root `npm run typecheck` does not; worth fixing separately.
 
 ## Suggested prompt for the next agent
 
-> Continue development of Counterwell in this existing workspace (git remote `origin`, branch `main`). Read my original plan and docs/PROGRESS-HANDOFF.md first, then inspect the actual code. Receiving, voice selling, checkout/handoff and catalogue import are implemented and device-checked on simulators; do not rebuild them. Next, build a fast opening-stock count flow for imported products, then the payments/credit/returns pass. Preserve local data, keep AI costs bounded and manual paths usable, and distinguish simulator checks from physical-device and real-shop acceptance. Update the progress and verification documents when finished.
+> Continue development of Counterwell in this existing workspace (git remote `origin`, branch `main`). Read my original plan and docs/PROGRESS-HANDOFF.md first, then inspect the actual code. Receiving, voice selling, checkout/handoff, catalogue import and the opening stock count are implemented and checked on simulators; do not rebuild them. First re-check the count flow, handoff banner, printing and PDF sharing on Android when the machine is not overloaded. Then do the payments/credit/returns pass. Preserve local data, keep AI costs bounded and manual paths usable, and distinguish simulator checks from physical-device and real-shop acceptance. Update the progress and verification documents when finished.

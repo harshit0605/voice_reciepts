@@ -109,3 +109,43 @@ Test data: a synthetic 2,102-row export (`SYNTHETIC MEDICAL STORE` title rows; h
 
 - The Android no-response lock, "Set aside", PDF sharing, printing and camera scanning were not exercised on devices.
 - `uiautomator` crashed several times when inspections overlapped, and taps were briefly ignored during that time. This is test-tool noise, not an app crash, but it should be re-checked on a physical phone.
+
+## Opening stock count, printing and two-phone handoff (28 September 2026)
+
+Strict TypeScript, 113 unit tests and the 26-test PostgreSQL/API suite passed. New coverage:
+
+- printed expiry formats and impossible dates;
+- strip ↔ tablet conversion with a per-strip MRP;
+- round-down pricing, so a full strip never exceeds MRP;
+- refusal of repeated, expired, fractional and over-MRP counts, including the engine refusing a repeated batch code;
+- search ranking;
+- replacing a temporary password: the old session is signed out, the replacement cookie works, and the flag clears only after a successful change. The test fails against the previous auth configuration.
+
+**iPhone 17 Pro simulator (owner, local API):**
+
+- **Count stock:** PARACET 50 TAB, batch `PC2609`, expiry `09/27`, 12 strips at ₹25 per strip. The server holds 120 tablets at 250 paise each with an opening movement. Recounting the same batch was refused, and the message was checked in Hindi.
+- **Sale:** 1 strip, cash ₹30 received, ₹5 change, bill `2627-002-000003`.
+- **Printing:** through the gateway to `scripts/fake-printer.mjs` (a local ePOS stand-in, not an Epson). The receipt image was correct. An audited reprint with a reason printed "COPY · 2627-002-000003", and the gateway audit row links to the original.
+- **Share PDF:** opened the iOS share sheet as `Bill 2627-002-000003.pdf`. Its content was correct: taxable ₹22.32 + CGST ₹1.34 + SGST ₹1.34 = ₹25.
+
+**Two phones: owner on the iPhone 17 Pro, new cashier on an iPhone 17e simulator:**
+
+- **New employee:** the owner created the account. On first sign-in, "Set your password" appeared.
+  - **Defect:** after a successful change, the phone hung on "Loading shop…". The server showed the change succeed, then `/me` returned 401.
+  - After the fix, a second new employee went from temporary password → new password → Sell screen. Server log: `change-password 200`, `/me 200`, `devices/register 200`, `state 200`.
+- **Handoff and collection:**
+  - The owner held Cetirizine (1 strip) and handed it to the cashier.
+  - Before the fix, it reached the cashier's Orders screen only on the next 30 s poll, with no signal.
+  - The cashier accepted and collected ₹35 cash (₹50 received, ₹15 change). Result: bill `2627-004-000001` (the cashier phone's own series), dispenser **Shop owner**, collector **cashier**, and one cash payment.
+  - The receipt printed from the cashier's phone through the gateway with batch, expiry, HSN and CGST ₹1.87 + SGST ₹1.88.
+  - Cetirizine stock went 139 → 129 tablets.
+- **After the handoff fix:**
+  - The banner and an Orders badge appeared on the cashier's Sell screen within 9 s of the owner's handoff.
+  - Order rows list the medicines and total.
+  - The collect sheet lists "Dolo 650 mg · 1 tablet · DOL2401".
+- **Employee limits:** the cashier's Stock screen is read-only, with no Count stock, Import or Add. More shows only counter assignment, their own cash collections (₹35.00), sync and language.
+
+**Evidence boundaries:**
+
+- **Android:** not re-run for this pass. Unrelated jobs pushed the host load average to 80–238. At about 78, the emulator's system server stopped responding, restarted, and dropped typed sign-in characters.
+- **Not exercised on any device:** the count flow's camera scan (DataMatrix parsing is unit-tested); printing to a physical Epson; Hindi receipts on paper.
