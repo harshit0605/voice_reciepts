@@ -5,7 +5,8 @@
   "main": "src/index.ts",
   "exports": "./src/index.ts",
   "dependencies": {
-    "zod": "^4.1.0",
-    "decimal.js": "^10.6.0"
+    "decimal.js": "^10.6.0",
+    "fflate": "0.8.3",
+    "zod": "^4.1.0"
   }
 }

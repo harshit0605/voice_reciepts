@@ -354,6 +354,66 @@ describe("retail ledger", () => {
       expect(() => apply(held, cancel(3), other)).toThrow("Only the current");
     });
   });
+  describe("catalogue import", () => {
+    const item = (id: string, over: Record<string, unknown> = {}) => ({
+      id,
+      name: `Imported ${id}`,
+      generic: "",
+      strength: "500 mg",
+      form: "tablet",
+      hsn: "3004",
+      aliases: ["x".repeat(90)],
+      barcode: "",
+      units: { tablet: "1", strip: "10" },
+      baseUnit: "tablet",
+      taxBps: 1200,
+      reorderAt: "0",
+      schedule: "OTC" as const,
+      active: true,
+      ...over,
+    });
+    const importing = (products: ReturnType<typeof item>[]): Operation => ({
+      type: "catalogue.import",
+      importId: "import-1",
+      products,
+    });
+    it("creates a chunk of products at once and keeps a small, hashed receipt", () => {
+      const s0 = demoState(undefined, undefined, undefined, now);
+      const c = cmd(
+        importing(Array.from({ length: 60 }, (_, i) => item(`p${i}`))),
+      );
+      const out = execute(s0, c, owner, now);
+      expect(Object.keys(out.state.products)).toHaveLength(66);
+      expect(out.result).toEqual({ importId: "import-1", created: 60 });
+      const receipt = out.state.commands[c.id];
+      expect(receipt.fingerprint).toMatch(/^h:/);
+      expect(execute(out.state, c, owner, now).state).toBe(out.state);
+      expect(() =>
+        execute(
+          out.state,
+          { ...c, operation: importing([item("p0")]) },
+          owner,
+          now,
+        ),
+      ).toThrow("different data");
+    });
+    it("is owner-only and all-or-nothing", () => {
+      const s0 = demoState(undefined, undefined, undefined, now);
+      expect(() => apply(s0, importing([item("a")]), employee)).toThrow(
+        "Owner",
+      );
+      expect(() => apply(s0, importing([item("a"), item("dolo")]))).toThrow(
+        "already exists",
+      );
+      expect(() => apply(s0, importing([item("a"), item("a")]))).toThrow(
+        "repeated",
+      );
+      expect(() =>
+        apply(s0, importing([item("b", { units: { tablet: "2" } })])),
+      ).toThrow("base unit");
+      expect(s0.products.a).toBeUndefined();
+    });
+  });
   it("binds discount approval to a specific order version", () => {
     let s = order();
     s = approve(s, "discount", {

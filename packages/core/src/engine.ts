@@ -1,4 +1,5 @@
 import { commandSchema, approvalSchemas, type Command } from "./contracts";
+import { commandFingerprint, sameFingerprint } from "./fingerprint";
 import {
   type Actor,
   type State,
@@ -40,12 +41,12 @@ export function execute(
   now = new Date().toISOString(),
 ): { state: State; result: unknown } {
   const cmd = commandSchema.parse(raw);
-  const fingerprint = JSON.stringify(cmd);
+  const json = JSON.stringify(cmd);
   ensure(actor.businessId === input.businessId, "Wrong business", "FORBIDDEN");
   const prior = input.commands[cmd.id];
   if (prior) {
     ensure(
-      prior.fingerprint === fingerprint && prior.actorId === actor.id,
+      sameFingerprint(prior.fingerprint, json) && prior.actorId === actor.id,
       "Command ID was reused with different data",
       "CONFLICT",
     );
@@ -201,6 +202,28 @@ export function execute(
         );
       s.products[op.product.id] = op.product;
       result = op.product;
+      break;
+    }
+    case "catalogue.import": {
+      owner();
+      const ids = new Set<string>();
+      for (const p of op.products) {
+        ensure(!ids.has(p.id), "Product repeated in import", "CONFLICT");
+        ids.add(p.id);
+        ensure(
+          !s.products[p.id],
+          `${p.name}: product ID already exists`,
+          "CONFLICT",
+        );
+        ensure(
+          p.units[p.baseUnit] === "1",
+          `${p.name}: base unit conversion must be 1`,
+        );
+        s.products[p.id] = p;
+      }
+      audit("catalogue.import", op.importId, `${op.products.length} products`);
+      // Keep the stored receipt small; the products themselves are in the catalogue.
+      result = { importId: op.importId, created: op.products.length };
       break;
     }
     case "customer.create":
@@ -1109,7 +1132,7 @@ export function execute(
   s.revision++;
   s.commands[cmd.id] = {
     id: cmd.id,
-    fingerprint,
+    fingerprint: commandFingerprint(json),
     result,
     actorId: actor.id,
     revision: s.revision,

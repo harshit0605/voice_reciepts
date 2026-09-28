@@ -32,7 +32,7 @@ const prescription = z.object({
   prescriberAddress: z.string().min(1),
   reference: z.string().min(1),
 });
-const product = z
+export const productSchema = z
   .object({
     id,
     name: z.string().min(1).max(180),
@@ -67,7 +67,13 @@ const batch = z
   .strict();
 const approvalPayload = z.record(z.string(), z.unknown());
 const data = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("product.save"), product }),
+  z.object({ type: z.literal("product.save"), product: productSchema }),
+  /** New catalogue products, created together or not at all; large imports send several. */
+  z.object({
+    type: z.literal("catalogue.import"),
+    importId: id,
+    products: z.array(productSchema).min(1).max(250),
+  }),
   z.object({
     type: z.literal("batch.price"),
     batchId: id,

@@ -611,6 +611,44 @@ describe.skipIf(!enabled)("PostgreSQL and authenticated API", () => {
     } as Operation);
     expect(duplicate.status).toBe(409);
   });
+  it("imports a full catalogue chunk atomically, owner-only, with a small stored receipt", async () => {
+    const products = Array.from({ length: 250 }, (_, i) => ({
+      id: `imp-${randomUUID()}`,
+      name: `Imported medicine ${i}`,
+      generic: "Paracetamol",
+      strength: `${i} mg`,
+      form: "tablet",
+      hsn: "3004",
+      aliases: [],
+      barcode: String(8900000000000 + i),
+      units: { tablet: "1", strip: "10" },
+      baseUnit: "tablet",
+      taxBps: 500,
+      reorderAt: "0",
+      schedule: "OTC" as const,
+      active: true,
+    }));
+    const op: Operation = {
+      type: "catalogue.import",
+      importId: "api-import",
+      products,
+    };
+    expect((await command(op, employeeCookie)).status).toBe(403);
+    const c = make(op);
+    const started = performance.now();
+    const first = await req("/api/v1/commands", c);
+    const elapsed = performance.now() - started;
+    expect(first.status).toBe(200);
+    expect(first.data.result).toEqual({ importId: "api-import", created: 250 });
+    const retry = await req("/api/v1/commands", c);
+    expect(retry.data.result).toEqual(first.data.result);
+    const s = await db.readState(businessId);
+    expect(products.every((p) => s!.products[p.id]?.name === p.name)).toBe(
+      true,
+    );
+    expect(s!.commands[c.id].fingerprint.length).toBeLessThan(60);
+    expect(elapsed).toBeLessThan(15000);
+  });
   it("reports an issued invoice number distinctly so the phone does not hand it back", async () => {
     const checkout = (orderId: string, n: number): Operation => ({
       type: "checkout",

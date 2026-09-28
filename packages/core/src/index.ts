@@ -10,3 +10,5 @@ export * from "./receiving";
 export * from "./voice";
 export * from "./checkout-recovery";
 export * from "./scan";
+export * from "./fingerprint";
+export * from "./catalogue";

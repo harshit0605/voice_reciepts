@@ -13,6 +13,7 @@ import {
   DomainError,
   totals,
   receiptHtml,
+  sameFingerprint,
   type Actor,
   type State,
 } from "@counterwell/core";
@@ -384,7 +385,7 @@ app.post("/api/v1/sync", async (c) => {
         if (existing) {
           if (
             existing.actorId !== actor.id ||
-            existing.fingerprint !== JSON.stringify(cmd)
+            !sameFingerprint(existing.fingerprint, JSON.stringify(cmd))
           )
             throw new DomainError("CONFLICT", "Command ID already used");
           return {
