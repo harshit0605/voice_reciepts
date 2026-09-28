@@ -186,3 +186,14 @@ It has **not** run on a real Windows PC yet. The one-line version downloads the 
 - **Not established:** a dense real distributor bill (20+ lines, free quantity, PTR), multi-page PDFs and handwritten corrections. `npm run evaluate:invoices -- <files>` reruns this on any bill.
 
 **Android:** the emulator booted, but the host load average stayed between 55 and 95. The guest reported a load of 53 and did not bring the app to the foreground within 2 minutes. No Android evidence for this pass.
+
+**Phone upload, sign-out and ended sessions (iPhone 17e simulator, 28 September 2026, evening):**
+
+- **Invoice and voice uploads never left a phone.** Expo's native `fetch` refuses React Native's `{ uri, name, type }` file parts ("Unsupported FormDataPart implementation"). The app showed only "Connection unavailable". This was found by uploading a bill photo from Files as the owner.
+  - After the fix (`apps/mobile/src/upload.ts`), the same photo uploaded and was read in 4.5 s. The review draft showed the supplier and GSTIN, invoice 0001/25-26, 2025-08-05, ₹231 and 3 lines, with a ₹0.00 difference.
+  - Posting stayed disabled until each line was matched to the catalogue. The draft was discarded, not posted.
+  - Voice uses the same helper. It is unverified end to end because there is no Sarvam key.
+- **Sign-out** failed with "Cannot find module 'expo-network'" (an optional better-auth import that Expo's native loader throws on). Metro now maps it to a stand-in. Sign-out worked on the first tap afterwards.
+- **A phone whose session ended looked connected.** After a password change elsewhere, the phone kept "Up to date" while every sync returned 401. It now shows "Sign in again" (English and Hindi) and stops syncing; unsent sales stay queued.
+  - Checked: the password was changed from another client at 20:14:28. The cashier's phone showed "Sign in again" by 20:14:44 after one refused sync, and signing in with the new password returned it to Sell.
+- **Android:** not run. The host load average was 108–180.
