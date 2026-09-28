@@ -58,6 +58,18 @@ function exactPaise(input: string) {
     throw new Error("Enter an amount with at most two decimals");
   return amount.toNumber();
 }
+/** The bill total and the next round notes a customer is likely to hand over. */
+function quickAmounts(totalPaise: number) {
+  return [
+    ...new Set(
+      [1, 1000, 5000, 10000, 50000].map(
+        (step) => Math.ceil(totalPaise / step) * step,
+      ),
+    ),
+  ]
+    .filter((v) => v > 0)
+    .slice(0, 4);
+}
 export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
   const s = useSession(),
     state = s.state!,
@@ -68,7 +80,6 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
     [selected, setSelected] = useState<Batch | null>(null),
     [qty, setQty] = useState("1"),
     [unit, setUnit] = useState(""),
-    [confirmed, setConfirmed] = useState(false),
     [checkout, setCheckout] = useState(false),
     [basketOpen, setBasketOpen] = useState(false),
     [scanner, setScanner] = useState(false),
@@ -244,13 +255,18 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
     setUnit(
       spoken ? (spokenUnit(spoken.unit, product) ?? "") : product.baseUnit,
     );
-    setConfirmed(false);
   };
   const add = async () => {
     if (!selected || addLock.current || busy) return;
     addLock.current = true;
     try {
-      const line = { batchId: selected.id, quantity: qty, unit, confirmed };
+      // Pressing the button that names the batch is the physical-batch confirmation.
+      const line = {
+        batchId: selected.id,
+        quantity: qty,
+        unit,
+        confirmed: true,
+      };
       quote(state, [line], new Date().toISOString());
       const saved = await selling.update((entry) =>
         activeVoice
@@ -708,7 +724,6 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                     active={selected.id === b.id}
                     onPress={() => {
                       setSelected(b);
-                      setConfirmed(false);
                     }}
                   >
                     {b.code} · {b.expiry}
@@ -741,7 +756,6 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
               value={qty}
               onChange={(v) => {
                 setQty(v);
-                setConfirmed(false);
               }}
               number
             />
@@ -753,7 +767,6 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                     active={unit === u}
                     onPress={() => {
                       setUnit(u);
-                      setConfirmed(false);
                     }}
                   >
                     {u}
@@ -761,27 +774,15 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                 ),
               )}
             </Row>
-            <Pressable
-              onPress={() => setConfirmed(!confirmed)}
-              style={{
-                flexDirection: "row",
-                gap: 10,
-                alignItems: "center",
-                marginBottom: 25,
-                paddingVertical: 10,
-              }}
-            >
-              <Icon
-                name={confirmed ? "checkbox" : "square-outline"}
-                color={colors.accent}
-              />
-              <Txt>{t("confirmBatch")}</Txt>
-            </Pressable>
+
             <Button
-              disabled={!confirmed || !Number(qty) || !unit || busy}
+              disabled={!Number(qty) || !unit || busy}
               onPress={() => void add()}
+              icon="checkmark"
             >
-              {t("add")}
+              {s.language === "hi"
+                ? `बैच ${selected.code} जाँचा · जोड़ें`
+                : `Batch ${selected.code} checked · Add`}
             </Button>
           </>
         )}
@@ -872,6 +873,7 @@ export function Checkout({
       state.orders[existingOrderId ?? ""]?.customerId ?? "",
     ),
     [cash, setCash] = useState("0"),
+    [received, setReceived] = useState(""),
     [credit, setCredit] = useState("0"),
     [ref, setRef] = useState(""),
     [verified, setVerified] = useState(false),
@@ -896,6 +898,10 @@ export function Checkout({
     new Date().toISOString(),
     discountPaise,
   ).reduce((n, l) => n + l.netPaise, 0);
+  let change: number | null = null;
+  try {
+    if (received.trim()) change = exactPaise(received) - total;
+  } catch {}
   const rx = lines.some(
     (l) =>
       state.products[state.batches[l.batchId].productId].schedule !== "OTC",
@@ -977,6 +983,8 @@ export function Checkout({
           !prescription.prescriberAddress)
       )
         throw new Error("Complete the prescription register details");
+      if (method === "cash" && change !== null && change < 0)
+        throw new Error("Cash received is less than the bill total");
       if (billsLocally(method, attempt, existingOrderId)) {
         const i = await s.cashSale(
           lines,
@@ -1097,6 +1105,41 @@ export function Checkout({
           </Chip>
         ))}
       </Row>
+      {method === "cash" && (
+        <View style={{ gap: 10 }}>
+          <Field
+            label="Cash received (₹) · optional"
+            value={received}
+            onChange={setReceived}
+            number
+          />
+          <Row style={{ flexWrap: "wrap" }}>
+            {quickAmounts(total).map((v) => (
+              <Chip
+                key={v}
+                active={received === (v / 100).toString()}
+                onPress={() => setReceived((v / 100).toString())}
+              >
+                {rupees(v)}
+              </Chip>
+            ))}
+          </Row>
+          {change !== null && (
+            <Row style={{ justifyContent: "space-between" }}>
+              <Txt style={{ color: change < 0 ? colors.red : colors.ink }}>
+                {change < 0 ? "Short by" : "Return to customer"}
+              </Txt>
+              <Txt
+                size={22}
+                bold
+                style={{ color: change < 0 ? colors.red : colors.ink }}
+              >
+                {rupees(Math.abs(change))}
+              </Txt>
+            </Row>
+          )}
+        </View>
+      )}
       {(method === "split" || method === "credit") && (
         <Field
           label="Cash collected (₹)"

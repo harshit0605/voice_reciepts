@@ -395,4 +395,8 @@ export const hindiCopy: Record<string, string> = {
   "Open Settings": "सेटिंग्स खोलें",
   Dismiss: "बंद करें",
   "Barcodes (comma separated)": "बारकोड (कॉमा से अलग करें)",
+  "Cash received (₹) · optional": "मिला नकद (₹) · वैकल्पिक",
+  "Short by": "कम है",
+  "Return to customer": "ग्राहक को लौटाएँ",
+  "Cash received is less than the bill total": "मिला नकद बिल की रकम से कम है",
 };
