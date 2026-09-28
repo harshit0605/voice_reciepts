@@ -1,6 +1,6 @@
 # Counterwell — development progress and agent handoff
 
-Snapshot: 23 September 2026, after the checkout double-billing fixes (first part of the checkout pass). Read alongside the user's original **Pharmacy-first retail operations app** plan. This document describes the current implementation and evidence; the plan describes the intended product. Local source and a fresh inspection take precedence if development has continued since this snapshot.
+Snapshot: 28 September 2026, after the manual/barcode checkout and handoff pass (simulator-verified on iOS). Read alongside the user's original **Pharmacy-first retail operations app** plan. This document describes the current implementation and evidence; the plan describes the intended product. Local source and a fresh inspection take precedence if development has continued since this snapshot.
 
 ## Start here
 
@@ -8,7 +8,7 @@ Snapshot: 23 September 2026, after the checkout double-billing fixes (first part
 - An implemented pilot monorepo already exists. Continue it; do not scaffold a replacement app.
 - **Git was initialised on 23 September 2026** (local `main`, no remote). The first commit is the pre-existing implementation; later commits are the checkout pass. `.data/`, `.env` and generated native projects stay ignored. Preserve the private local data.
 - Completed passes: **supplier-invoice receiving**, then **voice-assisted selling**. Their implementation and local checks are complete, but their live-provider and physical-device acceptance is not.
-- **Current pass: manual/barcode checkout and cashier handoff.** The three client double-billing paths are fixed (see below). Continue with the remaining checkout gaps listed there.
+- **Checkout/handoff pass: done except Android device checks** (see "Checkout pass, part 2"). Next: repeat the device checks on Android, then payments/credit/returns.
 - No production deployment, store cutover, paid-provider evaluation, TestFlight upload or Play internal release has happened.
 
 Suggested reading order: this document → [README](../README.md) → [architecture/API](ARCHITECTURE.md) → [verification evidence](VERIFICATION.md) → [feature sequence](FEATURE-PASSES.md) → [AI costs](AI-COSTS.md) → [pilot gates](PILOT.md).
@@ -194,16 +194,27 @@ How the fix works:
 
 Evidence: see VERIFICATION.md. Not yet exercised: the lock banner against the live API, and native crash recovery on a phone.
 
-## Checkout pass, part 2: remaining work
+## Checkout pass, part 2 (done, 28 September 2026)
 
-Audit findings not yet addressed, most important first:
+Each item is its own commit on `main`:
 
-1. `ReceiptSheet` keeps print ID/status across invoices, so a reprint can target the previous bill. Reset it on invoice change.
-2. A handoff offer cannot be recalled, declined or reassigned; an absent cashier strands the order.
-3. Barcode scanning only fills the search box. It needs exact-match add, a clear unknown-code message, a denied-permission message with a Settings link, and multiple barcodes per product.
-4. The online checkout reserves an invoice number before sending, so any rejection leaves a gap in the GST series (seen: 000003 skipped).
-5. Speed: about 10–11 taps for a 2-item cash sale, and no amount-tendered/change field.
-6. After restart an uncertain command waits up to 30 s for the first sync. On iOS, chained modals (basket → checkout → receipt) need device checking. A reprint after sync can be refused because the device and server timestamps differ.
+| Item                                | Change                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Receipt state (`beb4e31`)           | `ReceiptSheet` resets print ID/status/reprint fields when the invoice changes and ignores late responses for a previous bill. The gateway compares only printed bill content for a reused print ID, so a synced offline bill (new `postedAt`, redacted costs) can still be reprinted.                                                                                                                                         |
+| Invoice series gaps (`04c578f`)     | A definitely rejected online checkout hands its reserved number back while it is still the latest (`releaseSequence`). An issued-number collision now has its own `INVOICE_NUMBER_USED` code (still 409) so that number is never handed back. The app syncs right after sign-in/restart instead of waiting up to 30 s.                                                                                                        |
+| Stranded handoffs (`2ea798f`)       | New `order.decline` (recipient), `order.recall` (offerer, or an owner taking over any open order, audited) and `order.cancel` (collector or owner, reason required; cancelled orders cannot be billed online or offline). Orders shows Accept/Decline, Take back, Take over, Cancel order and a Cancelled list with who/when/why.                                                                                             |
+| Barcode scanning (`c21ba60`)        | `packages/core/src/scan.ts` parses EAN/UPC and GS1 DataMatrix/QR (GTIN, batch, expiry). Products hold several comma-separated barcodes. An exact match opens the batch sheet with the scanned pack's batch preselected; expired/unrecorded/stockless batches, shared codes, unknown codes and denied camera permission each get a clear message (Open Settings when the OS will not ask again). One scan per scanner opening. |
+| Speed (`4964ea8`)                   | One "Batch X checked · Add" button replaces the tick + Add (7 taps instead of about 9 for a 2-item cash sale on a phone). Cash checkout has optional cash received, quick amounts, change to return, and refuses a short payment.                                                                                                                                                                                             |
+| iOS font clipping (`f259400`)       | Render after DM Sans loads; text was clipped on iOS.                                                                                                                                                                                                                                                                                                                                                                          |
+| **Native cash billing (`bf5bdd6`)** | **Every local cash sale failed on a device** ("file is not a database"): expo-sqlite's `withExclusiveTransactionAsync` opens a second connection that never gets the SQLCipher key. Storage now runs every call on the one keyed connection through a serial queue with explicit `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK`. Unit tests and the in-memory web store could not catch this.                                          |
+| Sheet tap-through (`8e87dbd`)       | A quick second tap on "Review & collect" landed on "Hold order" in the newly opened checkout and silently parked the sale. Sheets ignore touches for 400 ms after opening.                                                                                                                                                                                                                                                    |
+
+Still open in this pass:
+
+- Android: the emulator run was blocked by host load (see VERIFICATION.md). Rebuild the debug APK and repeat the iOS checks there.
+- A basket is locked while its own payment has no answer; "Set aside" is covered by tests but was not exercised on a device.
+- Tap count could drop further with a one-tap "exact cash" path and search-as-you-type add; measure with staff first.
+- iOS `Share PDF` and the gateway print path were not exercised (no printer configured).
 
 Original checklist for the pass:
 

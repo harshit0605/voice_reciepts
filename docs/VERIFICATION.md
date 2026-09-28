@@ -61,3 +61,19 @@ Added coverage (`packages/core/test/checkout-recovery.test.ts`, `apps/mobile/src
 Browser walkthrough (demo employee, 390 × 844): a double-clicked cash Confirm produced one bill. A UPI attempt rejected for a reused reference, then switched to Cash, produced one bill for the same order and left no stray held order (Open · 0; previously a separate cash bill plus an orphaned held order). Hold, then Collect from Orders, produced one bill. There were no console errors.
 
 Not exercised in the UI: the no-response lock banner, **Check now** and **Set aside** against the live API, which need a signed-in connected session and a dropped response. Native crash-between-commit-and-clear recovery also needs a development build on a phone. Both paths are covered by the domain tests above, not by device evidence. The rejected UPI attempt still consumed an invoice number (bill 000003 was skipped); see the remaining checkout gaps in the handoff.
+
+## Checkout pass, part 2 (28 September 2026)
+
+Strict TypeScript and 110 tests across ten suites passed with the PostgreSQL/API suite. New coverage: stranded-handoff rules (decline, recall, owner takeover, cancel, cancelled orders unbillable online and offline), GS1/EAN scan parsing and batch matching, invoice-number release rules, the `INVOICE_NUMBER_USED` API code, and reprinting a synced offline bill at the gateway.
+
+**iPhone 17 Pro simulator (iOS 26.5), connected to the local API, ad-hoc signed debug build (`.data/ios-signed-build.log`):**
+
+- Signed in as the local seed owner; the header showed "Up to date".
+- Local cash sale: **first attempt failed** with the SQLCipher/second-connection defect (fixed in `bf5bdd6`). After the fix and an app restart, the same pinned attempt billed exactly once: bill `2627-002-000001`, one server invoice, one cash payment, stock 32 → 31.
+- No-response path: API stopped, UPI checkout attempted → "No response from the server…", Confirm/Hold disabled, and switching to Cash kept Confirm disabled. The Sell screen showed the lock banner with Check now / Set aside. API restarted → Check now → "An action that had no response is now confirmed as saved" and the basket unlocked. The server had one held order and no invoice (the checkout never reached it), so nothing was double-billed.
+- Found the sheet tap-through defect (a double tap parked the sale as a held order); fixed in `8e87dbd` and re-verified: a tap during the opening animation and a quick double tap both left checkout open, then cash billing produced `2627-002-000002`.
+- Basket → checkout → receipt modal chaining worked on iOS; no dropped sheets.
+
+**Android emulator (Medium Phone, API 36):** the existing debug APK installed and loaded the current JS through `adb reverse` (login screen rendered correctly). Interactive testing was blocked: the host load average reached 73 from unrelated jobs, and the app hit input-dispatch ANRs ("Application does not have a focused window"). Another installed app also opened a system "display over other apps" page mid-test; it was left untouched. **No Android billing evidence yet.**
+
+Not exercised: camera scanning on a device (the simulator has no camera and the browser pane blocks it; scan logic is unit-tested), PDF sharing, gateway printing, and "Set aside".
