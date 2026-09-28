@@ -149,3 +149,32 @@ Strict TypeScript, 113 unit tests and the 26-test PostgreSQL/API suite passed. N
 
 - **Android:** not re-run for this pass. Unrelated jobs pushed the host load average to 80–238. At about 78, the emulator's system server stopped responding, restarted, and dropped typed sign-in characters.
 - **Not exercised on any device:** the count flow's camera scan (DataMatrix parsing is unit-tested); printing to a physical Epson; Hindi receipts on paper.
+
+## Receipt PDF, shop PC setup and invoice images (28 September 2026)
+
+**Share PDF (iPhone 17e simulator, cashier):**
+
+- **Defect:** the shared PDF was a US Letter page (612 × 792 pt) with the bill squeezed into its top-left corner.
+- **Fix:** the page is now 300 pt wide and as tall as the bill (`receiptPage`). Heights were checked against browser layout for 1, 3, 6, 10 and 15 lines, with long medicine names and a long address; every case had spare room and none needed a second page.
+- **Contents:** the PDF names the customer and states "Paid ₹35.00 by cash", or the balance due, from the recorded payments.
+- **Checked:** bill `2627-004-000001` produced a 300 × 382 pt PDF. The share sheet thumbnail showed the whole receipt, and **Save to Files** stored `Bill 2627-004-000001.pdf` in the simulator's Files storage.
+- **Test-tool note:** a Metro reload while the iOS share sheet is open leaves the development app ignoring taps until it is restarted. Development builds only.
+
+**Shop PC setup:** `scripts/windows/test-shop-pc-setup.ps1` passes 26 checks under PowerShell 7.6 on macOS:
+
+- the generated file parses as Windows PowerShell 5.1 would accept, is plain ASCII and uses CRLF;
+- a fresh run, a second run and the fallbacks behave as expected, against stand-ins for Windows commands;
+- deliberately turning SSH password sign-in back on makes the test fail.
+
+It has **not** run on a real Windows PC yet. The one-line version downloads the script from GitHub at a pinned commit; its SHA-256 matched the local file.
+
+**Invoice reading from real-looking images: blocked.**
+
+- `GEMINI_API_KEY` in `.env` is empty, so the worker marks every invoice job "Document/structure provider is not configured". This was confirmed with two uploads.
+- Test images are in `.data/real-invoices` (git-ignored; not ours to publish):
+  - Busy's three public sample pharmacy invoices, each with the same three lines (paracetamol, cough syrup, face mask) and batch, expiry, HSN, discount and GST;
+  - phone-photo versions of them (skewed, rotated, uneven light, JPEG quality 58).
+- These are vendor templates, not a dense real distributor bill with PTR, free quantity and 20+ lines. That still needs a real bill from the shop.
+- Once a key is set, restart the worker and run `python3 .data/real-invoices/run-extraction.py .data/real-invoices/*.png .data/real-invoices/photo-*.jpg`.
+
+**Android:** the emulator booted, but the host load average stayed between 55 and 95. The guest reported a load of 53 and did not bring the app to the foreground within 2 minutes. No Android evidence for this pass.

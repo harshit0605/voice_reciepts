@@ -11,6 +11,8 @@ Snapshot: 28 September 2026, after the checkout pass, catalogue import and openi
 - **Code is on GitHub:** `git@github.com:harshit0605/voice_reciepts.git` (`main`, **public repository**). Secrets and `.data/` are git-ignored and were scanned before the first push.
 - **Checkout/handoff pass and catalogue import: done**, device-checked on iOS and Android (see "Catalogue import").
 - **Opening stock count: done**, checked on iOS with printing, PDF sharing and a two-phone owner → cashier handoff (see "Opening stock count and two-phone checks"). Android re-check is pending. Next: payments/credit/returns.
+- **Shared bill PDF** is now receipt-sized and states what was paid (checked on iOS). **Shop PC remote setup** exists for the shop's Windows PC (Tailscale, key-only SSH, gateway tools); see [SHOP-PC-SETUP.md](SHOP-PC-SETUP.md). It has not run on the real PC yet.
+- **Blocked:** invoice reading needs `GEMINI_API_KEY` in `.env` (it is empty). Android checks need the host load well below 50.
 - No production deployment, store cutover, paid-provider evaluation, TestFlight upload or Play internal release has happened.
 
 Suggested reading order: this document → [README](../README.md) → [architecture/API](ARCHITECTURE.md) → [verification evidence](VERIFICATION.md) → [feature sequence](FEATURE-PASSES.md) → [AI costs](AI-COSTS.md) → [pilot gates](PILOT.md).
