@@ -24,6 +24,8 @@ import {
   colors,
   styles,
   useText,
+  useWord,
+  itemCount,
   SHOWN_PRODUCTS,
 } from "./ui";
 import { Checkout } from "./selling";
@@ -54,6 +56,46 @@ const money = (value: string) => {
     throw new Error("Enter a valid amount with at most two decimals");
   return d.toNumber();
 };
+/** What an open order holds, so the counter can tell orders apart and check them before collecting. */
+function orderSummary(state: State, o: Order) {
+  let totalPaise = 0;
+  const lines = o.lines.map((l, i) => {
+    const batch = state.batches[l.batchId],
+      product = batch && state.products[batch.productId],
+      factor = product?.units[l.unit];
+    if (batch && factor)
+      totalPaise += round(D(l.quantity).mul(factor).mul(batch.pricePaise));
+    return {
+      key: `${l.batchId}:${i}`,
+      name: product ? `${product.name} ${product.strength}`.trim() : "Medicine",
+      quantity: l.quantity,
+      unit: l.unit,
+      batch: batch?.code,
+    };
+  });
+  return { lines, totalPaise };
+}
+function OrderLines({ order }: { order: Order }) {
+  const state = useSession().state!,
+    w = useWord();
+  return (
+    <View style={{ marginBottom: 16 }}>
+      {orderSummary(state, order).lines.map((l) => (
+        <Row
+          key={l.key}
+          style={[styles.listRow, { justifyContent: "space-between" }]}
+        >
+          <Txt bold style={{ flex: 1 }}>
+            {l.name}
+          </Txt>
+          <Txt muted size={12}>
+            {`${l.quantity} ${w(l.unit)}${l.batch ? ` · ${l.batch}` : ""}`}
+          </Txt>
+        </Row>
+      ))}
+    </View>
+  );
+}
 function Page({ title, subtitle, action, children }: any) {
   return (
     <ScrollView
@@ -237,7 +279,7 @@ export function OverviewScreen() {
             <View>
               <Txt bold>{i.number}</Txt>
               <Txt muted size={12} style={{ marginTop: 4 }}>
-                {i.lines.length} items ·{" "}
+                {itemCount(i.lines.length, s.language)} ·{" "}
                 {new Date(i.occurredAt).toLocaleTimeString("en-IN", {
                   hour: "2-digit",
                   minute: "2-digit",
@@ -328,7 +370,10 @@ export function OrdersScreen({
               </Txt>
             </Row>
             <Txt muted size={12} style={{ marginTop: 5 }}>
-              {o.lines.length} items · {state.members[o.collectorId]?.name}
+              {orderSummary(state, o)
+                .lines.map((l) => l.name)
+                .join(", ")}{" "}
+              · {state.members[o.collectorId]?.name}
             </Txt>
             <Txt size={12} style={{ marginTop: 5 }}>
               {o.cancelReason}
@@ -339,10 +384,15 @@ export function OrdersScreen({
         ? open.map((o) => (
             <View key={o.id} style={styles.listRow}>
               <Row style={{ justifyContent: "space-between" }}>
-                <View>
+                <View style={{ flex: 1, marginRight: 12 }}>
                   <Txt bold>Order {o.id.slice(0, 8)}</Txt>
-                  <Txt muted size={12} style={{ marginTop: 5 }}>
-                    {o.lines.length} items ·{" "}
+                  <Txt size={13} style={{ marginTop: 5 }}>
+                    {orderSummary(state, o)
+                      .lines.map((l) => l.name)
+                      .join(", ")}
+                  </Txt>
+                  <Txt muted size={12} style={{ marginTop: 4 }}>
+                    {rupees(orderSummary(state, o).totalPaise)} ·{" "}
                     {state.members[o.dispenserId]?.name}
                   </Txt>
                 </View>
@@ -450,6 +500,7 @@ export function OrdersScreen({
       >
         {selected && (
           <>
+            <OrderLines order={selected} />
             <Checkout
               existingOrderId={selected.id}
               lines={selected.lines}

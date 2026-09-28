@@ -28,6 +28,12 @@ const englishToHindi: Record<string, string> = {
   ...hindiCopy,
 };
 /** A single word such as a unit name, in the current language, for use inside a longer text. */
+/** "1 item" / "3 items", or "1 दवा" / "3 दवाएँ". */
+export function itemCount(n: number, language: string) {
+  return language === "hi"
+    ? `${n} ${n === 1 ? "दवा" : "दवाएँ"}`
+    : `${n} ${n === 1 ? "item" : "items"}`;
+}
 export function useWord() {
   const { language } = useSession();
   return (word: string) =>

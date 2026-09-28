@@ -88,6 +88,10 @@ export default function App() {
       </View>
     );
   const owner = session.identity.actor.role === "owner";
+  // A customer handed over by another counter is waiting: say so on every screen.
+  const handedToMe = Object.values(session.state.orders).filter(
+    (o) => o.status === "handoff" && o.offeredTo === session.identity!.actor.id,
+  ).length;
   const nav = (items: typeof tabs | typeof ownerTabs) =>
     items.map(([key, icon]) => (
       <Pressable
@@ -114,19 +118,20 @@ export default function App() {
         >
           {t(key)}
         </Txt>
-        {key === "reviews" &&
+        {((key === "reviews" &&
           Object.values(session.state!.reviews).some(
             (r) => r.status === "open",
-          ) && (
-            <View
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: colors.amber,
-              }}
-            />
-          )}
+          )) ||
+          (key === "orders" && handedToMe > 0)) && (
+          <View
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: colors.amber,
+            }}
+          />
+        )}
       </Pressable>
     ));
   const content =
@@ -308,6 +313,23 @@ export default function App() {
               </Txt>
             </Pressable>
           )}
+          {handedToMe > 0 && page !== "orders" && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setPage("orders")}
+              style={{
+                paddingVertical: 12,
+                paddingHorizontal: wide ? 32 : 20,
+                backgroundColor: colors.amberBg,
+              }}
+            >
+              <Txt size={13} bold style={{ color: colors.amber }}>
+                {session.language === "hi"
+                  ? `${handedToMe} ऑर्डर आपको सौंपा गया · खोलें`
+                  : `${handedToMe === 1 ? "An order was" : `${handedToMe} orders were`} handed to you · Open`}
+              </Txt>
+            </Pressable>
+          )}
           <View style={{ flex: 1 }}>{content}</View>
           {!wide && (
             <View
@@ -326,11 +348,33 @@ export default function App() {
                   onPress={() => setPage(key)}
                   style={{ flex: 1, alignItems: "center", padding: 8, gap: 4 }}
                 >
-                  <Icon
-                    name={icon}
-                    size={22}
-                    color={page === key ? colors.accent : colors.muted}
-                  />
+                  <View>
+                    <Icon
+                      name={icon}
+                      size={22}
+                      color={page === key ? colors.accent : colors.muted}
+                    />
+                    {key === "orders" && handedToMe > 0 && (
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: -4,
+                          right: -10,
+                          minWidth: 16,
+                          height: 16,
+                          borderRadius: 8,
+                          paddingHorizontal: 4,
+                          backgroundColor: colors.amber,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Txt size={10} bold style={{ color: "white" }}>
+                          {handedToMe}
+                        </Txt>
+                      </View>
+                    )}
+                  </View>
                   <Txt
                     size={10}
                     bold={page === key}

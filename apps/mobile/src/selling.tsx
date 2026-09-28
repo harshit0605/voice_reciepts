@@ -31,6 +31,7 @@ import {
   useText,
   SHOWN_PRODUCTS,
   useWord,
+  itemCount,
 } from "./ui";
 import {
   D,
@@ -291,7 +292,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
         <Txt size={18} bold>
           {t("basket")}
         </Txt>
-        <Badge>{basket.length} items</Badge>
+        <Badge>{itemCount(basket.length, s.language)}</Badge>
       </Row>
       {basket.length === 0 ? (
         <Empty

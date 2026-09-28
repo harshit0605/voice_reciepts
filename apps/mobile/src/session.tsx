@@ -83,6 +83,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   identityRef.current = identity;
   const syncing = useRef(false);
   const operating = useRef(false);
+  // Refreshes can overlap (the quick poll, a command, a full sync); never let an older answer win.
+  const applied = useRef({ scope: "", revision: -1 });
   const scope = () =>
     `${identityRef.current!.actor.businessId}:${identityRef.current!.actor.id}`;
   // A rejected checkout never used its invoice number; give it back so the GST series has no gap.
@@ -138,6 +140,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return data;
   }
   async function establish() {
+    applied.current = { scope: "", revision: -1 };
     const me = await request("/me");
     const m = me.memberships.find((x: any) => x.active);
     if (!m) throw new Error("No active shop membership");
@@ -304,6 +307,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     } else fresh = (await request("/state")) as State;
     if (demoRef.current || !identityRef.current || scope() !== currentScope)
       return;
+    if (
+      applied.current.scope === currentScope &&
+      fresh.revision < applied.current.revision
+    )
+      return;
+    applied.current = { scope: currentScope, revision: fresh.revision };
     await storage.set(remoteKey, fresh);
     const entries =
       (await storage.get<storage.Queued[]>(`outbox:${currentScope}`)) ?? [];
@@ -661,9 +670,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const interval = setInterval(() => {
       void sync();
     }, 30000);
+    // A handoff or approval from another counter should show within seconds; an
+    // unchanged shop costs one small request.
+    const quick = setInterval(() => {
+      if (syncing.current || AppState.currentState !== "active") return;
+      void refresh().catch(() => {});
+    }, 8000);
     return () => {
       sub.remove();
       clearInterval(interval);
+      clearInterval(quick);
     };
   }, [identity?.deviceId, demo]);
   return (
