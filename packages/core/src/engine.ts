@@ -105,6 +105,7 @@ export function execute(
     const o = s.orders[id];
     ensure(o, "Order not found", "NOT_FOUND");
     ensure(o.status !== "completed", "Order already completed", "CONFLICT");
+    ensure(o.status !== "cancelled", "Order was cancelled", "CONFLICT");
     if (version !== undefined)
       ensure(
         o.version === version,
@@ -296,6 +297,57 @@ export function execute(
       o.status = "held";
       delete o.offeredTo;
       o.version++;
+      result = o;
+      break;
+    }
+    case "order.decline": {
+      const o = getOrder(op.orderId, op.version);
+      ensure(
+        o.status === "handoff" && o.offeredTo === actor.id,
+        "This handoff is not addressed to you",
+        "FORBIDDEN",
+      );
+      o.status = "held";
+      delete o.offeredTo;
+      o.version++;
+      result = o;
+      break;
+    }
+    case "order.recall": {
+      const o = getOrder(op.orderId, op.version);
+      ensure(
+        (o.status === "handoff" && o.collectorId === actor.id) ||
+          actor.role === "owner",
+        "Only the offering collector or an owner can take this order back",
+        "FORBIDDEN",
+      );
+      collector();
+      const from = o.offeredTo ?? o.collectorId;
+      o.collectorId = actor.id;
+      o.status = "held";
+      delete o.offeredTo;
+      o.version++;
+      audit("order.recall", o.id, `from ${from}`);
+      result = o;
+      break;
+    }
+    case "order.cancel": {
+      const o = getOrder(op.orderId, op.version);
+      ensure(
+        o.status === "held",
+        "Take back a handed-off order before cancelling it",
+        "CONFLICT",
+      );
+      ensure(
+        o.collectorId === actor.id || actor.role === "owner",
+        "Only the current collector or an owner can cancel this order",
+        "FORBIDDEN",
+      );
+      o.status = "cancelled";
+      o.cancelReason = op.reason;
+      o.cancelledAt = cmd.occurredAt;
+      o.version++;
+      audit("order.cancel", o.id, op.reason);
       result = o;
       break;
     }

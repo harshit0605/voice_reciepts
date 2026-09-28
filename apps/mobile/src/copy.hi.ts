@@ -353,8 +353,8 @@ export const hindiCopy: Record<string, string> = {
     "जिस कार्रवाई का जवाब नहीं आया था, वह दर्ज नहीं हुई। ऑर्डर जाँचें, फिर ज़रूरत हो तो दोबारा कोशिश करें।",
   "This cash sale is already saved on this phone and waiting to sync. Do not collect again.":
     "यह नकद बिक्री इस फ़ोन में पहले से दर्ज है और सिंक होने का इंतज़ार कर रही है। दोबारा भुगतान न लें।",
-  "This sale is now in Orders, billed or handed over. Do not collect it again here.":
-    "यह बिक्री अब ऑर्डर में है — बिल बन चुका है या सौंप दी गई है। यहाँ दोबारा भुगतान न लें।",
+  "This sale was billed, handed over or cancelled elsewhere. Check Orders; do not collect it again here.":
+    "इस बिक्री का बिल कहीं और बन गया, इसे सौंप दिया गया या रद्द कर दिया गया। ऑर्डर जाँचें; यहाँ दोबारा भुगतान न लें।",
   "Sale set aside. It will be confirmed automatically when the connection returns. Do not bill these items again; check Orders later.":
     "बिक्री अलग रखी गई। कनेक्शन लौटने पर इसकी पुष्टि अपने-आप होगी। इन सामानों का दोबारा बिल न बनाएँ; बाद में ऑर्डर जाँचें।",
   "No server response yet for this sale's payment. It may already be recorded, so do not collect again.":
@@ -367,4 +367,15 @@ export const hindiCopy: Record<string, string> = {
     "ड्राफ्ट सेव नहीं हो सका। भुगतान लेने से पहले फिर कोशिश करें।",
   "This sale is no longer open here. Check Orders before collecting.":
     "यह बिक्री अब यहाँ खुली नहीं है। भुगतान लेने से पहले ऑर्डर जाँचें।",
+  Decline: "मना करें",
+  "Take back": "वापस लें",
+  "Take over": "अपने पास लें",
+  "Cancel order": "ऑर्डर रद्द करें",
+  "Reason for cancelling": "रद्द करने का कारण",
+  "Only for an unbilled order the customer did not take. The cancellation and reason are recorded.":
+    "सिर्फ़ उस बिना बिल वाले ऑर्डर के लिए जिसे ग्राहक ने नहीं लिया। रद्द करना और उसका कारण दर्ज होगा।",
+  "Take back a handed-off order before cancelling it":
+    "रद्द करने से पहले सौंपा गया ऑर्डर वापस लें",
+  "Order was cancelled": "ऑर्डर रद्द हो चुका है",
+  "Offered to": "सौंपा गया:",
 };

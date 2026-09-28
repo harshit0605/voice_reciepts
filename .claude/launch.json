@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:api"],
+      "port": 4100
+    },
+    {
+      "name": "gateway",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:gateway"],
+      "port": 4101
+    },
+    {
+      "name": "mobile",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "web", "-w", "@counterwell/mobile"],
+      "port": 8081
+    }
+  ]
+}

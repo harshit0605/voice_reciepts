@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -72,11 +72,17 @@ function Page({ title, subtitle, action, children }: any) {
 }
 function useRun() {
   const s = useSession();
+  const running = useRef(false);
+  // Ignore a second tap while the first action is still being saved.
   return async (fn: () => Promise<any>) => {
+    if (running.current) return;
+    running.current = true;
     try {
       await fn();
     } catch (e) {
       s.setError((e as Error).message);
+    } finally {
+      running.current = false;
     }
   };
 }
@@ -262,11 +268,21 @@ export function OrdersScreen({
   const [filter, setFilter] = useState("open"),
     [selected, setSelected] = useState<Order | null>(null),
     [handoff, setHandoff] = useState<Order | null>(null),
+    [cancelling, setCancelling] = useState<Order | null>(null),
+    [cancelReason, setCancelReason] = useState(""),
     [discount, setDiscount] = useState("");
   const [returnInvoice, setReturnInvoice] = useState<Invoice | null>(null);
+  const me = s.identity!.actor;
   const open = Object.values(state.orders).filter(
-    (o) => o.status !== "completed",
+    (o) => o.status === "held" || o.status === "handoff",
   );
+  const cancelled = Object.values(state.orders)
+    .filter((o) => o.status === "cancelled")
+    .sort((a, b) => (b.cancelledAt ?? "").localeCompare(a.cancelledAt ?? ""));
+  const act = (
+    type: "order.accept" | "order.decline" | "order.recall",
+    o: Order,
+  ) => void run(() => s.command({ type, orderId: o.id, version: o.version }));
   return (
     <Page
       title={t("orders")}
@@ -279,7 +295,38 @@ export function OrdersScreen({
         <Chip active={filter === "bills"} onPress={() => setFilter("bills")}>
           Completed
         </Chip>
+        {cancelled.length > 0 && (
+          <Chip
+            active={filter === "cancelled"}
+            onPress={() => setFilter("cancelled")}
+          >
+            Cancelled · {cancelled.length}
+          </Chip>
+        )}
       </Row>
+      {filter === "cancelled" &&
+        cancelled.map((o) => (
+          <View key={o.id} style={styles.listRow}>
+            <Row style={{ justifyContent: "space-between" }}>
+              <Txt bold>Order {o.id.slice(0, 8)}</Txt>
+              <Txt muted size={12}>
+                {o.cancelledAt
+                  ? new Date(o.cancelledAt).toLocaleString("en-IN", {
+                      timeZone: "Asia/Kolkata",
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })
+                  : ""}
+              </Txt>
+            </Row>
+            <Txt muted size={12} style={{ marginTop: 5 }}>
+              {o.lines.length} items · {state.members[o.collectorId]?.name}
+            </Txt>
+            <Txt size={12} style={{ marginTop: 5 }}>
+              {o.cancelReason}
+            </Txt>
+          </View>
+        ))}
       {filter === "open"
         ? open.map((o) => (
             <View key={o.id} style={styles.listRow}>
@@ -295,25 +342,35 @@ export function OrdersScreen({
                   {o.status === "handoff" ? "Handoff pending" : "Held"}
                 </Badge>
               </Row>
+              {o.status === "handoff" && (
+                <Txt muted size={12} style={{ marginTop: 8 }}>
+                  Offered to{" "}
+                  {state.members[o.offeredTo ?? ""]?.name ?? "a cashier"}
+                </Txt>
+              )}
               <Row style={{ marginTop: 14, flexWrap: "wrap" }}>
-                {o.status === "handoff" &&
-                o.offeredTo === s.identity!.actor.id ? (
+                {o.status === "handoff" && o.offeredTo === me.id ? (
+                  <>
+                    <Button small onPress={() => act("order.accept", o)}>
+                      Accept handoff
+                    </Button>
+                    <Button
+                      secondary
+                      small
+                      onPress={() => act("order.decline", o)}
+                    >
+                      Decline
+                    </Button>
+                  </>
+                ) : o.status === "handoff" && o.collectorId === me.id ? (
                   <Button
+                    secondary
                     small
-                    onPress={() =>
-                      void run(() =>
-                        s.command({
-                          type: "order.accept",
-                          orderId: o.id,
-                          version: o.version,
-                        }),
-                      )
-                    }
+                    onPress={() => act("order.recall", o)}
                   >
-                    Accept handoff
+                    Take back
                   </Button>
-                ) : o.status === "held" &&
-                  o.collectorId === s.identity!.actor.id ? (
+                ) : o.status === "held" && o.collectorId === me.id ? (
                   <>
                     <Button small onPress={() => setSelected(o)}>
                       Collect payment
@@ -321,7 +378,25 @@ export function OrdersScreen({
                     <Button secondary small onPress={() => setHandoff(o)}>
                       Hand to cashier
                     </Button>
+                    <Button
+                      secondary
+                      small
+                      onPress={() => {
+                        setCancelReason("");
+                        setCancelling(o);
+                      }}
+                    >
+                      Cancel order
+                    </Button>
                   </>
+                ) : me.role === "owner" ? (
+                  <Button
+                    secondary
+                    small
+                    onPress={() => act("order.recall", o)}
+                  >
+                    Take over
+                  </Button>
                 ) : (
                   <Txt muted size={12}>
                     Awaiting the assigned collector.
@@ -330,7 +405,8 @@ export function OrdersScreen({
               </Row>
             </View>
           ))
-        : Object.values(state.invoices)
+        : filter === "bills" &&
+          Object.values(state.invoices)
             .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
             .map((i) => (
               <View key={i.id} style={styles.listRow}>
@@ -438,6 +514,37 @@ export function OrdersScreen({
               <Txt bold>{m.name}</Txt>
             </Pressable>
           ))}
+      </Sheet>
+      <Sheet
+        visible={!!cancelling}
+        title="Cancel order"
+        onClose={() => setCancelling(null)}
+      >
+        <Txt muted size={12} style={{ marginBottom: 12 }}>
+          Only for an unbilled order the customer did not take. The cancellation
+          and reason are recorded.
+        </Txt>
+        <Field
+          label="Reason for cancelling"
+          value={cancelReason}
+          onChange={setCancelReason}
+        />
+        <Button
+          disabled={cancelReason.trim().length < 3}
+          onPress={() =>
+            void run(async () => {
+              await s.command({
+                type: "order.cancel",
+                orderId: cancelling!.id,
+                version: cancelling!.version,
+                reason: cancelReason.trim(),
+              });
+              setCancelling(null);
+            })
+          }
+        >
+          Cancel order
+        </Button>
       </Sheet>
       <Sheet
         visible={!!returnInvoice}

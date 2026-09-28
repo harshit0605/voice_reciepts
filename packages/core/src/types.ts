@@ -62,8 +62,10 @@ export type Order = Entity & {
   collectorId: string;
   counterId: string;
   version: number;
-  status: "held" | "handoff" | "completed";
+  status: "held" | "handoff" | "completed" | "cancelled";
   offeredTo?: string;
+  cancelReason?: string;
+  cancelledAt?: string;
   createdAt: string;
   prescription?: {
     patient: string;

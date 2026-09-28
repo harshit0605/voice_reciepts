@@ -231,6 +231,129 @@ describe("retail ledger", () => {
     expect(invoice.dispenserId).toBe(owner.id);
     expect(invoice.collectorId).toBe(employee.id);
   });
+  describe("stranded handoffs and abandoned orders", () => {
+    const offered = () =>
+      apply(order(), {
+        type: "order.offer",
+        orderId: "order-1",
+        to: employee.id,
+        version: 1,
+      });
+    const other: Actor = { ...employee, id: "demo-other" };
+    it("lets the offering collector take back an unaccepted handoff", () => {
+      const s = apply(offered(), {
+        type: "order.recall",
+        orderId: "order-1",
+        version: 2,
+      });
+      expect(s.orders["order-1"]).toMatchObject({
+        status: "held",
+        collectorId: owner.id,
+        version: 3,
+      });
+      expect(s.orders["order-1"].offeredTo).toBeUndefined();
+      expect(() =>
+        apply(
+          s,
+          { type: "order.accept", orderId: "order-1", version: 3 },
+          employee,
+        ),
+      ).toThrow("not addressed");
+      expect(apply(s, checkout({ version: 3 })).orders["order-1"].status).toBe(
+        "completed",
+      );
+    });
+    it("lets the recipient decline, returning the order to the offerer", () => {
+      const s = apply(
+        offered(),
+        { type: "order.decline", orderId: "order-1", version: 2 },
+        employee,
+      );
+      expect(s.orders["order-1"]).toMatchObject({
+        status: "held",
+        collectorId: owner.id,
+      });
+      expect(Object.values(s.audit).map((a) => a.action)).toContain(
+        "order.decline",
+      );
+    });
+    it("lets only the people involved, or an owner, move a handoff", () => {
+      const s = offered();
+      s.members[other.id] = { ...s.members[employee.id], id: other.id };
+      for (const type of ["order.decline", "order.recall"] as const)
+        expect(() =>
+          apply(s, { type, orderId: "order-1", version: 2 }, other),
+        ).toThrow(/not addressed|Only the offering/);
+    });
+    it("lets an owner take over an order stranded with an absent employee", () => {
+      let s = offered();
+      s = apply(
+        s,
+        { type: "order.accept", orderId: "order-1", version: 2 },
+        employee,
+      );
+      s = apply(s, { type: "order.recall", orderId: "order-1", version: 3 });
+      expect(s.orders["order-1"]).toMatchObject({
+        status: "held",
+        collectorId: owner.id,
+        dispenserId: owner.id,
+      });
+      expect(
+        Object.values(s.audit).find(
+          (a) => a.action === "order.recall" && a.referenceId === "order-1",
+        )?.detail,
+      ).toBe(`from ${employee.id}`);
+    });
+    it("cancels an unbilled held order with a recorded reason and blocks billing it", () => {
+      const s = apply(order(), {
+        type: "order.cancel",
+        orderId: "order-1",
+        version: 1,
+        reason: "Customer left without medicines",
+      });
+      expect(s.orders["order-1"]).toMatchObject({
+        status: "cancelled",
+        cancelReason: "Customer left without medicines",
+      });
+      expect(s.batches["dolo-b1"].quantity).toBe(
+        order().batches["dolo-b1"].quantity,
+      );
+      expect(() => apply(s, checkout({ version: 2 }))).toThrow("cancelled");
+      expect(() =>
+        execute(
+          s,
+          cmd({
+            type: "offline.checkout",
+            deviceId: "demo-device",
+            sequence: 1,
+            orderId: "order-1",
+            counterId: "counter-1",
+            lines: [{ ...line, pricePaise: 280, taxBps: 1200 }],
+            cashPaise: 2800,
+            dispenserId: owner.id,
+          }),
+          { ...owner, offlineAuthorized: true },
+          now,
+        ),
+      ).toThrow("transferred");
+    });
+    it("does not cancel a pending handoff or another collector's order", () => {
+      const cancel = (version: number): Operation => ({
+        type: "order.cancel",
+        orderId: "order-1",
+        version,
+        reason: "Not needed",
+      });
+      expect(() => apply(offered(), cancel(2))).toThrow("Take back");
+      const held = apply(
+        offered(),
+        { type: "order.accept", orderId: "order-1", version: 2 },
+        employee,
+      );
+      held.members[other.id] = { ...held.members[employee.id], id: other.id };
+      expect(() => apply(held, cancel(3), other)).toThrow("Only the current");
+    });
+  });
   it("binds discount approval to a specific order version", () => {
     let s = order();
     s = approve(s, "discount", {

@@ -123,7 +123,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
         s.setError(
           recovery.kind === "saved_locally"
             ? "This cash sale is already saved on this phone and waiting to sync. Do not collect again."
-            : "This sale is now in Orders, billed or handed over. Do not collect it again here.",
+            : "This sale was billed, handed over or cancelled elsewhere. Check Orders; do not collect it again here.",
         ),
       );
     }

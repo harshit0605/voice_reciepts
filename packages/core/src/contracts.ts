@@ -117,6 +117,23 @@ const data = z.discriminatedUnion("type", [
     version: z.number().int(),
   }),
   z.object({
+    type: z.literal("order.decline"),
+    orderId: id,
+    version: z.number().int(),
+  }),
+  /** The offering collector takes back a handoff; an owner may take over any open order. */
+  z.object({
+    type: z.literal("order.recall"),
+    orderId: id,
+    version: z.number().int(),
+  }),
+  z.object({
+    type: z.literal("order.cancel"),
+    orderId: id,
+    version: z.number().int(),
+    reason: z.string().trim().min(3).max(300),
+  }),
+  z.object({
     type: z.literal("checkout"),
     orderId: id,
     version: z.number().int(),
