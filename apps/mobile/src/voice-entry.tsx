@@ -15,6 +15,7 @@ import {
 } from "expo-audio";
 import * as FileSystem from "expo-file-system";
 import { useSession, uid } from "./session";
+import { appendFile } from "./upload";
 import { Txt, Button, Field, Row, Badge, Sheet, colors, styles } from "./ui";
 import {
   applyVoiceResult,
@@ -194,12 +195,7 @@ export function VoiceEntry({
     );
     if (Platform.OS === "web")
       form.append("file", await (await fetch(value.uri)).blob(), "sale.webm");
-    else
-      form.append("file", {
-        uri: value.uri,
-        name: "sale.m4a",
-        type: "audio/mp4",
-      } as any);
+    else await appendFile(form, "file", value.uri, "sale.m4a", "audio/mp4");
     const job = await request.current("/extractions", {
       method: "POST",
       body: form,

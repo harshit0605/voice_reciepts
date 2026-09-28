@@ -128,6 +128,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setOnline(true);
     } catch (e) {
       setOnline(false);
+      if (__DEV__) console.warn(`request ${route} failed`, e);
       throw new Error(
         "Connection unavailable. Cash billing can continue in the mobile app while your authorisation is valid.",
       );

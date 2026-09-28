@@ -633,12 +633,19 @@ app.post("/api/v1/extractions", async (c) => {
     kind === "voice"
       ? z.coerce.number().positive().max(30).parse(form.get("recordedSeconds"))
       : undefined;
+  // Expo's native fetch percent-encodes file names ("Supplier%20bill.jpg").
+  let name = file.name;
+  try {
+    name = decodeURIComponent(name);
+  } catch {
+    /* keep the name as sent */
+  }
   const result = await enqueueExtraction(
     actor,
     kind,
     Buffer.from(await file.arrayBuffer()),
     file.type.split(";")[0],
-    file.name,
+    name.slice(0, 200),
     { recordedSeconds, saleId },
   );
   return c.json(result, result.reused ? 200 : 202);

@@ -6,6 +6,7 @@ import * as Sharing from "expo-sharing";
 import { useSession, uid } from "./session";
 import * as storage from "./storage";
 import { API_URL, cookieHeaders } from "./auth";
+import { appendFile } from "./upload";
 import { Txt, Button, Field, Row, Chip, Badge, colors, styles } from "./ui";
 import { ProductForm } from "./product-form";
 import {
@@ -182,14 +183,13 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
         );
       const form = new FormData();
       form.append("kind", "invoice");
-      if (Platform.OS === "web")
-        form.append("file", await (await fetch(file.uri)).blob(), file.name);
-      else
-        form.append("file", {
-          uri: file.uri,
-          name: file.name,
-          type: file.mimeType ?? "application/pdf",
-        } as any);
+      await appendFile(
+        form,
+        "file",
+        file.uri,
+        file.name,
+        file.mimeType ?? "application/pdf",
+      );
       const job = await s.request("/extractions", {
         method: "POST",
         body: form,
