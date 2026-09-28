@@ -85,6 +85,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const operating = useRef(false);
   const scope = () =>
     `${identityRef.current!.actor.businessId}:${identityRef.current!.actor.id}`;
+  // A rejected checkout never used its invoice number; give it back so the GST series has no gap.
+  async function releaseRejected(cmd: Command, e: unknown) {
+    const op = cmd.operation;
+    if (op.type === "checkout" && (e as any).code !== "INVOICE_NUMBER_USED")
+      await storage.releaseSequence(
+        `${op.deviceId}:${fiscalYear(cmd.occurredAt)}`,
+        op.sequence,
+      );
+  }
   async function markUncertain(cmd: Command | null) {
     if (cmd) await storage.set(`online:${scope()}`, cmd);
     else await storage.remove(`online:${scope()}`);
@@ -123,6 +132,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (data.code === "PASSWORD_CHANGE_REQUIRED") setPasswordRequired(true);
       throw Object.assign(new Error(data.error ?? "Request failed"), {
         httpStatus: r.status,
+        code: data.code,
       });
     }
     return data;
@@ -175,6 +185,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setIdentity(next);
     await storage.set("identity", next);
     await refresh();
+    // Resolve unanswered actions and queued sales now rather than at the next 30-second tick.
+    void sync();
   }
   async function login(username: string, password: string) {
     setError("");
@@ -346,6 +358,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         const status = (e as any).httpStatus;
         if (status && status < 500) {
           await markUncertain(null);
+          await releaseRejected(cmd, e);
           throw e;
         }
         throw new Error(NO_RESPONSE);
@@ -484,6 +497,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           const status = (e as any).httpStatus;
           if (!status || status >= 500) throw e;
           await markUncertain(null);
+          await releaseRejected(unresolved, e);
           setError(
             "An action that had no response was not saved. Check Orders, then try again if needed.",
           );

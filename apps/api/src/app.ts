@@ -77,7 +77,9 @@ app.onError((e, c) => {
           ? 403
           : e.code === "NOT_FOUND"
             ? 404
-            : e.code === "CONFLICT" || e.code === "PAYMENT_REFERENCE_REUSED"
+            : e.code === "CONFLICT" ||
+                e.code === "PAYMENT_REFERENCE_REUSED" ||
+                e.code === "INVOICE_NUMBER_USED"
               ? 409
               : 400,
     );

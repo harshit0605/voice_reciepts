@@ -22,6 +22,11 @@ export async function nextSequence(key: string) {
   await set(`sequence:${key}`, n);
   return n;
 }
+/** Give back a number the server definitely did not use, unless a later one was already taken. */
+export async function releaseSequence(key: string, sequence: number) {
+  if ((await get<number>(`sequence:${key}`)) === sequence)
+    await set(`sequence:${key}`, sequence - 1);
+}
 /** Returns null, writing nothing, when `commandId` is already queued. */
 export async function commitCash(
   scope: string,

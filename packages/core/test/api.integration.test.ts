@@ -611,6 +611,24 @@ describe.skipIf(!enabled)("PostgreSQL and authenticated API", () => {
     } as Operation);
     expect(duplicate.status).toBe(409);
   });
+  it("reports an issued invoice number distinctly so the phone does not hand it back", async () => {
+    const checkout = (orderId: string, n: number): Operation => ({
+      type: "checkout",
+      orderId,
+      version: 1,
+      deviceId,
+      sequence: n,
+      cashPaise: 280,
+      upiPaise: 0,
+      creditPaise: 0,
+      discountPaise: 0,
+    });
+    const issued = ++sequence;
+    expect((await command(checkout(await order(), issued))).status).toBe(200);
+    const reused = await command(checkout(await order(), issued));
+    expect(reused.status).toBe(409);
+    expect(reused.data.code).toBe("INVOICE_NUMBER_USED");
+  });
   it("accepts signed cash sync and deduplicates the same batch", async () => {
     const c = make({
       type: "offline.checkout",
@@ -826,6 +844,7 @@ describe.skipIf(!enabled)("PostgreSQL and authenticated API", () => {
       discountPaise: 0,
     });
     expect(duplicate.status).toBe(409);
+    expect(duplicate.data.code).toBe("PAYMENT_REFERENCE_REUSED");
     const after = await db.readState(businessId);
     expect(Object.keys(after.invoices).length).toBe(
       Object.keys(before.invoices).length,

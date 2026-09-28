@@ -25,3 +25,14 @@ describe("local cash commit", () => {
     expect(await storage.get("sequence:seq")).toBe(1);
   });
 });
+describe("invoice number release", () => {
+  it("returns an unused number only while it is still the latest", async () => {
+    const key = "device:2627";
+    expect(await storage.nextSequence(key)).toBe(1);
+    await storage.releaseSequence(key, 1);
+    expect(await storage.nextSequence(key)).toBe(1);
+    expect(await storage.nextSequence(key)).toBe(2);
+    await storage.releaseSequence(key, 1);
+    expect(await storage.nextSequence(key)).toBe(3);
+  });
+});

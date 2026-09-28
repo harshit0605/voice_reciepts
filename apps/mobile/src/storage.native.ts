@@ -69,6 +69,23 @@ export async function nextSequence(key: string) {
   });
   return value;
 }
+/** Give back a number the server definitely did not use, unless a later one was already taken. */
+export async function releaseSequence(key: string, sequence: number) {
+  await (
+    await db()
+  ).withExclusiveTransactionAsync(async (tx) => {
+    const row = await tx.getFirstAsync<{ value: string }>(
+      "SELECT value FROM kv WHERE key=?",
+      `sequence:${key}`,
+    );
+    if (Number(row?.value ?? 0) === sequence)
+      await tx.runAsync(
+        "UPDATE kv SET value=? WHERE key=?",
+        String(sequence - 1),
+        `sequence:${key}`,
+      );
+  });
+}
 /** Returns null, writing nothing, when `commandId` is already queued. */
 export async function commitCash(
   scope: string,

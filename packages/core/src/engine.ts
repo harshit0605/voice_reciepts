@@ -426,7 +426,7 @@ export function execute(
       ensure(
         !values(s.invoices).some((i) => i.number === number),
         "Invoice number already used",
-        "CONFLICT",
+        "INVOICE_NUMBER_USED",
       );
       const invoice: Invoice = {
         id: `${cmd.id}:invoice`,
