@@ -208,3 +208,56 @@ It has **not** run on a real Windows PC yet. The one-line version downloads the 
   - The review listed Dolo 650 and Cetirizine. Staff confirmed each batch (DOL2401, CET2401); the basket held 2 strips + 1 strip = ₹91.00. It was not billed.
 - **Defect found:** "Dolo 650" was flagged "Strength or form differs" against Dolo 650 mg, because the spoken strength had no unit. A bare spoken number now matches a catalogue strength starting with that number; a different number or unit is still flagged.
 - **Not established:** real voices, accents and crowd noise; brands the synthetic voice mispronounced ("Crocin" was heard as "Klaricid"/"Pracin"); Android recording.
+
+## Payments, credit and returns; Android pass (28 September 2026, night)
+
+Strict TypeScript, 128 unit tests and the 28-test PostgreSQL/API suite passed. New coverage:
+
+- refund pricing from what was paid, including three uneven partial returns on a bill with an odd ₹1.01 discount that pay back exactly the bill;
+- credit cancelled before cash is handed back;
+- over-sized and duplicate return requests refused when asked;
+- only the requester or owner can hand back an approved refund;
+- strip-to-tablet return quantities;
+- an employee-run credit → return → refund flow through the real API;
+- a cut-off model reply retried once while a wrong-shaped draft is not.
+
+**Two phones: owner on the Android emulator (API 36), cashier on the iPhone 17e simulator:**
+
+- **Credit:**
+  - The cashier added a new customer, Ramesh Kumar, at checkout and asked for ₹35 credit. The phone said "₹35.00 credit is waiting for the owner" and Orders showed a count.
+  - The owner's Android showed "A request is waiting for your approval · Review" and a More-tab count. The request read "Credit ₹35.00 · Ramesh Kumar", "Owes nothing today", with the medicine and batch.
+  - The owner approved. Within seconds the iPhone showed "Owner approved ₹35.00 credit · Collect", and collecting opened on Credit with ₹35 filled.
+  - Bill `2627-004-000002`; the server has a ₹35 credit sale for Ramesh Kumar.
+- **Return and refund:**
+  - The cashier found bill `2627-004-000001`, entered 4 tablets and the reason "Not needed any more". The phone showed "Refund to the customer ₹14.00" before asking.
+  - The owner's Android showed "Return on bill 2627-004-000001 · ₹14.00", who billed it, and "4 tablets returned of 10 sold". The owner approved.
+  - The cashier's bill changed to "Return approved · Give refund", with the amount fixed at ₹14 and Cash chosen.
+  - On the server: refund ₹14 cash from the drawer, handed back by the cashier, 4 tablets set aside rather than returned to sale.
+- **Repayment (Android):** Ramesh Kumar's account showed "Owes ₹35.00", "Full amount" and a dated history. A ₹20 cash repayment left ₹15, with "Paid back −₹20.00" against the bill; ₹20 went into the drawer. The customer list shows those who owe first.
+
+**Android, other features (owner):**
+
+- **Cash sale:** ₹50 received, ₹15 change; bill `2627-006-000001`.
+- **Share PDF:** the Android share sheet showed `Bill 2627-006-000001.pdf`. The PDF pulled from the device is one 300 × 360 pt page reading "Paid ₹35.00 by cash".
+- **Printing:** through the gateway to the local ePOS stand-in, with the correct receipt.
+- **Stock count:** NIMU 50 CAP, batch NM2611, 11/27, 6 strips at ₹45 per strip. The server has 60 capsules at 450 paise, expiry 2027-11-30; the count went from 7 to 8 of 1,685.
+- **Voice:** recorded through the Mac microphone. The English list came back complete, with quantities 2, 1, 6 and units strip, bottle, tablet. One Hindi clip was cut short by the emulator's audio pass-through under load; the same clip was fully heard on iOS.
+- **Invoice photo:** picked in the Android file picker and uploaded (name decoded). The first reading failed with a reply cut off mid-JSON; nine reruns of the same request succeeded. After the retry fix, the owner's "Retry failed extraction" filled the review: 0001/25-26, ₹231, 3 lines.
+
+**Found and fixed on devices:**
+
+- Buttons at the bottom of a sheet were behind the Android keyboard. Sheets now move above it.
+- The Add customer form kept old text after closing, so reopening doubled everything. It now starts empty and needs a name.
+- The approval note still showed after credit was approved.
+- "10 tablet" is now plural.
+- Employees could not see returns on their own bills, so the phone could offer them again.
+- Spoken quantities showed as words ("दस गोलियां · गोलियां").
+
+**Not exercised on a device:**
+
+- UPI refunds (unit-tested);
+- Hindi on the new payment screens;
+- camera scanning;
+- a physical printer.
+
+A phone number typed on the iOS simulator was saved as "9"; the same form on Android saved all ten digits, so this looks like the simulator's typing tool.
