@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSession } from "./session";
@@ -286,6 +287,23 @@ export function Sheet({ title, visible, onClose, children }: any) {
     const timer = setTimeout(() => setSettled(true), 400);
     return () => clearTimeout(timer);
   }, [visible]);
+  // Android does not resize a modal for the keyboard, so a sheet's lower fields and buttons sat
+  // behind it. Lift the sheet by the keyboard's height there; iOS uses KeyboardAvoidingView.
+  const [keyboard, setKeyboard] = useState(0);
+  useEffect(() => {
+    if (Platform.OS !== "android" || !visible) return;
+    const shown = Keyboard.addListener("keyboardDidShow", (e) =>
+      setKeyboard(e.endCoordinates.height),
+    );
+    const hidden = Keyboard.addListener("keyboardDidHide", () =>
+      setKeyboard(0),
+    );
+    return () => {
+      shown.remove();
+      hidden.remove();
+      setKeyboard(0);
+    };
+  }, [visible]);
   return (
     <Modal
       visible={visible}
@@ -298,7 +316,10 @@ export function Sheet({ title, visible, onClose, children }: any) {
         style={styles.overlay}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={styles.sheet} pointerEvents={settled ? "auto" : "none"}>
+        <View
+          style={[styles.sheet, keyboard ? { marginBottom: keyboard } : null]}
+          pointerEvents={settled ? "auto" : "none"}
+        >
           <Row
             style={{
               justifyContent: "space-between",

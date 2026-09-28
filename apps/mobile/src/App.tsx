@@ -12,6 +12,7 @@ import { useLocalSearchParams } from "expo-router";
 import { useSession } from "./session";
 import { colors, Txt, Icon, Button, Field, Row, Badge, useText } from "./ui";
 import { SellScreen, ReceiptSheet } from "./selling";
+import { useAttention } from "./payments";
 import {
   OrdersScreen,
   StockScreen,
@@ -45,6 +46,8 @@ export default function App() {
   const [page, setPage] = useState("sell"),
     [invoice, setInvoice] = useState<Invoice | null>(null);
   const params = useLocalSearchParams();
+  // Handoffs, requests waiting for the owner, and answers to this person's requests.
+  const attention = useAttention();
   useEffect(() => {
     if (params.demo === "owner" || params.demo === "employee")
       session.startDemo(params.demo);
@@ -89,10 +92,11 @@ export default function App() {
       </View>
     );
   const owner = session.identity.actor.role === "owner";
-  // A customer handed over by another counter is waiting: say so on every screen.
-  const handedToMe = Object.values(session.state.orders).filter(
-    (o) => o.status === "handoff" && o.offeredTo === session.identity!.actor.id,
-  ).length;
+  const count = (target: string) =>
+    attention.filter((a) => a.page === target).length;
+  // On a phone the owner screens sit under More.
+  const badge = (key: string) =>
+    count(key) + (key === "more" && !wide ? count("reviews") : 0);
   const nav = (items: typeof tabs | typeof ownerTabs) =>
     items.map(([key, icon]) => (
       <Pressable
@@ -123,7 +127,7 @@ export default function App() {
           Object.values(session.state!.reviews).some(
             (r) => r.status === "open",
           )) ||
-          (key === "orders" && handedToMe > 0)) && (
+          badge(key) > 0) && (
           <View
             style={{
               width: 6,
@@ -314,23 +318,27 @@ export default function App() {
               </Txt>
             </Pressable>
           )}
-          {handedToMe > 0 && page !== "orders" && (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setPage("orders")}
-              style={{
-                paddingVertical: 12,
-                paddingHorizontal: wide ? 32 : 20,
-                backgroundColor: colors.amberBg,
-              }}
-            >
-              <Txt size={13} bold style={{ color: colors.amber }}>
-                {session.language === "hi"
-                  ? `${handedToMe} ऑर्डर आपको सौंपा गया · खोलें`
-                  : `${handedToMe === 1 ? "An order was" : `${handedToMe} orders were`} handed to you · Open`}
-              </Txt>
-            </Pressable>
-          )}
+          {attention
+            .filter((a) => a.page !== page)
+            .slice(0, 2)
+            .map((a) => (
+              <Pressable
+                key={a.key}
+                accessibilityRole="button"
+                onPress={() => setPage(a.page)}
+                style={{
+                  paddingVertical: 12,
+                  paddingHorizontal: wide ? 32 : 20,
+                  backgroundColor: colors.amberBg,
+                  borderBottomWidth: 1,
+                  borderColor: colors.line,
+                }}
+              >
+                <Txt size={13} bold style={{ color: colors.amber }}>
+                  {a.text}
+                </Txt>
+              </Pressable>
+            ))}
           <View style={{ flex: 1 }}>{content}</View>
           {!wide && (
             <View
@@ -355,7 +363,7 @@ export default function App() {
                       size={22}
                       color={page === key ? colors.accent : colors.muted}
                     />
-                    {key === "orders" && handedToMe > 0 && (
+                    {badge(key) > 0 && (
                       <View
                         style={{
                           position: "absolute",
@@ -371,7 +379,7 @@ export default function App() {
                         }}
                       >
                         <Txt size={10} bold style={{ color: "white" }}>
-                          {handedToMe}
+                          {badge(key)}
                         </Txt>
                       </View>
                     )}

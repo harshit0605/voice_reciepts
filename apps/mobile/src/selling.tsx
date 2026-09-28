@@ -16,6 +16,7 @@ import { useSession, uid } from "./session";
 import { useSaleEntry } from "./sale-entry";
 import { VoiceEntry } from "./voice-entry";
 import { useBarcodeScanner, CAMERA_OFF } from "./scanner";
+import { CustomerPicker } from "./payments";
 import {
   Txt,
   Icon,
@@ -855,22 +856,6 @@ export function Checkout({
   const s = useSession(),
     t = useText(),
     state = s.state!;
-  const [method, setMethod] = useState("cash"),
-    [customerId, setCustomer] = useState(
-      state.orders[existingOrderId ?? ""]?.customerId ?? "",
-    ),
-    [cash, setCash] = useState("0"),
-    [received, setReceived] = useState(""),
-    [credit, setCredit] = useState("0"),
-    [ref, setRef] = useState(""),
-    [verified, setVerified] = useState(false),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [patient, setPatient] = useState(""),
-    [address, setAddress] = useState(""),
-    [doctor, setDoctor] = useState(""),
-    [doctorAddress, setDoctorAddress] = useState(""),
-    [prescriptionRef, setPrescriptionRef] = useState("");
   const approvedDiscount = Object.values(state.approvals).find(
     (a) =>
       a.kind === "discount" &&
@@ -885,6 +870,37 @@ export function Checkout({
     new Date().toISOString(),
     discountPaise,
   ).reduce((n, l) => n + l.netPaise, 0);
+  // Coming back to an order whose credit the owner approved: start on that credit, with its amount.
+  const approvedCredit = Object.values(state.approvals).find(
+    (a) =>
+      a.kind === "credit" &&
+      a.status === "approved" &&
+      a.payload.orderId === existingOrderId &&
+      a.payload.orderVersion === state.orders[existingOrderId ?? ""]?.version,
+  );
+  const approvedCreditPaise = Number(approvedCredit?.payload.amountPaise ?? 0);
+  const [method, setMethod] = useState(approvedCredit ? "credit" : "cash"),
+    [customerId, setCustomer] = useState(
+      state.orders[existingOrderId ?? ""]?.customerId ?? "",
+    ),
+    [cash, setCash] = useState(
+      approvedCredit
+        ? (Math.max(0, total - approvedCreditPaise) / 100).toString()
+        : "0",
+    ),
+    [received, setReceived] = useState(""),
+    [credit, setCredit] = useState(
+      approvedCredit ? (approvedCreditPaise / 100).toString() : "0",
+    ),
+    [ref, setRef] = useState(""),
+    [verified, setVerified] = useState(false),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [patient, setPatient] = useState(""),
+    [address, setAddress] = useState(""),
+    [doctor, setDoctor] = useState(""),
+    [doctorAddress, setDoctorAddress] = useState(""),
+    [prescriptionRef, setPrescriptionRef] = useState("");
   let change: number | null = null;
   try {
     if (received.trim()) change = exactPaise(received) - total;
@@ -922,7 +938,20 @@ export function Checkout({
     return next;
   }
   async function hold(): Promise<Order> {
-    if (existingOrderId) return state.orders[existingOrderId];
+    if (existingOrderId) {
+      const current = state.orders[existingOrderId];
+      if ((current.customerId ?? "") === customerId) return current;
+      // A customer chosen while collecting belongs on the order, or credit cannot name them.
+      return s.command({
+        type: "order.save",
+        orderId: current.id,
+        version: current.version,
+        lines: current.lines,
+        customerId: customerId || undefined,
+        prescription: current.prescription,
+        counterId: current.counterId,
+      });
+    }
     const { orderId } = await pinAttempt(true);
     const current = state.orders[orderId];
     const content = {
@@ -1001,17 +1030,34 @@ export function Checkout({
             : 0;
       const upiPaise =
         method === "upi" || method === "split" ? total - cashPaise : 0;
+      if (method === "credit" && cashPaise + creditPaise !== total)
+        throw new Error(`Cash and credit must add up to ${rupees(total)}`);
+      // Only an approval for exactly this order, version, customer and amount can be used.
+      const creditApproval =
+        method === "credit"
+          ? Object.values(s.state!.approvals).find(
+              (a) =>
+                a.kind === "credit" &&
+                a.status === "approved" &&
+                a.payload.orderId === order.id &&
+                a.payload.orderVersion === order.version &&
+                a.payload.customerId === customerId &&
+                a.payload.amountPaise === creditPaise,
+            )
+          : undefined;
       if (method === "credit") {
         if (!customerId) throw new Error("Select a customer for credit");
-        const approval = Object.values(s.state!.approvals).find(
+        const waiting = Object.values(s.state!.approvals).some(
           (a) =>
             a.kind === "credit" &&
-            a.status === "approved" &&
-            a.payload.orderId === order.id &&
-            a.payload.orderVersion === order.version &&
-            a.payload.amountPaise === creditPaise,
+            a.status === "pending" &&
+            a.payload.orderId === order.id,
         );
-        if (!approval) {
+        if (waiting)
+          throw new Error(
+            "This credit is already waiting for the owner. You will see it on screen when they decide.",
+          );
+        if (!creditApproval) {
           await s.command({
             type: "approval.request",
             approvalId: uid(),
@@ -1028,12 +1074,6 @@ export function Checkout({
           return;
         }
       }
-      const approval = Object.values(s.state!.approvals).find(
-        (a) =>
-          a.kind === "credit" &&
-          a.status === "approved" &&
-          a.payload.orderId === order.id,
-      );
       const invoice = await s.command({
         type: "checkout",
         orderId: order.id,
@@ -1045,7 +1085,7 @@ export function Checkout({
         upiReference: ref || undefined,
         upiVerified: verified,
         creditPaise,
-        creditApprovalId: approval?.id,
+        creditApprovalId: creditApproval?.id,
         discountPaise,
         discountApprovalId: approvedDiscount?.id,
       });
@@ -1059,25 +1099,7 @@ export function Checkout({
           {rupees(total)}
         </Txt>
       </Row>
-      <Txt size={12} muted>
-        Customer
-      </Txt>
-      <ScrollView horizontal>
-        <Row>
-          <Chip active={!customerId} onPress={() => setCustomer("")}>
-            {t("walkin")}
-          </Chip>
-          {Object.values(state.customers).map((c) => (
-            <Chip
-              key={c.id}
-              active={customerId === c.id}
-              onPress={() => setCustomer(c.id)}
-            >
-              {c.name}
-            </Chip>
-          ))}
-        </Row>
-      </ScrollView>
+      <CustomerPicker value={customerId} onChange={setCustomer} />
       <Row style={{ flexWrap: "wrap" }}>
         {["cash", "upi", "split", "credit"].map((m) => (
           <Chip
@@ -1085,7 +1107,10 @@ export function Checkout({
             active={method === m}
             onPress={() => {
               setMethod(m);
-              if (m === "credit") setCredit((total / 100).toFixed(2));
+              if (m === "credit") {
+                setCredit((total / 100).toString());
+                setCash("0");
+              }
             }}
           >
             {m === "split" ? "Cash + UPI" : t(m as "cash")}
@@ -1139,9 +1164,23 @@ export function Checkout({
         <Field
           label="New customer credit (₹)"
           value={credit}
-          onChange={setCredit}
+          onChange={(v) => {
+            setCredit(v);
+            try {
+              setCash((Math.max(0, total - exactPaise(v)) / 100).toString());
+            } catch {
+              /* keep cash while the amount is being typed */
+            }
+          }}
           number
         />
+      )}
+      {method === "credit" && !approvedCredit && (
+        <Txt size={12} muted>
+          {s.language === "hi"
+            ? "उधार के लिए मालिक की मंज़ूरी चाहिए। सेल ऑर्डर में रुकी रहेगी और मंज़ूरी आते ही स्क्रीन पर दिखेगा।"
+            : "Credit needs the owner's approval. The sale waits in Orders, and you will see it on screen as soon as they decide."}
+        </Txt>
       )}
       {(method === "upi" || method === "split") && (
         <>
@@ -1202,8 +1241,8 @@ export function Checkout({
       >
         {busy
           ? "Saving…"
-          : method === "credit"
-            ? "Collect with credit approval"
+          : method === "credit" && !approvedCredit
+            ? "Ask the owner to approve credit"
             : "Confirm payment & create bill"}
       </Button>
       {!existingOrderId && (

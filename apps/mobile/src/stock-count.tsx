@@ -14,6 +14,7 @@ import {
   useWord,
 } from "./ui";
 import { useBarcodeScanner, CAMERA_OFF } from "./scanner";
+import { amountOf } from "./payments";
 import {
   openingCount,
   packUnit,
@@ -86,7 +87,7 @@ export function CountForm({
         reason: "Owner verified physical opening count",
       });
       onSaved(
-        `${product.name} ${product.strength} · ${batch.code} · ${batch.quantity} ${w(product.baseUnit)}`,
+        `${product.name} ${product.strength} · ${batch.code} · ${amountOf(batch.quantity, product.baseUnit, w)}`,
       );
     } catch (e) {
       setError((e as Error).message);
@@ -115,7 +116,8 @@ export function CountForm({
           </Txt>
           {existing.map((b) => (
             <Txt key={b.id} size={12} muted>
-              {b.code} · {b.expiry} · {b.quantity} {w(product.baseUnit)}
+              {b.code} · {b.expiry} ·{" "}
+              {amountOf(b.quantity, product.baseUnit, w)}
             </Txt>
           ))}
         </View>
@@ -179,7 +181,7 @@ export function CountForm({
           }}
         >
           <Txt bold>
-            {`${preview.batch.quantity} ${w(product.baseUnit)} · ${rupees(preview.batch.pricePaise)} / ${w(product.baseUnit)}`}
+            {`${amountOf(preview.batch.quantity, product.baseUnit, w)} · ${rupees(preview.batch.pricePaise)} / ${w(product.baseUnit)}`}
           </Txt>
           <Txt size={12} muted>
             {`${hi ? "एक्सपायरी" : "Expires"} ${shortDate(preview.batch.expiry)}`}
@@ -359,7 +361,7 @@ export function StockCount() {
               </View>
               <Badge warning={!batches.length}>
                 {batches.length
-                  ? `${stock} ${w(p.baseUnit)}`
+                  ? amountOf(stock, p.baseUnit, w)
                   : hi
                     ? "गिनें"
                     : "Count"}

@@ -32,6 +32,7 @@ import { Checkout } from "./selling";
 import { ProductForm } from "./product-form";
 import { CatalogueImport } from "./catalogue-import";
 import { StockCount, CountForm } from "./stock-count";
+import { ReturnForm, RefundForm, amountOf } from "./payments";
 import {
   D,
   rupees,
@@ -49,6 +50,10 @@ import {
   groupBatches,
   matchesSearch,
   bySearch,
+  returnable,
+  refundQuote,
+  billDue,
+  type ReturnLine,
 } from "@counterwell/core";
 const money = (value: string) => {
   const d = D(value || 0).mul(100);
@@ -321,8 +326,35 @@ export function OrdersScreen({
     [cancelling, setCancelling] = useState<Order | null>(null),
     [cancelReason, setCancelReason] = useState(""),
     [discount, setDiscount] = useState("");
-  const [returnInvoice, setReturnInvoice] = useState<Invoice | null>(null);
-  const me = s.identity!.actor;
+  const [returnInvoice, setReturnInvoice] = useState<Invoice | null>(null),
+    [refunding, setRefunding] = useState<Approval | null>(null),
+    [billQuery, setBillQuery] = useState("");
+  const me = s.identity!.actor,
+    hi = s.language === "hi";
+  /** The latest credit or discount request on an order, if any. */
+  const orderRequest = (o: Order) =>
+    Object.values(state.approvals)
+      .filter(
+        (a) =>
+          (a.kind === "credit" || a.kind === "discount") &&
+          a.payload.orderId === o.id &&
+          a.status !== "used",
+      )
+      .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))[0];
+  const returnRequest = (i: Invoice) =>
+    Object.values(state.approvals)
+      .filter((a) => a.kind === "refund" && a.payload.invoiceId === i.id)
+      .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))[0];
+  const q = billQuery.trim().toLowerCase();
+  const bills = Object.values(state.invoices)
+    .filter(
+      (i) =>
+        !q ||
+        i.number.toLowerCase().includes(q) ||
+        i.lines.some((l) => l.name.toLowerCase().includes(q)) ||
+        state.customers[i.customerId ?? ""]?.name.toLowerCase().includes(q),
+    )
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
   const open = Object.values(state.orders).filter(
     (o) => o.status === "held" || o.status === "handoff",
   );
@@ -406,6 +438,46 @@ export function OrdersScreen({
                   {state.members[o.offeredTo ?? ""]?.name ?? "a cashier"}
                 </Txt>
               )}
+              {(() => {
+                const a = orderRequest(o);
+                if (!a) return null;
+                const what =
+                  a.kind === "credit"
+                    ? hi
+                      ? "उधार"
+                      : "Credit"
+                    : hi
+                      ? "छूट"
+                      : "Discount";
+                const amount = rupees(Number(a.payload.amountPaise));
+                return (
+                  <Txt
+                    size={12}
+                    bold
+                    style={{
+                      marginTop: 8,
+                      color:
+                        a.status === "approved"
+                          ? colors.accent
+                          : a.status === "rejected"
+                            ? colors.red
+                            : colors.amber,
+                    }}
+                  >
+                    {a.status === "pending"
+                      ? hi
+                        ? `${what} ${amount} · मालिक की मंज़ूरी बाकी`
+                        : `${what} ${amount} · waiting for the owner`
+                      : a.status === "approved"
+                        ? hi
+                          ? `${what} ${amount} मंज़ूर · पैसे लेते समय लागू होगा`
+                          : `${what} ${amount} approved · applied when you collect`
+                        : hi
+                          ? `${what} ${amount} मना किया गया`
+                          : `${what} ${amount} declined by the owner`}
+                  </Txt>
+                );
+              })()}
               <Row style={{ marginTop: 14, flexWrap: "wrap" }}>
                 {o.status === "handoff" && o.offeredTo === me.id ? (
                   <>
@@ -463,30 +535,93 @@ export function OrdersScreen({
               </Row>
             </View>
           ))
-        : filter === "bills" &&
-          Object.values(state.invoices)
-            .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
-            .map((i) => (
-              <View key={i.id} style={styles.listRow}>
-                <Row style={{ justifyContent: "space-between" }}>
-                  <Pressable onPress={() => onInvoice(i)}>
-                    <Txt bold>{i.number}</Txt>
-                    <Txt size={12} muted style={{ marginTop: 5 }}>
-                      {i.lines.map((l) => l.name).join(", ")}
-                    </Txt>
-                  </Pressable>
-                  <Txt bold>{rupees(i.totalPaise)}</Txt>
-                </Row>
-                <Pressable
-                  onPress={() => setReturnInvoice(i)}
-                  style={{ paddingTop: 12 }}
-                >
-                  <Txt size={11} style={{ color: colors.accent }}>
-                    Request return
-                  </Txt>
-                </Pressable>
-              </View>
-            ))}
+        : filter === "bills" && (
+            <>
+              <Field
+                value={billQuery}
+                onChange={setBillQuery}
+                placeholder="Find bill by number, medicine or customer"
+              />
+              {bills.slice(0, 30).map((i) => {
+                const refunded = Object.values(state.refunds)
+                  .filter((r) => r.invoiceId === i.id)
+                  .reduce((n, r) => n + r.totalPaise, 0);
+                const request = returnRequest(i);
+                const fully = returnable(state, i).every((r) =>
+                  r.remaining.lte(0),
+                );
+                const mine =
+                  request?.requestedBy === me.id || me.role === "owner";
+                return (
+                  <View key={i.id} style={styles.listRow}>
+                    <Row style={{ justifyContent: "space-between" }}>
+                      <Pressable
+                        onPress={() => onInvoice(i)}
+                        style={{ flex: 1, marginRight: 12 }}
+                      >
+                        <Txt bold>{i.number}</Txt>
+                        <Txt size={12} muted style={{ marginTop: 5 }}>
+                          {i.lines.map((l) => l.name).join(", ")}
+                          {i.customerId && state.customers[i.customerId]
+                            ? ` · ${state.customers[i.customerId].name}`
+                            : ""}
+                        </Txt>
+                      </Pressable>
+                      <Txt bold>{rupees(i.totalPaise)}</Txt>
+                    </Row>
+                    {refunded > 0 && (
+                      <Txt size={12} style={{ marginTop: 6 }}>
+                        {hi
+                          ? `वापसी ${rupees(refunded)}`
+                          : `Returned ${rupees(refunded)}`}
+                      </Txt>
+                    )}
+                    {request?.status === "pending" ? (
+                      <Txt
+                        size={12}
+                        bold
+                        style={{ marginTop: 8, color: colors.amber }}
+                      >
+                        {hi
+                          ? "वापसी मालिक की मंज़ूरी का इंतज़ार कर रही है"
+                          : "Return waiting for the owner"}
+                      </Txt>
+                    ) : request?.status === "approved" && mine ? (
+                      <View style={{ marginTop: 10 }}>
+                        <Button small onPress={() => setRefunding(request)}>
+                          {hi
+                            ? "मंज़ूर वापसी · पैसे लौटाएँ"
+                            : "Return approved · Give refund"}
+                        </Button>
+                      </View>
+                    ) : fully ? null : (
+                      <Pressable
+                        onPress={() => setReturnInvoice(i)}
+                        style={{ paddingTop: 12 }}
+                      >
+                        <Txt size={12} style={{ color: colors.accent }}>
+                          {request?.status === "rejected"
+                            ? hi
+                              ? "पिछली वापसी मना हुई · फिर माँगें"
+                              : "Last return declined · Request again"
+                            : hi
+                              ? "वापसी माँगें"
+                              : "Request return"}
+                        </Txt>
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })}
+              {bills.length > 30 && (
+                <Txt size={11} muted>
+                  {hi
+                    ? `${bills.length} में से 30 दिख रहे हैं · खोजें`
+                    : `Showing 30 of ${bills.length} · search to find others`}
+                </Txt>
+              )}
+            </>
+          )}
       {filter === "open" && !open.length && (
         <Empty
           title="No open orders"
@@ -617,64 +752,16 @@ export function OrdersScreen({
           />
         )}
       </Sheet>
-    </Page>
-  );
-}
-function ReturnForm({
-  invoice,
-  onDone,
-}: {
-  invoice: Invoice;
-  onDone: () => void;
-}) {
-  const s = useSession(),
-    run = useRun();
-  const [quantities, Q] = useState(invoice.lines.map(() => "0")),
-    [reason, R] = useState("");
-  return (
-    <>
-      <Txt muted>
-        Enter only physically returned quantities in base units. Owner approval
-        and refund execution are separate.
-      </Txt>
-      {invoice.lines.map((l, index) => (
-        <View key={index} style={styles.listRow}>
-          <Txt bold>
-            {l.name} {l.strength} · {l.batchCode}
-          </Txt>
-          <Txt muted>Originally supplied: {l.baseQuantity}</Txt>
-          <Field
-            label="Returned base units"
-            value={quantities[index]}
-            onChange={(v) => Q(quantities.map((q, i) => (i === index ? v : q)))}
-            number
-          />
-        </View>
-      ))}
-      <Field label="Reason" value={reason} onChange={R} />
-      <Button
-        disabled={reason.length < 3}
-        onPress={() =>
-          void run(async () => {
-            const lines = quantities
-              .map((quantity, index) => ({ quantity, index }))
-              .filter((l) => D(l.quantity || 0).gt(0));
-            if (!lines.length)
-              throw new Error("Enter at least one returned quantity");
-            await s.command({
-              type: "approval.request",
-              approvalId: uid(),
-              kind: "refund",
-              reason,
-              payload: { invoiceId: invoice.id, lines },
-            });
-            onDone();
-          })
-        }
+      <Sheet
+        visible={!!refunding}
+        title="Give refund"
+        onClose={() => setRefunding(null)}
       >
-        Request owner approval
-      </Button>
-    </>
+        {refunding && (
+          <RefundForm approval={refunding} onDone={() => setRefunding(null)} />
+        )}
+      </Sheet>
+    </Page>
   );
 }
 export function CustomersScreen() {
@@ -691,6 +778,13 @@ export function CustomersScreen() {
     [method, setMethod] = useState<"cash" | "upi">("cash"),
     [ref, setRef] = useState(""),
     [verified, setVerified] = useState(false);
+  // A closed form starts empty next time, so nothing is added twice by accident.
+  const closeAdd = () => {
+    setAdd(false);
+    setName("");
+    setPhone("");
+    setAddress("");
+  };
   return (
     <Page
       title={t("customers")}
@@ -701,55 +795,75 @@ export function CustomersScreen() {
         </Button>
       }
     >
-      {Object.values(state.customers).map((c) => (
-        <Pressable
-          key={c.id}
-          onPress={() => setSelected(c.id)}
-          style={styles.listRow}
-        >
-          <Row style={{ justifyContent: "space-between" }}>
-            <Row>
-              <View
-                style={{
-                  backgroundColor: colors.tint,
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <Txt bold>{c.name[0]}</Txt>
-              </View>
-              <View>
-                <Txt bold>{c.name}</Txt>
-                <Txt size={12} muted style={{ marginTop: 4 }}>
-                  {c.phone || "No phone recorded"}
-                </Txt>
+      {Object.values(state.customers)
+        // Customers who owe come first, largest balance first.
+        .map((c) => ({ c, owes: balance(state, c.id) }))
+        .sort((a, b) => b.owes - a.owes || a.c.name.localeCompare(b.c.name))
+        .map(({ c }) => c)
+        .map((c) => (
+          <Pressable
+            key={c.id}
+            onPress={() => setSelected(c.id)}
+            style={styles.listRow}
+          >
+            <Row style={{ justifyContent: "space-between" }}>
+              <Row>
+                <View
+                  style={{
+                    backgroundColor: colors.tint,
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  <Txt bold>{c.name[0]}</Txt>
+                </View>
+                <View>
+                  <Txt bold>{c.name}</Txt>
+                  <Txt size={12} muted style={{ marginTop: 4 }}>
+                    {c.phone || "No phone recorded"}
+                  </Txt>
+                </View>
+              </Row>
+              <View style={{ alignItems: "flex-end" }}>
+                {balance(state, c.id) > 0 ? (
+                  <>
+                    <Txt bold style={{ color: colors.amber }}>
+                      {rupees(balance(state, c.id))}
+                    </Txt>
+                    <Txt size={10} muted>
+                      {s.language === "hi" ? "बाकी" : "owes"}
+                    </Txt>
+                  </>
+                ) : (
+                  <Txt size={12} muted>
+                    {s.language === "hi" ? "कुछ बाकी नहीं" : "Nothing owed"}
+                  </Txt>
+                )}
               </View>
             </Row>
-            <View style={{ alignItems: "flex-end" }}>
-              <Txt bold>{rupees(balance(state, c.id))}</Txt>
-              <Txt size={10} muted>
-                outstanding
-              </Txt>
-            </View>
-          </Row>
-        </Pressable>
-      ))}
-      <Sheet visible={add} title="Add customer" onClose={() => setAdd(false)}>
+          </Pressable>
+        ))}
+      <Sheet visible={add} title="Add customer" onClose={() => closeAdd()}>
         <Field label={t("name")} value={name} onChange={setName} />
-        <Field label={t("phone")} value={phone} onChange={setPhone} />
+        <Field label={t("phone")} value={phone} onChange={setPhone} number />
         <Field label={t("address")} value={address} onChange={setAddress} />
         <Button
+          disabled={!name.trim()}
           onPress={() =>
             void run(async () => {
               await s.command({
                 type: "customer.create",
-                customer: { id: uid(), name, phone, address },
+                customer: {
+                  id: uid(),
+                  name: name.trim(),
+                  phone: phone.trim(),
+                  address: address.trim(),
+                },
               });
-              setAdd(false);
-              setName("");
+              closeAdd();
             })
           }
         >
@@ -763,6 +877,9 @@ export function CustomersScreen() {
       >
         {selected && (
           <>
+            <Txt muted size={12}>
+              {s.language === "hi" ? "बाकी" : "Owes"}
+            </Txt>
             <Txt size={30} bold style={{ marginBottom: 20 }}>
               {rupees(balance(state, selected))}
             </Txt>
@@ -772,6 +889,21 @@ export function CustomersScreen() {
               onChange={setAmount}
               number
             />
+            {balance(state, selected) > 0 && (
+              <Row style={{ marginBottom: 12 }}>
+                <Chip
+                  active={
+                    amount === (balance(state, selected) / 100).toString()
+                  }
+                  onPress={() =>
+                    setAmount((balance(state, selected) / 100).toString())
+                  }
+                >
+                  {s.language === "hi" ? "पूरा बाकी" : "Full amount"}{" "}
+                  {rupees(balance(state, selected))}
+                </Chip>
+              </Row>
+            )}
             <Row style={{ marginBottom: 20 }}>
               <Chip
                 active={method === "cash"}
@@ -822,15 +954,53 @@ export function CustomersScreen() {
             <Txt bold>Account history</Txt>
             {Object.values(state.ledger)
               .filter((l) => l.customerId === selected)
-              .map((l) => (
-                <Row
-                  key={l.id}
-                  style={[styles.listRow, { justifyContent: "space-between" }]}
-                >
-                  <Txt size={12}>{l.kind.replaceAll("_", " ")}</Txt>
-                  <Txt>{rupees(l.amountPaise)}</Txt>
-                </Row>
-              ))}
+              .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
+              .map((l) => {
+                const hi = s.language === "hi";
+                const bill = state.invoices[l.invoiceId ?? ""]?.number;
+                const what =
+                  l.kind === "credit_sale"
+                    ? hi
+                      ? "उधार बिक्री"
+                      : "Credit sale"
+                    : l.kind === "repayment"
+                      ? hi
+                        ? "भुगतान मिला"
+                        : "Paid back"
+                      : hi
+                        ? "वापसी से कम"
+                        : "Reduced by a return";
+                return (
+                  <Row
+                    key={l.id}
+                    style={[
+                      styles.listRow,
+                      { justifyContent: "space-between" },
+                    ]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Txt size={13}>{what}</Txt>
+                      <Txt size={11} muted style={{ marginTop: 3 }}>
+                        {new Date(l.occurredAt).toLocaleDateString("en-IN", {
+                          timeZone: "Asia/Kolkata",
+                          day: "numeric",
+                          month: "short",
+                        })}
+                        {bill ? ` · ${bill}` : ""}
+                      </Txt>
+                    </View>
+                    <Txt
+                      bold
+                      style={{
+                        color: l.amountPaise < 0 ? colors.accent : colors.ink,
+                      }}
+                    >
+                      {l.amountPaise < 0 ? "−" : "+"}
+                      {rupees(Math.abs(l.amountPaise))}
+                    </Txt>
+                  </Row>
+                );
+              })}
           </>
         )}
       </Sheet>
@@ -1269,6 +1439,33 @@ export function MoneyScreen() {
     </Page>
   );
 }
+/** "Credit ₹120 · Meera Sharma", "Return on bill 2627-004-000001 · ₹35". */
+function approvalTitle(state: State, a: Approval, hi: boolean) {
+  const p = a.payload;
+  const customer =
+    state.customers[
+      String(
+        p.customerId ??
+          state.orders[String(p.orderId)]?.customerId ??
+          state.invoices[String(p.invoiceId)]?.customerId ??
+          "",
+      )
+    ]?.name;
+  if (a.kind === "refund") {
+    const invoice = state.invoices[String(p.invoiceId)];
+    let amount = "";
+    try {
+      amount = invoice
+        ? ` · ${rupees(refundQuote(state, invoice, p.lines as ReturnLine[]).payablePaise)}`
+        : "";
+    } catch {}
+    return `${hi ? "वापसी · बिल" : "Return on bill"} ${invoice?.number ?? ""}${amount}`;
+  }
+  if (a.kind === "stock") return hi ? "स्टॉक बदलाव" : "Stock change";
+  const what =
+    a.kind === "credit" ? (hi ? "उधार" : "Credit") : hi ? "छूट" : "Discount";
+  return `${what} ${rupees(Number(p.amountPaise))}${customer ? ` · ${customer}` : ""}`;
+}
 function ApprovalDetails({ approval }: { approval: Approval }) {
   const { state } = useSession();
   const p = approval.payload,
@@ -1285,6 +1482,19 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
       {customerId && (
         <Txt bold>
           {s.customers[customerId]?.name} · {s.customers[customerId]?.phone}
+        </Txt>
+      )}
+      {customerId && approval.kind === "credit" && (
+        <Txt style={{ color: colors.amber }}>
+          {(() => {
+            const bills = Object.values(s.invoices).filter(
+              (inv) => inv.customerId === customerId && billDue(s, inv.id) > 0,
+            );
+            const owed = balance(s, customerId);
+            return owed > 0
+              ? `Already owes ${rupees(owed)} on ${bills.length} bill${bills.length === 1 ? "" : "s"}${bills.length ? `, oldest ${new Date(bills.reduce((a, b) => (a.occurredAt < b.occurredAt ? a : b)).occurredAt).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}` : ""}`
+              : "Owes nothing today";
+          })()}
         </Txt>
       )}
       {typeof p.amountPaise === "number" && (
@@ -1311,16 +1521,54 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
       )}
       {i && (
         <>
-          <Txt bold>{i.number}</Txt>
-          {(p.lines as { index: number; quantity: string }[]).map((l, n) => {
+          <Txt bold>
+            {i.number} ·{" "}
+            {new Date(i.occurredAt).toLocaleString("en-IN", {
+              timeZone: "Asia/Kolkata",
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
+          </Txt>
+          <Txt muted>Billed by {s.members[i.collectorId]?.name}</Txt>
+          {(p.lines as ReturnLine[]).map((l, n) => {
             const item = i.lines[l.index];
+            const unit = s.products[item?.productId ?? ""]?.baseUnit ?? "";
             return (
               <Txt key={n}>
-                {item?.name} {item?.strength} · {item?.batchCode} · {l.quantity}{" "}
-                base units
+                {item?.name} {item?.strength} · {item?.batchCode} ·{" "}
+                {amountOf(l.quantity, unit, (x) => x)} returned of{" "}
+                {item?.baseQuantity} sold
               </Txt>
             );
           })}
+          {(() => {
+            try {
+              const q = refundQuote(s, i, p.lines as ReturnLine[]);
+              return (
+                <View style={styles.panel}>
+                  <Txt muted size={12}>
+                    Refund to the customer
+                  </Txt>
+                  <Txt size={26} bold style={{ marginTop: 6 }}>
+                    {rupees(q.payablePaise)}
+                  </Txt>
+                  {q.creditReductionPaise > 0 && (
+                    <Txt
+                      size={12}
+                      style={{ marginTop: 6, color: colors.amber }}
+                    >
+                      {rupees(q.creditReductionPaise)} comes off what the
+                      customer owes
+                    </Txt>
+                  )}
+                </View>
+              );
+            } catch (e) {
+              return (
+                <Txt style={{ color: colors.red }}>{(e as Error).message}</Txt>
+              );
+            }
+          })()}
         </>
       )}
       {b && (
@@ -1396,10 +1644,7 @@ export function ReviewsScreen() {
     run = useRun();
   const [selected, setSelected] = useState<Approval | null>(null),
     [reason, R] = useState(""),
-    [reviewId, V] = useState(""),
-    [refundCash, RC] = useState(""),
-    [refundUpi, RU] = useState("0"),
-    [refundRef, RF] = useState("");
+    [reviewId, V] = useState("");
   const pending = Object.values(state.approvals).filter(
     (a) => a.status === "pending" || a.status === "approved",
   );
@@ -1490,9 +1735,7 @@ export function ReviewsScreen() {
           >
             <Row style={{ justifyContent: "space-between" }}>
               <View>
-                <Txt bold>
-                  {a.kind[0].toUpperCase() + a.kind.slice(1)} request
-                </Txt>
+                <Txt bold>{approvalTitle(state, a, s.language === "hi")}</Txt>
                 <Txt muted size={12} style={{ marginTop: 6 }}>
                   {a.reason}
                 </Txt>
@@ -1548,7 +1791,7 @@ export function ReviewsScreen() {
         {selected && (
           <>
             <Txt bold size={18} style={{ marginBottom: 12 }}>
-              {selected.kind.toUpperCase()}
+              {approvalTitle(state, selected, s.language === "hi")}
             </Txt>
             <Txt muted style={{ marginBottom: 15 }}>
               {selected.reason}
@@ -1602,45 +1845,10 @@ export function ReviewsScreen() {
                 Execute approved adjustment
               </Button>
             ) : selected.kind === "refund" ? (
-              <>
-                <Txt muted size={12} style={{ marginBottom: 12 }}>
-                  Reduce unpaid invoice credit first. Enter only the money
-                  actually returned to the customer.
-                </Txt>
-                <Field
-                  label="Cash refunded (₹)"
-                  value={refundCash}
-                  onChange={RC}
-                  number
-                />
-                <Field
-                  label="UPI refunded (₹)"
-                  value={refundUpi}
-                  onChange={RU}
-                  number
-                />
-                <Field
-                  label="Refund UPI reference, if used"
-                  value={refundRef}
-                  onChange={RF}
-                />
-                <Button
-                  onPress={() =>
-                    void run(async () => {
-                      await s.command({
-                        type: "refund.execute",
-                        approvalId: selected.id,
-                        cashPaise: money(refundCash),
-                        upiPaise: money(refundUpi),
-                        upiReference: refundRef || undefined,
-                      });
-                      setSelected(null);
-                    })
-                  }
-                >
-                  Record executed refund
-                </Button>
-              </>
+              <RefundForm
+                approval={selected}
+                onDone={() => setSelected(null)}
+              />
             ) : (
               <Txt muted>
                 Return to the held order to use this approval. It is valid only

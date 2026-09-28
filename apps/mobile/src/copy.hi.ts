@@ -104,6 +104,18 @@ export const hindiCopy: Record<string, string> = {
   Owner: "मालिक",
   Employee: "कर्मचारी",
   "Set your password": "अपना पासवर्ड बनाएँ",
+  "Ask the owner to approve credit": "मालिक से उधार की मंज़ूरी माँगें",
+  "Quantity returned": "लौटाई गई मात्रा",
+  "Other reason": "दूसरा कारण",
+  "UPI reference of the refund": "वापसी का UPI रेफ़रेंस",
+  "Find customer by name or phone": "नाम या फ़ोन से ग्राहक खोजें",
+  "Customer name": "ग्राहक का नाम",
+  Phone: "फ़ोन",
+  "Find bill by number, medicine or customer":
+    "बिल नंबर, दवा या ग्राहक से खोजें",
+  "Give refund": "पैसे लौटाएँ",
+  "Refund to the customer": "ग्राहक को लौटाना है",
+  "Owes nothing today": "आज कुछ बाकी नहीं",
   "Sign in again": "फिर से साइन इन करें",
   "This phone was signed out, for example after a password change on another phone. Sales not yet sent stay on this phone and are sent after you sign in.":
     "यह फ़ोन साइन आउट हो गया है, जैसे किसी दूसरे फ़ोन पर पासवर्ड बदलने के बाद। जो बिक्री अभी भेजी नहीं गई वह इसी फ़ोन पर सुरक्षित है और साइन इन करने के बाद भेज दी जाएगी।",
