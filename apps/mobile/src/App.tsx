@@ -63,7 +63,8 @@ export default function App() {
         <ActivityIndicator color={colors.accent} />
       </View>
     );
-  if (!session.identity || session.passwordRequired) return <Login />;
+  if (!session.identity || session.passwordRequired || session.signInRequired)
+    return <Login />;
   if (!session.state)
     return (
       <View
@@ -461,9 +462,11 @@ function Login() {
           <Txt size={32} bold style={{ letterSpacing: -1 }}>
             {s.passwordRequired
               ? "Set your password"
-              : s.language === "hi"
-                ? "दुकान का काम, एक जगह।"
-                : "Ready for the next customer."}
+              : s.signInRequired
+                ? "Sign in again"
+                : s.language === "hi"
+                  ? "दुकान का काम, एक जगह।"
+                  : "Ready for the next customer."}
           </Txt>
           <Txt
             muted
@@ -471,7 +474,9 @@ function Login() {
           >
             {s.passwordRequired
               ? "Replace the temporary password your owner gave you."
-              : "Sign in to your shop to start billing and keep the day’s work in order."}
+              : s.signInRequired
+                ? "This phone was signed out, for example after a password change on another phone. Sales not yet sent stay on this phone and are sent after you sign in."
+                : "Sign in to your shop to start billing and keep the day’s work in order."}
           </Txt>
           {!s.passwordRequired && (
             <Field

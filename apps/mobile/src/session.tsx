@@ -46,6 +46,8 @@ type Ctx = {
   login: (u: string, p: string) => Promise<void>;
   changePassword: (current: string, password: string) => Promise<void>;
   passwordRequired: boolean;
+  /** The server no longer accepts this phone's sign-in; unsent sales stay queued. */
+  signInRequired: boolean;
   startDemo: (role?: "owner" | "employee") => void;
   logout: () => Promise<void>;
   setLanguage: (v: "en" | "hi") => void;
@@ -75,7 +77,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [language, changeLanguage] = useState<"en" | "hi">("en"),
     [pending, setPending] = useState<storage.Queued[]>([]),
     [uncertain, setUncertain] = useState<Command | null>(null),
-    [passwordRequired, setPasswordRequired] = useState(false);
+    [passwordRequired, setPasswordRequired] = useState(false),
+    [signInRequired, setSignInRequired] = useState(false);
   const demoRef = useRef(false);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -132,6 +135,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const data = await r.json();
     if (!r.ok) {
       if (data.code === "PASSWORD_CHANGE_REQUIRED") setPasswordRequired(true);
+      // The session ended (password changed on another phone, signed out, unused for a week):
+      // say so instead of looking connected while every sync is refused.
+      if (r.status === 401) setSignInRequired(true);
       throw Object.assign(new Error(data.error ?? "Request failed"), {
         httpStatus: r.status,
         code: data.code,
@@ -142,6 +148,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   async function establish() {
     applied.current = { scope: "", revision: -1 };
     const me = await request("/me");
+    setSignInRequired(false);
     const m = me.memberships.find((x: any) => x.active);
     if (!m) throw new Error("No active shop membership");
     const base: Identity = {
@@ -233,6 +240,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setUncertain(null);
     setError("");
     setPasswordRequired(false);
+    setSignInRequired(false);
   }
   async function assignCounter(counterId: string) {
     if (!/^[\w-]{1,40}$/.test(counterId))
@@ -281,6 +289,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setIdentity(null);
     identityRef.current = null;
     setDemo(false);
+    setSignInRequired(false);
   }
   async function refresh() {
     if (demoRef.current || !identityRef.current) return;
@@ -663,7 +672,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
   useEffect(() => {
-    if (!identity || demo) return;
+    if (!identity || demo || signInRequired) return;
     const sub = AppState.addEventListener("change", (status) => {
       if (status === "active") void sync();
     });
@@ -681,7 +690,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       clearInterval(interval);
       clearInterval(quick);
     };
-  }, [identity?.deviceId, demo]);
+  }, [identity?.deviceId, demo, signInRequired]);
   return (
     <context.Provider
       value={{
@@ -697,6 +706,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         login,
         changePassword,
         passwordRequired,
+        signInRequired,
         startDemo,
         logout,
         setLanguage,

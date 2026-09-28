@@ -104,6 +104,9 @@ export const hindiCopy: Record<string, string> = {
   Owner: "मालिक",
   Employee: "कर्मचारी",
   "Set your password": "अपना पासवर्ड बनाएँ",
+  "Sign in again": "फिर से साइन इन करें",
+  "This phone was signed out, for example after a password change on another phone. Sales not yet sent stay on this phone and are sent after you sign in.":
+    "यह फ़ोन साइन आउट हो गया है, जैसे किसी दूसरे फ़ोन पर पासवर्ड बदलने के बाद। जो बिक्री अभी भेजी नहीं गई वह इसी फ़ोन पर सुरक्षित है और साइन इन करने के बाद भेज दी जाएगी।",
   "Replace the temporary password your owner gave you.":
     "मालिक से मिले अस्थायी पासवर्ड को बदलें।",
   "Sign in to your shop to start billing and keep the day’s work in order.":
