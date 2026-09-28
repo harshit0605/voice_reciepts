@@ -18,6 +18,8 @@ import { useSession, uid } from "./session";
 import { appendFile } from "./upload";
 import { Txt, Button, Field, Row, Badge, Sheet, colors, styles } from "./ui";
 import {
+  readableQuantity,
+  readableUnit,
   applyVoiceResult,
   emptyVoice,
   parseExactSaleText,
@@ -519,7 +521,7 @@ export function VoiceEntry({
               )}
             </Row>
             <Txt muted>
-              {item.quantity} {item.unit} ·{" "}
+              {readableQuantity(item.quantity)} {readableUnit(item.unit)} ·{" "}
               {item.form || t("Check form", "रूप जाँचें")}
             </Txt>
             <Button

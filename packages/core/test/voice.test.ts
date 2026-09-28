@@ -3,6 +3,8 @@ import {
   demoState,
   spokenUnit,
   spokenQuantity,
+  readableQuantity,
+  readableUnit,
   parseExactSaleText,
   voiceCandidates,
   sameStrength,
@@ -30,6 +32,15 @@ describe("Voice-assisted entry", () => {
     expect(spokenQuantity("some")).toBe("");
     expect(spokenQuantity("-1")).toBe("");
     expect(spokenQuantity("0")).toBe("");
+    expect(spokenQuantity("दस")).toBe("10");
+    expect(spokenQuantity("Two")).toBe("2");
+    expect(spokenQuantity("बारह")).toBe("12");
+    expect(spokenQuantity("half")).toBe("0.5");
+    expect(readableQuantity("दस")).toBe("10");
+    expect(readableQuantity("a few")).toBe("a few");
+    expect(readableUnit("गोलियां")).toBe("tablet");
+    expect(readableUnit("strips")).toBe("strip");
+    expect(readableUnit("sachet")).toBe("sachet");
     expect(spokenUnit("गोलियाँ", state.products.dolo)).toBe("tablet");
     expect(spokenUnit("STRIPS", state.products.dolo)).toBe("strip");
     expect(spokenUnit("packet", state.products.ors)).toBeNull();

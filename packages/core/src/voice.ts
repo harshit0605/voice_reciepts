@@ -83,6 +83,9 @@ export function spokenUnit(value: string, product: Product): string | null {
   return canonical && product.units[canonical] ? canonical : null;
 }
 const numbers: Record<string, string> = {
+  half: "0.5",
+  आधा: "0.5",
+  आधी: "0.5",
   one: "1",
   two: "2",
   three: "3",
@@ -105,7 +108,28 @@ const numbers: Record<string, string> = {
   आठ: "8",
   नौ: "9",
   दस: "10",
+  eleven: "11",
+  twelve: "12",
+  fifteen: "15",
+  twenty: "20",
+  thirty: "30",
+  ग्यारह: "11",
+  बारह: "12",
+  पंद्रह: "15",
+  बीस: "20",
+  तीस: "30",
+  "a dozen": "12",
+  dozen: "12",
 };
+/** A spoken quantity shown for review: "दस" → "10", unknown words unchanged. */
+export function readableQuantity(value: string) {
+  return spokenQuantity(value) || value;
+}
+/** Units said in Hindi or plural shown as the catalogue's word: "गोलियां" → "tablet". */
+export function readableUnit(value: string) {
+  const key = value.trim().toLowerCase();
+  return units[key] ?? units[normalVoice(value)] ?? value;
+}
 export function spokenQuantity(value: string): string {
   const v = value
     .trim()
