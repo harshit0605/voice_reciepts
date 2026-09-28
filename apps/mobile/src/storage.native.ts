@@ -9,8 +9,8 @@ export type Queued = {
   error?: string;
 };
 let connection: Promise<SQLite.SQLiteDatabase> | undefined;
-async function db() {
-  if (!connection)
+function db() {
+  if (!connection) {
     connection = (async () => {
       let key = await SecureStore.getItemAsync("counterwell.database.key");
       if (!key) {
@@ -31,119 +31,97 @@ async function db() {
       );
       return db;
     })();
+    // Let a later call retry, for example after the keychain becomes available.
+    connection.catch(() => (connection = undefined));
+  }
   return connection;
 }
-export async function get<T>(key: string): Promise<T | null> {
-  const row = await (
-    await db()
-  ).getFirstAsync<{ value: string }>("SELECT value FROM kv WHERE key=?", key);
-  return row ? JSON.parse(row.value) : null;
+// expo-sqlite's withExclusiveTransactionAsync opens a second connection that never
+// receives the SQLCipher key ("file is not a database"). Everything therefore runs on
+// the one keyed connection, one operation at a time, so nothing can interleave with an
+// open transaction.
+let queue: Promise<unknown> = Promise.resolve();
+function serial<T>(task: (db: SQLite.SQLiteDatabase) => Promise<T>) {
+  const run = queue.then(async () => task(await db()));
+  queue = run.catch(() => {});
+  return run;
 }
-export async function set(key: string, value: unknown) {
-  await (
-    await db()
-  ).runAsync(
+function transaction<T>(task: (db: SQLite.SQLiteDatabase) => Promise<T>) {
+  return serial(async (d) => {
+    await d.execAsync("BEGIN IMMEDIATE");
+    try {
+      const out = await task(d);
+      await d.execAsync("COMMIT");
+      return out;
+    } catch (e) {
+      await d.execAsync("ROLLBACK");
+      throw e;
+    }
+  });
+}
+const read = async <T>(d: SQLite.SQLiteDatabase, key: string) => {
+  const row = await d.getFirstAsync<{ value: string }>(
+    "SELECT value FROM kv WHERE key=?",
+    key,
+  );
+  return row ? (JSON.parse(row.value) as T) : null;
+};
+const write = (d: SQLite.SQLiteDatabase, key: string, value: unknown) =>
+  d.runAsync(
     "INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
     key,
     JSON.stringify(value),
   );
+export function get<T>(key: string): Promise<T | null> {
+  return serial((d) => read<T>(d, key));
+}
+export async function set(key: string, value: unknown) {
+  await serial((d) => write(d, key, value));
 }
 export async function remove(key: string) {
-  await (await db()).runAsync("DELETE FROM kv WHERE key=?", key);
+  await serial((d) => d.runAsync("DELETE FROM kv WHERE key=?", key));
 }
-export async function nextSequence(key: string) {
-  let value = 0;
-  await (
-    await db()
-  ).withExclusiveTransactionAsync(async (tx) => {
-    const row = await tx.getFirstAsync<{ value: string }>(
-      "SELECT value FROM kv WHERE key=?",
-      `sequence:${key}`,
-    );
-    value = Number(row?.value ?? 0) + 1;
-    await tx.runAsync(
-      "INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-      `sequence:${key}`,
-      String(value),
-    );
+export function nextSequence(key: string) {
+  return transaction(async (d) => {
+    const value = Number((await read<number>(d, `sequence:${key}`)) ?? 0) + 1;
+    await write(d, `sequence:${key}`, value);
+    return value;
   });
-  return value;
 }
 /** Give back a number the server definitely did not use, unless a later one was already taken. */
 export async function releaseSequence(key: string, sequence: number) {
-  await (
-    await db()
-  ).withExclusiveTransactionAsync(async (tx) => {
-    const row = await tx.getFirstAsync<{ value: string }>(
-      "SELECT value FROM kv WHERE key=?",
-      `sequence:${key}`,
-    );
-    if (Number(row?.value ?? 0) === sequence)
-      await tx.runAsync(
-        "UPDATE kv SET value=? WHERE key=?",
-        String(sequence - 1),
-        `sequence:${key}`,
-      );
+  await transaction(async (d) => {
+    if (Number((await read<number>(d, `sequence:${key}`)) ?? 0) === sequence)
+      await write(d, `sequence:${key}`, sequence - 1);
   });
 }
 /** Returns null, writing nothing, when `commandId` is already queued. */
-export async function commitCash(
+export function commitCash(
   scope: string,
   sequenceKey: string,
   commandId: string,
   build: (sequence: number) => { entry: Queued; state: State },
 ) {
-  let result = null as ReturnType<typeof build> | null;
-  await (
-    await db()
-  ).withExclusiveTransactionAsync(async (tx) => {
-    const queued = await tx.getFirstAsync<{ value: string }>(
-      "SELECT value FROM kv WHERE key=?",
-      `outbox:${scope}`,
-    );
-    const entries: Queued[] = queued ? JSON.parse(queued.value) : [];
-    if (entries.some((e) => e.command.id === commandId)) return;
-    const row = await tx.getFirstAsync<{ value: string }>(
-      "SELECT value FROM kv WHERE key=?",
-      `sequence:${sequenceKey}`,
-    );
-    const n = Number(row?.value ?? 0) + 1;
+  return transaction(async (d) => {
+    const entries = (await read<Queued[]>(d, `outbox:${scope}`)) ?? [];
+    if (entries.some((e) => e.command.id === commandId)) return null;
+    const n =
+      Number((await read<number>(d, `sequence:${sequenceKey}`)) ?? 0) + 1;
     const built = build(n);
-    entries.push(built.entry);
-    for (const [key, value] of [
-      [`sequence:${sequenceKey}`, n],
-      [`outbox:${scope}`, entries],
-      [`state:${scope}`, built.state],
-    ] as const)
-      await tx.runAsync(
-        "INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-        key,
-        JSON.stringify(value),
-      );
-    result = built;
+    await write(d, `sequence:${sequenceKey}`, n);
+    await write(d, `outbox:${scope}`, [...entries, built.entry]);
+    await write(d, `state:${scope}`, built.state);
+    return built;
   });
-  return result;
 }
 export const durableOffline = true;
-export async function updateQueue(
+export function updateQueue(
   scope: string,
   update: (entries: Queued[]) => Queued[],
 ) {
-  let result: Queued[] = [];
-  await (
-    await db()
-  ).withExclusiveTransactionAsync(async (tx) => {
-    const key = `outbox:${scope}`;
-    const row = await tx.getFirstAsync<{ value: string }>(
-      "SELECT value FROM kv WHERE key=?",
-      key,
-    );
-    result = update(row ? JSON.parse(row.value) : []);
-    await tx.runAsync(
-      "INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-      key,
-      JSON.stringify(result),
-    );
+  return transaction(async (d) => {
+    const result = update((await read<Queued[]>(d, `outbox:${scope}`)) ?? []);
+    await write(d, `outbox:${scope}`, result);
+    return result;
   });
-  return result;
 }
