@@ -86,11 +86,18 @@ export async function processClaimedExtraction(
     return { status: "completed" };
   } catch (e) {
     const status = Number((e as any).status ?? (e as any).code);
+    const message = (e as Error).message;
     const transient =
       status === 429 ||
       status >= 500 ||
-      /timeout|fetch failed|returned (429|5\d\d)/i.test((e as Error).message);
-    const terminal = job.attempts >= 2 || !transient;
+      /timeout|fetch failed|returned (429|5\d\d)/i.test(message);
+    // A reply cut off mid-JSON is a one-off from the provider, not a bad document: try once more.
+    // Any other malformed draft stays failed, so a hard document is never paid for repeatedly.
+    const truncated =
+      e instanceof SyntaxError ||
+      /Unterminated|Unexpected end of JSON/i.test(message);
+    const terminal =
+      job.attempts >= 2 || (!transient && !(truncated && job.attempts < 2));
     await pool.query(
       "UPDATE jobs SET status=$2,error=$3,locked_at=NULL,available_at=now()+interval '30 seconds' WHERE id=$1",
       [job.id, terminal ? "failed" : "pending", (e as Error).message],

@@ -403,6 +403,26 @@ describe.skipIf(!enabled)("PostgreSQL and authenticated API", () => {
         .status,
     ).toBe(400);
   });
+  it("retries an invoice once after a reply cut off mid-JSON, but not a complete wrong draft", async () => {
+    const { processClaimedExtraction } =
+      await import("../../../apps/api/src/process-extraction");
+    const run = (id: string, invoice: () => Promise<unknown>) =>
+      claimed(id).then((job) =>
+        processClaimedExtraction(job, {
+          invoice,
+          catalogue: async () => [],
+        } as any),
+      );
+    const cutOff = await uploadInvoice(`%PDF-cut-off-${randomUUID()}`);
+    const truncated = async () => JSON.parse('{"supplierName": "Pharma');
+    expect((await run(cutOff.data.id, truncated)).status).toBe("pending");
+    expect((await run(cutOff.data.id, truncated)).status).toBe("failed");
+    const wrong = await uploadInvoice(`%PDF-wrong-${randomUUID()}`);
+    const malformed = async () => {
+      throw new Error("Invalid input: expected array, received string");
+    };
+    expect((await run(wrong.data.id, malformed)).status).toBe("failed");
+  });
   it("processes exact typed entries with no speech or structure provider call", async () => {
     const upload = await req(
       "/api/v1/extractions/text",
