@@ -49,6 +49,7 @@ import {
   quote,
   rupees,
   receiptHtml,
+  receiptPage,
   indiaDate,
   type OrderLine,
   type Invoice,
@@ -1255,11 +1256,24 @@ export function ReceiptSheet({
   async function share() {
     if (!invoice) return;
     try {
+      const state = s.state!;
+      const extras = {
+        customerName: state.customers[invoice.customerId ?? ""]?.name,
+        payments: Object.values(state.payments).filter(
+          (p) => p.invoiceId === invoice.id,
+        ),
+      };
+      // A page the size of the bill: the customer sees the whole receipt, not a blank letter page.
+      const page = receiptPage(invoice, extras);
+      const html = receiptHtml(invoice, false, { ...extras, page });
       if (Platform.OS === "web") {
-        await Print.printAsync({ html: receiptHtml(invoice) });
+        await Print.printAsync({ html });
       } else {
         const file = await Print.printToFileAsync({
-          html: receiptHtml(invoice),
+          html,
+          width: page.width,
+          height: page.height,
+          margins: { left: 0, top: 0, right: 0, bottom: 0 },
         });
         // Name the PDF after the bill so WhatsApp and Files show "Bill 2627-002-000003.pdf".
         const named = new FileSystem.File(

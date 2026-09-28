@@ -10,6 +10,7 @@ import {
   employeeView,
   fiscalYear,
   receiptHtml,
+  receiptPage,
   type State,
   type Command,
   type Operation,
@@ -568,6 +569,37 @@ describe("retail ledger", () => {
         employee,
       ),
     ).toThrow("Owner");
+  });
+  it("sizes the shared PDF like a receipt and says what was paid", () => {
+    const s = apply(order(), checkout());
+    const i = Object.values(s.invoices)[0];
+    const one = receiptPage(i);
+    expect(one.width).toBe(300);
+    const longer = receiptPage({
+      ...i,
+      lines: [...i.lines, ...i.lines, ...i.lines],
+    });
+    expect(longer.height).toBeGreaterThan(one.height + 100);
+    expect(
+      receiptPage(i, { customerName: "Meera Sharma" }).height,
+    ).toBeGreaterThan(one.height);
+    const html = receiptHtml(i, false, {
+      page: one,
+      customerName: "Meera Sharma",
+      payments: [
+        { kind: "sale", method: "cash", amountPaise: i.totalPaise - 100 },
+        { kind: "refund", method: "cash", amountPaise: 999 },
+      ],
+    });
+    expect(html).toContain(`@page{size:300pt ${one.height}pt;margin:0}`);
+    expect(html).toContain("Customer: Meera Sharma");
+    expect(html).toMatch(/Paid ₹[\d.,]+ by cash · Balance due ₹1\.00/);
+    expect(html).not.toContain("recorded separately");
+    // The owner's on-screen copy keeps the neutral wording and page-free layout.
+    expect(receiptHtml(i)).toContain(
+      "Payment details are recorded separately.",
+    );
+    expect(receiptHtml(i)).not.toContain("@page");
   });
   it("escapes invoice HTML", () => {
     const s = apply(order(), checkout());
