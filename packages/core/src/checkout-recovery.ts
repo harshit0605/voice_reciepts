@@ -84,3 +84,12 @@ export function orderMatches(
     stable(order.prescription ?? null) === stable(content.prescription ?? null)
   );
 }
+/**
+ * The request never left the phone: no network, the server refused the connection or its name
+ * did not resolve. Anything else (a timeout, a connection dropped mid-way) may have reached the
+ * server and stays uncertain.
+ */
+export const neverSent = (e: unknown) =>
+  /Failed to connect|ConnectException|Could not connect to the server|appears to be offline|not connected to the internet|Unable to resolve host|UnknownHostException|hostname could not be found|Network is unreachable|ENETUNREACH|ECONNREFUSED|No address associated/i.test(
+    String((e as Error)?.message ?? e),
+  );

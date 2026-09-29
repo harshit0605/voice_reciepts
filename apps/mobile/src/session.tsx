@@ -22,9 +22,12 @@ import {
   type Invoice,
   type OrderLine,
   type CheckoutAttempt,
+  neverSent,
 } from "@counterwell/core";
 const NO_RESPONSE =
   "No response from the server. This may already be saved, so do not collect payment again. It will be checked when the connection returns.";
+const NOT_SENT =
+  "No connection, so this was not saved. Cash bills still work offline; try this again when the connection returns.";
 type Identity = {
   actor: Actor;
   deviceId: string;
@@ -129,8 +132,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       setOnline(false);
       if (__DEV__) console.warn(`request ${route} failed`, e);
-      throw new Error(
-        "Connection unavailable. Cash billing can continue in the mobile app while your authorisation is valid.",
+      throw Object.assign(
+        new Error(
+          "Connection unavailable. Cash billing can continue in the mobile app while your authorisation is valid.",
+        ),
+        { notSent: neverSent(e) },
       );
     }
     const data = await r.json();
@@ -383,6 +389,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           await markUncertain(null);
           await releaseRejected(cmd, e);
           throw e;
+        }
+        if ((e as any).notSent) {
+          await markUncertain(null);
+          await releaseRejected(cmd, e);
+          throw Object.assign(new Error(NOT_SENT), { notSent: true });
         }
         throw new Error(NO_RESPONSE);
       }

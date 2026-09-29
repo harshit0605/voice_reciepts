@@ -6,6 +6,7 @@ import {
   billsLocally,
   orderMatches,
   commandOrderId,
+  neverSent,
   type Actor,
   type CheckoutAttempt,
   type Command,
@@ -201,5 +202,25 @@ describe("held order reuse", () => {
         },
       }),
     ).toBe(false);
+  });
+});
+describe("failed requests", () => {
+  it("treats only requests that never left the phone as not sent", () => {
+    for (const message of [
+      "fetch failed: java.net.ConnectException: Failed to connect to localhost/127.0.0.1:4100",
+      'fetch failed: java.net.UnknownHostException: Unable to resolve host "api.example.in": No address associated with hostname',
+      "fetch failed: UnexpectedException: Could not connect to the server.",
+      "The Internet connection appears to be offline.",
+      "A server with the specified hostname could not be found.",
+    ])
+      expect(neverSent(new Error(message))).toBe(true);
+    for (const message of [
+      "fetch failed: java.io.IOException: unexpected end of stream on http://localhost:4100/...",
+      "The request timed out.",
+      "The network connection was lost.",
+      "java.net.SocketTimeoutException: timeout",
+      "The operation was aborted due to timeout",
+    ])
+      expect(neverSent(new Error(message))).toBe(false);
   });
 });

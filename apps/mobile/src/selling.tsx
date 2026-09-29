@@ -952,8 +952,8 @@ export function Checkout({
         counterId: current.counterId,
       });
     }
-    const { orderId } = await pinAttempt(true);
-    const current = state.orders[orderId];
+    const pinned = await pinAttempt(true);
+    const current = state.orders[pinned.orderId];
     const content = {
       lines,
       customerId: customerId || undefined,
@@ -966,13 +966,21 @@ export function Checkout({
         );
       if (orderMatches(current, content)) return current;
     }
-    return s.command({
-      type: "order.save",
-      orderId,
-      version: current?.version ?? 0,
-      ...content,
-      counterId: state.devices[s.identity!.deviceId]?.counterId ?? "counter-1",
-    });
+    try {
+      return await s.command({
+        type: "order.save",
+        orderId: pinned.orderId,
+        version: current?.version ?? 0,
+        ...content,
+        counterId:
+          state.devices[s.identity!.deviceId]?.counterId ?? "counter-1",
+      });
+    } catch (e) {
+      // Nothing reached the server, so the sale can still be billed in cash on this phone.
+      if (!attempt?.online && (e as any).notSent)
+        await pin!({ ...pinned, online: false });
+      throw e;
+    }
   }
   async function guarded(action: () => Promise<void>) {
     if (submitting.current) return;
