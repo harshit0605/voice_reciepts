@@ -38,7 +38,11 @@ export function receiptPage(
   px += 3 * 20 + 44 + (extras.payments?.length ? 20 : 0) + 70;
   return { width: PAGE_WIDTH, height: Math.ceil((px + 30) * PX) };
 }
-function paymentLine(invoice: Invoice, payments: ReceiptExtras["payments"]) {
+/** "Paid ₹50.00 by cash", for the PDF and the printed receipt. */
+export function paymentLine(
+  invoice: Invoice,
+  payments: ReceiptExtras["payments"],
+) {
   const sale = (payments ?? []).filter((p) => p.kind === "sale");
   if (!sale.length) return "";
   const paid = sale.reduce((n, p) => n + p.amountPaise, 0);

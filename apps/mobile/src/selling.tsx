@@ -51,6 +51,7 @@ import {
   rupees,
   receiptHtml,
   receiptPage,
+  paymentLine,
   indiaDate,
   type OrderLine,
   type Invoice,
@@ -1349,10 +1350,20 @@ export function ReceiptSheet({
         );
       const url = s.state!.settings.gatewayUrl;
       if (!url) throw new Error("Configure the shop gateway in Administration");
+      // The bill record does not hold how it was paid; the paper receipt should say so, like the PDF.
+      const paid = paymentLine(
+        invoice,
+        Object.values(s.state!.payments).filter(
+          (p) => p.invoiceId === invoice.id,
+        ),
+      );
       const r = await fetch(`${url}/print`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lease: s.identity!.lease, invoice }),
+        body: JSON.stringify({
+          lease: s.identity!.lease,
+          invoice: paid ? { ...invoice, paid } : invoice,
+        }),
         signal: AbortSignal.timeout(10000),
       });
       const result = await r.json();

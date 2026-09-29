@@ -38,6 +38,10 @@ export async function printInvoice(invoice: Invoice, reprint = false) {
     `CGST ${rupees(invoice.lines.reduce((n, l) => n + l.cgstPaise, 0))}`,
     `SGST ${rupees(invoice.lines.reduce((n, l) => n + l.sgstPaise, 0))}`,
     `TOTAL ${rupees(invoice.totalPaise)}`,
+    // Sent by the phone that billed it: "Paid ₹50.00 by cash".
+    ...((invoice as Invoice & { paid?: string }).paid
+      ? [(invoice as Invoice & { paid?: string }).paid!]
+      : []),
     "Thank you. Keep this bill.",
   ];
   const width = 576,
