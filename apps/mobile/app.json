@@ -11,15 +11,37 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Connect to your shop printer and backup gateway."
+      },
+      "buildNumber": "1"
+    },
+    "android": {
+      "package": "com.counterwell.mobile",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#146D5A"
       }
     },
-    "android": { "package": "com.counterwell.mobile" },
-    "web": { "bundler": "metro", "output": "single", "name": "Counterwell" },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "Counterwell"
+    },
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      ["expo-sqlite", { "useSQLCipher": true }],
-      ["expo-camera", { "cameraPermission": "Scan product barcodes and photograph supplier bills." }],
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan product barcodes and photograph supplier bills."
+        }
+      ],
       [
         "expo-audio",
         {
@@ -27,8 +49,12 @@
         }
       ],
       "expo-font",
-      "expo-localization"
+      "expo-localization",
+      "./plugins/release"
     ],
-    "experiments": { "typedRoutes": false }
+    "experiments": {
+      "typedRoutes": false
+    },
+    "icon": "./assets/icon.png"
   }
 }

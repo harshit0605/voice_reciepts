@@ -292,8 +292,7 @@ export const hindiCopy: Record<string, string> = {
     "पुष्टि से पहले दवाएँ और भुगतान जाँचें। अंतिम बिल में सुधार दर्ज वापसी के माध्यम से होता है।",
   "Completed sales update this view. Customer repayments are counted as collections, not new sales.":
     "पूर्ण बिक्री यहाँ जुड़ती है। उधार की वसूली प्राप्त भुगतान में जुड़ती है, नई बिक्री में नहीं।",
-  "Demo data stays separate from your real shop. Native development builds support encrypted offline billing.":
-    "डेमो आपकी दुकान से अलग है। Android और iOS ऐप में सुरक्षित ऑफलाइन बिलिंग उपलब्ध है।",
+  "Demo data stays separate from your real shop.": "डेमो आपकी दुकान से अलग है।",
   "EOD remains provisional until every device has synced.":
     "हर फ़ोन के सिंक होने तक दिन की रिपोर्ट अस्थायी रहती है।",
   "Hold a basket or hand an order to a cashier to continue it here.":

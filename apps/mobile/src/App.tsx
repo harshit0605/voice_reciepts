@@ -38,6 +38,9 @@ const ownerTabs = [
   ["reviews", "shield-checkmark-outline"],
   ["administration", "settings-outline"],
 ] as const;
+/** The demo shop is for the web preview and development; a shop's phones sign in to the real one. */
+const DEMO =
+  __DEV__ || Platform.OS === "web" || process.env.EXPO_PUBLIC_DEMO === "1";
 export default function App() {
   const session = useSession(),
     t = useText(),
@@ -49,7 +52,7 @@ export default function App() {
   // Handoffs, requests waiting for the owner, and answers to this person's requests.
   const attention = useAttention();
   useEffect(() => {
-    if (params.demo === "owner" || params.demo === "employee")
+    if (DEMO && (params.demo === "owner" || params.demo === "employee"))
       session.startDemo(params.demo);
   }, []);
   useEffect(() => setPage("sell"), [session.identity?.actor.id]);
@@ -519,38 +522,39 @@ function Login() {
                 : t("signIn")}
           </Button>
           <View style={{ height: 30 }} />
-          <View
-            style={{
-              borderTopWidth: 1,
-              borderColor: colors.line,
-              paddingTop: 22,
-              gap: 12,
-            }}
-          >
-            <Button
-              secondary
-              onPress={() => s.startDemo("owner")}
-              icon="play-outline"
+          {DEMO && (
+            <View
+              style={{
+                borderTopWidth: 1,
+                borderColor: colors.line,
+                paddingTop: 22,
+                gap: 12,
+              }}
             >
-              {t("demo")} · Owner
-            </Button>
-            <Pressable
-              onPress={() => s.startDemo("employee")}
-              style={{ padding: 12, alignItems: "center" }}
-            >
-              <Txt muted size={12}>
-                Explore employee workspace
+              <Button
+                secondary
+                onPress={() => s.startDemo("owner")}
+                icon="play-outline"
+              >
+                {t("demo")} · Owner
+              </Button>
+              <Pressable
+                onPress={() => s.startDemo("employee")}
+                style={{ padding: 12, alignItems: "center" }}
+              >
+                <Txt muted size={12}>
+                  Explore employee workspace
+                </Txt>
+              </Pressable>
+              <Txt
+                size={11}
+                muted
+                style={{ textAlign: "center", lineHeight: 18 }}
+              >
+                Demo data stays separate from your real shop.
               </Txt>
-            </Pressable>
-            <Txt
-              size={11}
-              muted
-              style={{ textAlign: "center", lineHeight: 18 }}
-            >
-              Demo data stays separate from your real shop. Native development
-              builds support encrypted offline billing.
-            </Txt>
-          </View>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

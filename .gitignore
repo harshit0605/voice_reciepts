@@ -12,3 +12,4 @@ __pycache__/
 apps/mobile/android/
 apps/mobile/ios/
 *.tsbuildinfo
+deploy/backups/
