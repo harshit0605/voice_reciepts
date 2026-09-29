@@ -169,6 +169,7 @@ export function Field({
   number = false,
   secret = false,
   multiline = false,
+  identifier = false,
 }: {
   label?: string;
   value: string;
@@ -177,6 +178,8 @@ export function Field({
   number?: boolean;
   secret?: boolean;
   multiline?: boolean;
+  /** A username, code or address: the keyboard must not "correct" it ("shopowner" became "shop owner"). */
+  identifier?: boolean;
 }) {
   const { language } = useSession();
   return (
@@ -195,6 +198,8 @@ export function Field({
         keyboardType={number ? "decimal-pad" : "default"}
         secureTextEntry={secret}
         autoCapitalize="none"
+        autoCorrect={!identifier && !secret}
+        spellCheck={!identifier && !secret}
         multiline={multiline}
         style={[
           styles.input,

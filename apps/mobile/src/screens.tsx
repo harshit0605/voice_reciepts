@@ -2369,6 +2369,12 @@ export function AdministrationScreen() {
             label={label}
             value={settings[key]}
             onChange={(v) => S({ ...settings, [key]: v })}
+            identifier={[
+              "gstin",
+              "drugLicence",
+              "upiId",
+              "gatewayUrl",
+            ].includes(key)}
           />
         ))}
         <Pressable
@@ -2396,7 +2402,12 @@ export function AdministrationScreen() {
       </Section>
       <Section title="Invite employee">
         <Field label="Employee name" value={name} onChange={N} />
-        <Field label="Unique username" value={username} onChange={U} />
+        <Field
+          label="Unique username"
+          value={username}
+          onChange={U}
+          identifier
+        />
         <Field
           label="Temporary password · at least 12 characters"
           value={password}

@@ -491,6 +491,7 @@ function Login() {
           </Txt>
           {!s.passwordRequired && (
             <Field
+              identifier
               label={t("username")}
               value={username}
               onChange={setUsername}
