@@ -96,9 +96,12 @@ if (!existsSync(sdk)) {
   console.error(`Android SDK not found at ${sdk}. Set ANDROID_HOME.`);
   process.exit(1);
 }
+// Libraries fetched ahead of time on a slow connection (see docs/DEPLOY.md), used before the internet.
+const mavenLocal = path.join(root, ".data/maven-local");
 const env = {
   ...process.env,
   ANDROID_HOME: sdk,
+  ...(existsSync(mavenLocal) ? { COUNTERWELL_MAVEN_LOCAL: mavenLocal } : {}),
   NODE_ENV: "production",
   EXPO_PUBLIC_API_URL: api.replace(/\/$/, ""),
   COUNTERWELL_KEYSTORE: keystore,

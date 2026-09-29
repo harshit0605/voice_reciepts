@@ -3,6 +3,7 @@ const {
   withAndroidManifest,
   withAppBuildGradle,
   withInfoPlist,
+  withProjectBuildGradle,
 } = require("expo/config-plugins");
 
 /**
@@ -11,6 +12,8 @@ const {
  *   default. The API itself should be HTTPS.
  * - Release APKs are signed with the shop's own upload key when COUNTERWELL_KEYSTORE and its
  *   passwords are set (see scripts/build-android-release.mjs); otherwise the debug key is used.
+ * - COUNTERWELL_MAVEN_LOCAL names a folder of already-downloaded libraries (React Native's release
+ *   libraries are over 200 MB) that Gradle checks before the internet.
  */
 module.exports = function release(config) {
   config = withAndroidManifest(config, (c) => {
@@ -23,6 +26,14 @@ module.exports = function release(config) {
       ...(c.modResults.NSAppTransportSecurity ?? {}),
       NSAllowsLocalNetworking: true,
     };
+    return c;
+  });
+  config = withProjectBuildGradle(config, (c) => {
+    if (!c.modResults.contents.includes("COUNTERWELL_MAVEN_LOCAL"))
+      c.modResults.contents = c.modResults.contents.replace(
+        /allprojects \{\n(\s+)repositories \{\n/,
+        `allprojects {\n$1repositories {\n$1  if (System.getenv("COUNTERWELL_MAVEN_LOCAL")) { maven { url = uri(System.getenv("COUNTERWELL_MAVEN_LOCAL")) } }\n`,
+      );
     return c;
   });
   config = withAppBuildGradle(config, (c) => {
