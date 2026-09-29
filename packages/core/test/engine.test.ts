@@ -1,4 +1,8 @@
-import { confirmEodSynchronisation } from "../src";
+import {
+  confirmEodSynchronisation,
+  phonesHoldingReport,
+  deviceLabel,
+} from "../src";
 import { describe, it, expect } from "vitest";
 import {
   demoState,
@@ -1167,6 +1171,10 @@ describe("offline and evidence", () => {
     s.devices["demo-device"].lastSyncedRevision = s.revision;
     confirmEodSynchronisation(s, "2026-09-23T09:00:02.000Z");
     expect(Object.keys(s.eods)).toHaveLength(1);
+    // The owner is told which phone the report waits for.
+    const waiting = phonesHoldingReport(s, s.eods["2026-09-23:1"]);
+    expect(waiting.map((d) => d.id)).toEqual(["second"]);
+    expect(deviceLabel(s, waiting[0])).toMatch(/ · bills D02$/);
     s.devices.second.lastSyncedAt = "2026-09-23T09:00:03.000Z";
     s.devices.second.lastSyncedRevision = s.revision;
     confirmEodSynchronisation(s, "2026-09-23T09:00:04.000Z");

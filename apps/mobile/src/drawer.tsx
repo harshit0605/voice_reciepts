@@ -16,6 +16,8 @@ import {
   dayReportHtml,
   openDrawerSession,
   lastClosedDrawer,
+  phonesHoldingReport,
+  deviceLabel,
   type DayReport,
   type Denominations,
   type DrawerSession,
@@ -606,6 +608,42 @@ function Line({
 }
 
 /** One day's report: live, or a saved revision with what changed since the one before. */
+/** Why a report is still provisional: which phones have not synced since, and recoveries to check. */
+function WaitingFor({ eod }: { eod: Eod }) {
+  const s = useSession(),
+    state = s.state!,
+    hi = s.language === "hi";
+  const phones = phonesHoldingReport(state, eod);
+  const recoveries = Object.values(state.quarantine).filter(
+    (q) => q.status === "pending",
+  ).length;
+  if (!phones.length && !recoveries) return null;
+  return (
+    <View style={{ marginTop: 8, gap: 4 }}>
+      {phones.map((d) => (
+        <Txt key={d.id} size={12} style={{ color: colors.amber }}>
+          {hi
+            ? `इंतज़ार: ${deviceLabel(state, d)} · आख़िरी बार ${dayLabel(indiaDate(d.lastSeen), hi)} ${clock(d.lastSeen)}${d.pendingCount ? ` · ${d.pendingCount} बिल भेजना बाकी` : ""}`
+            : `Waiting for ${deviceLabel(state, d)} · last seen ${dayLabel(indiaDate(d.lastSeen), hi)} ${clock(d.lastSeen)}${d.pendingCount ? ` · ${d.pendingCount} unsent` : ""}`}
+        </Txt>
+      ))}
+      {recoveries > 0 && (
+        <Txt size={12} style={{ color: colors.amber }}>
+          {hi
+            ? `${recoveries} वापस मिली बिक्री की जाँच बाकी (समीक्षा में)`
+            : `${recoveries} recovered ${recoveries === 1 ? "sale" : "sales"} to check in Reviews`}
+        </Txt>
+      )}
+      {phones.length > 0 && (
+        <Txt size={11} muted>
+          {hi
+            ? "जो फ़ोन अब इस्तेमाल नहीं होता, उसे प्रबंधन में हटाएँ।"
+            : "Revoke a phone that is no longer used in Administration."}
+        </Txt>
+      )}
+    </View>
+  );
+}
 export function DayReportView({
   report,
   eod,
@@ -648,6 +686,7 @@ export function DayReportView({
               : `Since revision ${previous.revision}: sales ${change >= 0 ? "+" : "−"}${rupees(Math.abs(change))}, cash ${cashChange >= 0 ? "+" : "−"}${rupees(Math.abs(cashChange))}`}
           </Txt>
         )}
+        {eod?.provisional && <WaitingFor eod={eod} />}
       </View>
       <View style={styles.panel}>
         <Line

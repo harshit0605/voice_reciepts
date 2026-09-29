@@ -64,6 +64,7 @@ import {
   differenceText,
   openDrawerSession,
   invoiceNumber,
+  deviceLabel,
   type ReturnLine,
 } from "@counterwell/core";
 const money = (value: string) => {
@@ -250,9 +251,14 @@ export function OverviewScreen({
       ? [
           {
             icon: "moon-outline",
-            text: hi
-              ? `आज खोलते समय रात की नकदी से ${differenceText(drawer.openingDifferencePaise)}`
-              : `Today's opening was ${differenceText(drawer.openingDifferencePaise)} against last night's cash`,
+            text:
+              indiaDate(drawer.openedAt) === today
+                ? hi
+                  ? `आज खोलते समय पिछली बार छोड़ी नकदी से ${differenceText(drawer.openingDifferencePaise)}`
+                  : `Today's opening was ${differenceText(drawer.openingDifferencePaise)} against the cash left at the last close`
+                : hi
+                  ? `${dayLabel(indiaDate(drawer.openedAt), hi)} खोलते समय पिछली बार छोड़ी नकदी से ${differenceText(drawer.openingDifferencePaise)}`
+                  : `The opening on ${dayLabel(indiaDate(drawer.openedAt))} was ${differenceText(drawer.openingDifferencePaise)} against the cash left at the last close`,
             page: "money",
             alert: drawer.openingDifferencePaise < 0,
           },
@@ -281,6 +287,22 @@ export function OverviewScreen({
           },
         ]
       : []),
+    // A registered phone that has gone quiet holds every day report as provisional.
+    ...Object.values(state.devices)
+      .filter(
+        (d) =>
+          !d.revoked &&
+          Date.now() - Date.parse(d.lastSeen) > 24 * 3_600_000 &&
+          d.id !== s.identity?.deviceId,
+      )
+      .map((d) => ({
+        icon: "phone-portrait-outline",
+        text: hi
+          ? `${deviceLabel(state, d)} ${dayLabel(indiaDate(d.lastSeen), hi)} से नहीं दिखा; रिपोर्ट उसका इंतज़ार कर रही हैं। इस्तेमाल न हो तो हटाएँ।`
+          : `${deviceLabel(state, d)} not seen since ${dayLabel(indiaDate(d.lastSeen))}; reports wait for it. Revoke it if it is no longer used.`,
+        page: "administration",
+        alert: d.pendingCount > 0,
+      })),
     ...(openReviews
       ? [
           {
@@ -2440,7 +2462,7 @@ export function AdministrationScreen() {
           <View key={d.id} style={styles.listRow}>
             <Row style={{ justifyContent: "space-between" }}>
               <View style={{ flex: 1 }}>
-                <Txt bold>{d.name}</Txt>
+                <Txt bold>{deviceLabel(state, d)}</Txt>
                 <Txt size={11} muted style={{ marginTop: 6 }}>
                   Series {d.series} · {d.pendingCount} pending · {d.counterId}
                 </Txt>
