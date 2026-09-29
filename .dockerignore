@@ -1,0 +1,11 @@
+**/node_modules
+.data
+.env
+.env.*
+.git
+apps/mobile
+apps/gateway
+services
+docs
+deploy/.env
+deploy/backups

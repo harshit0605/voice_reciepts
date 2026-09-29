@@ -1,0 +1,5 @@
+# HTTPS for the shop server. Caddy gets and renews the certificate for DOMAIN by itself.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy api:4100
+}

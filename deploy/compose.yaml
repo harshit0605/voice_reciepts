@@ -1,0 +1,76 @@
+# The shop server: database, API, extraction worker, HTTPS and daily backups.
+#   cp deploy/.env.example deploy/.env   (fill it in)
+#   docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --build
+name: counterwell
+x-server: &server
+  build: { context: .., dockerfile: deploy/Dockerfile }
+  image: counterwell-server
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    DATABASE_URL: postgres://counterwell:${POSTGRES_PASSWORD}@postgres:5432/counterwell
+    BETTER_AUTH_URL: https://${DOMAIN}
+    TRUSTED_ORIGINS: counterwell://
+    UPLOAD_DIR: /data/uploads
+    PORT: "4100"
+  volumes: [uploads:/data/uploads]
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: counterwell
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: counterwell
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U counterwell"]
+      interval: 5s
+      retries: 20
+  migrate:
+    <<: *server
+    restart: "no"
+    command: ["tsx", "packages/db/src/migrate.ts"]
+    depends_on: { postgres: { condition: service_healthy } }
+  api:
+    <<: *server
+    command: ["tsx", "apps/api/src/index.ts"]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+  worker:
+    <<: *server
+    command: ["tsx", "apps/api/src/worker.ts"]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment: { DOMAIN: "${DOMAIN:?set DOMAIN in deploy/.env}" }
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+  # A compressed dump every day, kept for 30 days, in deploy/backups on the server.
+  # Copy that folder somewhere else too (see docs/DEPLOY.md): a backup on the same disk is not enough.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes: ["./backups:/backups"]
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          f=/backups/counterwell-$$(date +%F-%H%M).sql.gz
+          pg_dump -h postgres -U counterwell -d counterwell --no-owner | gzip > "$$f.part" && mv "$$f.part" "$$f"
+          find /backups -name 'counterwell-*.sql.gz' -mtime +30 -delete
+          sleep 86400
+        done
+    depends_on: { postgres: { condition: service_healthy } }
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:
