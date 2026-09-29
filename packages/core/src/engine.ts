@@ -1227,6 +1227,7 @@ export function employeeView(state: State, userId: string): State {
       .filter((m) => m.actorId === userId)
       .map((m) => [m.id, m]),
   );
+  for (const m of values(s.members)) if (m.id !== userId) delete m.username;
   s.audit = {};
   s.reviews = {};
   s.observations = {};

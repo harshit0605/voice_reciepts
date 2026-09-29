@@ -375,6 +375,11 @@ export const hindiCopy: Record<string, string> = {
   safe_transfer: "तिजोरी में स्थानांतरण",
   "No response from the server. This may already be saved, so do not collect payment again. It will be checked when the connection returns.":
     "सर्वर से जवाब नहीं आया। यह पहले ही दर्ज हो चुका हो सकता है, इसलिए दोबारा भुगतान न लें। कनेक्शन लौटने पर इसकी जाँच अपने-आप होगी।",
+  "Username or password is wrong.": "यूज़रनेम या पासवर्ड गलत है।",
+  "Too many tries. Wait 10 seconds and try again.":
+    "बहुत बार कोशिश हुई। 10 सेकंड रुककर फिर कोशिश करें।",
+  "Cannot reach the shop server. Check the internet and try again.":
+    "दुकान के सर्वर से संपर्क नहीं हो रहा। इंटरनेट जाँचकर फिर कोशिश करें।",
   "Connection unavailable. Cash billing can continue in the mobile app while your authorisation is valid.":
     "कनेक्शन नहीं है। अनुमति वैध रहने तक ऐप में नकद बिल बनते रहेंगे।",
   "No connection, so this was not saved. Cash bills still work offline; try this again when the connection returns.":

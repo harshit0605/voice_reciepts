@@ -49,6 +49,8 @@ export type Member = Entity & {
   active: boolean;
   mustChangePassword: boolean;
   canCollect: boolean;
+  /** Sign-in name, so the owner can tell a new or locked-out employee what it is. */
+  username?: string;
 };
 export type OrderLine = {
   batchId: string;

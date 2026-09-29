@@ -584,6 +584,7 @@ app.post("/api/v1/employees", async (c) => {
       active: true,
       mustChangePassword: true,
       canCollect: b.canCollect,
+      username: b.username,
     };
     return { state: next, result: true };
   });
@@ -603,6 +604,45 @@ app.patch("/api/v1/employees/:id", async (c) => {
     Object.assign(member, b);
     return { state: next, result: true };
   });
+  // A disabled employee is signed out everywhere at once, not at their next action.
+  if (!b.active)
+    await (
+      await auth.$context
+    ).internalAdapter.deleteUserSessions(c.req.param("id"));
+  return c.json({ ok: true });
+});
+// The owner sets a new temporary password for an employee who forgot theirs. Every phone the
+// employee was signed in on is signed out, and they must choose their own password next.
+app.post("/api/v1/employees/:id/password", async (c) => {
+  const a = c.get("actor");
+  if (a.role !== "owner") return c.json({ error: "Owner only" }, 403);
+  const { password } = z
+    .object({ password: z.string().min(12).max(128) })
+    .parse(await c.req.json());
+  const id = c.req.param("id");
+  await transact(a.businessId, (s) => {
+    const member = s.members[id];
+    if (!member || member.role !== "employee")
+      throw new DomainError("INVALID", "Employee missing");
+    const next = structuredClone(s);
+    next.members[id].mustChangePassword = true;
+    const auditId = randomUUID();
+    next.audit[auditId] = {
+      id: auditId,
+      actorId: a.id,
+      action: "employee.password_reset",
+      referenceId: id,
+      detail: "Owner set a temporary password",
+      occurredAt: new Date().toISOString(),
+    };
+    return { state: next, result: true };
+  });
+  const ctx = await auth.$context;
+  await ctx.internalAdapter.updatePassword(
+    id,
+    await ctx.password.hash(password),
+  );
+  await ctx.internalAdapter.deleteUserSessions(id);
   return c.json({ ok: true });
 });
 app.post("/api/v1/extractions", async (c) => {

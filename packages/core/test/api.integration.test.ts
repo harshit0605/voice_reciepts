@@ -607,7 +607,54 @@ describe.skipIf(!enabled)("PostgreSQL and authenticated API", () => {
     const state = await req("/api/v1/state", undefined, replacementCookie);
     expect(state.status).toBe(200);
     expect(state.data.members[created.data.id].mustChangePassword).toBe(false);
-  });
+
+    // Forgotten: the owner sets a new temporary password and the old phone is signed out.
+    const reset = "Owner-reset-password-2026";
+    expect(
+      (
+        await req(
+          `/api/v1/employees/${created.data.id}/password`,
+          { password: reset },
+          employeeCookie,
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await req(`/api/v1/employees/${created.data.id}/password`, {
+          password: reset,
+        })
+      ).status,
+    ).toBe(200);
+    expect((await req("/api/v1/me", undefined, replacementCookie)).status).toBe(
+      401,
+    );
+    // Sign-in and password changes share a limit of three per ten seconds.
+    await new Promise((done) => setTimeout(done, 10_500));
+    const afterReset = cookie(
+      (
+        await req(
+          "/api/auth/sign-in/username",
+          { username, password: reset },
+          "",
+          "",
+        )
+      ).response,
+    );
+    expect((await req("/api/v1/state", undefined, afterReset)).data.code).toBe(
+      "PASSWORD_CHANGE_REQUIRED",
+    );
+
+    // Disabling signs them out at once.
+    await req(
+      `/api/v1/employees/${created.data.id}`,
+      { active: false, canCollect: true },
+      ownerCookie,
+      businessId,
+      "PATCH",
+    );
+    expect((await req("/api/v1/me", undefined, afterReset)).status).toBe(401);
+  }, 30_000);
   it("enforces cross-business isolation and masks employee costs", async () => {
     expect(
       (await req("/api/v1/state", undefined, ownerCookie, otherBusinessId))

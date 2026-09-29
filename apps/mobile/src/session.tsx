@@ -28,6 +28,15 @@ const NO_RESPONSE =
   "No response from the server. This may already be saved, so do not collect payment again. It will be checked when the connection returns.";
 const CONNECTION_LOST =
   "Connection unavailable. Cash billing can continue in the mobile app while your authorisation is valid.";
+/** What staff can act on, instead of the auth library's wording. */
+const signInProblem = (e: { status?: number; message?: string }) =>
+  e.status === 401 || e.status === 400
+    ? "Username or password is wrong."
+    : e.status === 429
+      ? "Too many tries. Wait 10 seconds and try again."
+      : !e.status
+        ? "Cannot reach the shop server. Check the internet and try again."
+        : (e.message ?? "Sign in failed");
 const NOT_SENT =
   "No connection, so this was not saved. Cash bills still work offline; try this again when the connection returns.";
 type Identity = {
@@ -209,7 +218,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   async function login(username: string, password: string) {
     setError("");
     const r = await authClient.signIn.username({ username, password });
-    if (r.error) throw new Error(r.error.message ?? "Sign in failed");
+    if (r.error) throw new Error(signInProblem(r.error));
     demoRef.current = false;
     setDemo(false);
     await establish();
@@ -222,7 +231,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       newPassword,
       revokeOtherSessions: true,
     });
-    if (r.error) throw new Error(r.error.message ?? "Password change failed");
+    if (r.error)
+      throw new Error(
+        r.error.status === 429 || r.error.status === 0 || !r.error.status
+          ? signInProblem(r.error)
+          : (r.error.message ?? "Password change failed"),
+      );
     setPasswordRequired(false);
     await establish();
   }
