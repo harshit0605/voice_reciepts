@@ -630,7 +630,7 @@ export function OrdersScreen({
     >
       <Row style={{ marginBottom: 20 }}>
         <Chip active={filter === "open"} onPress={() => setFilter("open")}>
-          Open · {open.length}
+          {hi ? "खुले" : "Open"} · {open.length}
         </Chip>
         <Chip active={filter === "bills"} onPress={() => setFilter("bills")}>
           Completed

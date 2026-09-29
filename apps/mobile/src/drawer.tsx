@@ -333,7 +333,7 @@ export function DrawerPanel() {
             icon="swap-vertical-outline"
             onPress={() => setStep("move")}
           >
-            {hi ? "पैसे डाले / निकाले" : "Cash in / out"}
+            {hi ? "पैसे डालें / निकालें" : "Cash in / out"}
           </Button>
           <Button
             small
