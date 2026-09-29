@@ -63,6 +63,7 @@ import {
   dayReport,
   differenceText,
   openDrawerSession,
+  invoiceNumber,
   type ReturnLine,
 } from "@counterwell/core";
 const money = (value: string) => {
@@ -1831,11 +1832,24 @@ function ExceptionDetails({ reviewId }: { reviewId: string }) {
     <View style={{ gap: 10, marginBottom: 20 }}>
       {q && op?.type === "offline.checkout" && (
         <>
+          {s.devices[op.deviceId] && (
+            <Txt bold>
+              Bill{" "}
+              {invoiceNumber(
+                command.occurredAt,
+                s.devices[op.deviceId].series,
+                op.sequence,
+              )}
+            </Txt>
+          )}
           <Txt bold>
             {s.members[q.actorId]?.name} · {rupees(op.cashPaise)}
           </Txt>
           <Txt muted>
-            {new Date(command.occurredAt).toLocaleString()} · {op.counterId}
+            {new Date(command.occurredAt).toLocaleString("en-IN", {
+              timeZone: "Asia/Kolkata",
+            })}{" "}
+            · {op.counterId}
           </Txt>
           {op.lines.map((l: any, index: number) => {
             const b = s.batches[l.batchId],

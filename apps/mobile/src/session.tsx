@@ -26,6 +26,8 @@ import {
 } from "@counterwell/core";
 const NO_RESPONSE =
   "No response from the server. This may already be saved, so do not collect payment again. It will be checked when the connection returns.";
+const CONNECTION_LOST =
+  "Connection unavailable. Cash billing can continue in the mobile app while your authorisation is valid.";
 const NOT_SENT =
   "No connection, so this was not saved. Cash bills still work offline; try this again when the connection returns.";
 type Identity = {
@@ -129,15 +131,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         signal: AbortSignal.timeout(15000),
       });
       setOnline(true);
+      // The connection is back: an old "unavailable" notice would now be wrong.
+      setError((current) => (current === CONNECTION_LOST ? "" : current));
     } catch (e) {
       setOnline(false);
       if (__DEV__) console.warn(`request ${route} failed`, e);
-      throw Object.assign(
-        new Error(
-          "Connection unavailable. Cash billing can continue in the mobile app while your authorisation is valid.",
-        ),
-        { notSent: neverSent(e) },
-      );
+      throw Object.assign(new Error(CONNECTION_LOST), {
+        notSent: neverSent(e),
+      });
     }
     const data = await r.json();
     if (!r.ok) {
