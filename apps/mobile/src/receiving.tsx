@@ -9,6 +9,7 @@ import { API_URL, cookieHeaders } from "./auth";
 import { appendFile } from "./upload";
 import { Txt, Button, Field, Row, Chip, Badge, colors, styles } from "./ui";
 import { ProductForm } from "./product-form";
+import { BillCamera, type BillFile } from "./bill-camera";
 import {
   catalogueSignature,
   signedPaise,
@@ -49,6 +50,7 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
   const [draft, setDraft] = useState<ReceivingDraft>(fresh),
     [loaded, setLoaded] = useState(false),
     [busy, setBusy] = useState(false),
+    [camera, setCamera] = useState(false),
     [error, setError] = useState(""),
     [jobs, setJobs] = useState<any[]>([]),
     [jobStatus, setJobStatus] = useState(""),
@@ -149,6 +151,12 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
             supplierId: "",
           }));
           setExpanded(imported.lines[0]?.id ?? null);
+          if (!imported.lines.length)
+            setError(
+              s.language === "hi"
+                ? "इस बिल से कोई दवा नहीं पढ़ी जा सकी। बिल को सीधा और अच्छी रोशनी में फिर से खींचें, या हाथ से भरें।"
+                : "No medicines could be read from this bill. Photograph it again flat and in good light, or enter it manually.",
+            );
         } else if (result.status === "failed") {
           setFailedJob(result.id);
           setError(result.error ?? "Extraction failed; continue manually.");
@@ -168,28 +176,31 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
     };
   }, [draft.jobId]);
   async function upload() {
+    const pick = await DocumentPicker.getDocumentAsync({
+      type: ["application/pdf", "image/jpeg", "image/png", "image/webp"],
+      copyToCacheDirectory: true,
+    });
+    if (pick.canceled) return;
+    const file = pick.assets[0];
+    if (file.size && file.size > 10 * 1024 * 1024) {
+      setError(
+        t("Choose a file smaller than 10 MB", "10 MB से छोटी फ़ाइल चुनें"),
+      );
+      return;
+    }
+    await send({
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType ?? "application/pdf",
+    });
+  }
+  async function send(file: BillFile) {
     setBusy(true);
     setError("");
     try {
-      const pick = await DocumentPicker.getDocumentAsync({
-        type: ["application/pdf", "image/jpeg", "image/png", "image/webp"],
-        copyToCacheDirectory: true,
-      });
-      if (pick.canceled) return;
-      const file = pick.assets[0];
-      if (file.size && file.size > 10 * 1024 * 1024)
-        throw new Error(
-          t("Choose a file smaller than 10 MB", "10 MB से छोटी फ़ाइल चुनें"),
-        );
       const form = new FormData();
       form.append("kind", "invoice");
-      await appendFile(
-        form,
-        "file",
-        file.uri,
-        file.name,
-        file.mimeType ?? "application/pdf",
-      );
+      await appendFile(form, "file", file.uri, file.name, file.type);
       const job = await s.request("/extractions", {
         method: "POST",
         body: form,
@@ -359,18 +370,31 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
               "बिल अपलोड करें या हाथ से भरें। अंतिम जाँच के बाद ही स्टॉक बढ़ेगा।",
             )}
           </Txt>
+          {!s.demo && Platform.OS !== "web" && (
+            <Button
+              icon="camera-outline"
+              disabled={busy}
+              onPress={() => setCamera(true)}
+            >
+              {t("Photograph the bill", "बिल की फ़ोटो लें")}
+            </Button>
+          )}
           {!s.demo && (
             <Button
-              icon="cloud-upload-outline"
+              secondary
+              icon="document-outline"
               disabled={busy}
               onPress={() => void upload()}
             >
-              {t(
-                "Upload invoice photo or PDF",
-                "बिल की फ़ोटो या PDF अपलोड करें",
-              )}
+              {t("Choose a photo or PDF", "फ़ोटो या PDF चुनें")}
             </Button>
           )}
+          <BillCamera
+            visible={camera}
+            close={() => setCamera(false)}
+            onReady={(file) => void send(file)}
+            hi={s.language === "hi"}
+          />
           {s.demo && (
             <Button
               secondary

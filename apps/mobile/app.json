@@ -19,7 +19,7 @@
       "expo-router",
       "expo-secure-store",
       ["expo-sqlite", { "useSQLCipher": true }],
-      ["expo-camera", { "cameraPermission": "Scan product barcodes." }],
+      ["expo-camera", { "cameraPermission": "Scan product barcodes and photograph supplier bills." }],
       [
         "expo-audio",
         {
