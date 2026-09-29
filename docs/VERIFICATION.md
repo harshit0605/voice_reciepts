@@ -295,3 +295,63 @@ Strict TypeScript, 134 unit tests and the 29-test PostgreSQL/API suite passed. N
 - Hindi on the drawer, report and Overview screens;
 - closing while another phone holds unsent sales;
 - a real drawer routine at the shop.
+
+## Offline recovery, staff access and release preparation (29 September 2026)
+
+Strict TypeScript, 135 unit tests and the 29-test PostgreSQL/API suite passed. New coverage:
+
+- only a request that never left the phone (refused, unreachable, unknown host) counts as not sent; timeouts and dropped connections stay uncertain;
+- the owner's password reset signs the employee out everywhere and forces a new password; disabling signs them out at once; staff cannot reset passwords;
+- a provisional report names the phones it is waiting for;
+- a drawer closed after midnight still reports the day before.
+
+**Offline billing (owner on the Android emulator; the phone could not reach the server but could reach the shop gateway):**
+
+- The header read "Offline". A Cetirizine strip was billed in cash as `2627-006-000002` and the header showed "1 Pending". The shop gateway held a backup of it within seconds.
+- The app was force-stopped and reopened with no server: still signed in, still "1 Pending".
+- After reconnecting, the bill posted once with its phone-issued number and original time.
+- Four bills from this phone are numbered 000001 to 000004 with no gap.
+
+**Defects found and fixed:**
+
+- Pressing "Hold order" with no connection said "No response from the server … do not collect payment again" and then locked "Confirm payment". The offline cash sale was blocked by one tap. Now the phone says "No connection, so this was not saved. Cash bills still work offline", gives the bill number back and lets the sale be billed in cash. Re-checked on the device: the hold failed cleanly and the sale billed offline as `2627-006-000004`, with no stray held order on the server.
+- "Connection unavailable" stayed on screen after the connection came back. It now clears on the next successful request.
+
+**Lost phone (cashier on the iPhone 17e simulator, owner on Android):**
+
+1. With the server stopped, the cashier billed Betadine for ₹145 in cash as `2627-004-000003`. The gateway held the backup.
+2. The app was deleted from the iPhone, losing the unsent sale, and the server was restarted.
+3. The owner pressed "Recover from shop backups". Reviews showed "Gateway backup requires recovery: Test Cashier 2 · ₹145.00", the time, the counter and the batch.
+4. The owner entered a reason and chose "Recover sale". The server now has `2627-004-000003` for ₹145 at the original time under Test Cashier 2.
+5. After reinstalling and signing in again, the cashier sees the bill among completed bills. A reinstalled phone registers with a new bill series, so its numbers cannot collide with the old ones.
+
+Found: the recovery review did not show the bill number the owner would match against the paper bill. It now does, with India time.
+
+**Staff access (Android owner):** Administration → Test Cashier → "Set temporary password". The server marked the account for a password change, and signing in with the temporary password returned "password change required".
+
+**Waiting phones:** the 28 September report listed four phones it was waiting for, each with its owner, iPhone or Android, and when it was last seen. The Overview flagged "Shop owner · Preview device not seen since Wed, 23 Sept; reports wait for it."
+
+**Bill photos (Android emulator camera):**
+
+- "Photograph the bill" asked for camera access, then showed the camera inside the receiving sheet.
+- Two photos went up as one PDF and a single photo as a JPEG. The worker processed both.
+- The emulator camera returns blank frames, so nothing could be read. That exposed a silent return to the start, which now explains why and suggests retaking the photo.
+- Real bill reading was checked earlier on sample invoice images, not with a phone camera.
+
+**Hindi:** the drawer panel, the close sheet and the returns form read correctly. Two labels were fixed (the cash in/out button's verb form, and "Open" on the Orders filter).
+
+**Release preparation:**
+
+- The production JavaScript bundle compiles (5 MB Hermes).
+- `create-shop` was tested against the local database with a throwaway shop. It stored the details (state code taken from the GSTIN), refused to create the same shop twice and forced the owner's first password change; the owner then saw an empty shop.
+- The Docker deployment kit has not been run yet: the Mac's connection was down to about 25 KB/s, too slow to pull the images.
+
+**The release APK on the Android emulator** (built with `scripts/build-android-release.mjs --api http://localhost:4100`):
+
+- It is signed with the new upload key, version 0.1.0 (code 1), built for ARM only, and 86 MB. It needed React Native's release libraries fetched ahead of time into `.data/maven-local`.
+- It started without the development server or developer menu. The sign-in screen had no demo buttons, and the launcher showed the new icon.
+- The owner signed in and billed `2627-008-000001`; the reinstalled phone got a fresh series. The receipt printed through the shop gateway over plain HTTP to the printer stand-in.
+- With the server cut off, it billed `2627-008-000002`, which posted about a minute after reconnecting.
+- **Defect found:** Android's keyboard autocorrected the username "shopowner" to "shop owner". Usernames, GSTIN, licence, UPI ID and gateway address fields no longer autocorrect; this needs the next release build.
+
+**Test-tool quirk, not an app defect:** closing a sheet with the emulator's Escape key left the Sell screen ignoring taps until another tab was opened. Android's Back key, which phones use, does not.

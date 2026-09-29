@@ -9,7 +9,11 @@ Work proceeds one user workflow at a time. Each pass includes UI, server invaria
 4. **Payments, credit, approvals and returns — done; checked on iOS and Android (28 September).** New customers at checkout, credit and discount requests with on-screen answers, returns in strips or tablets priced from what was paid, credit cancelled before cash is handed back, one-tap refunds by the requester after owner approval, customer accounts sorted by what they owe. Not yet on a device: UPI refunds, Hindi on these screens.
 5. **Stock catalogue/counts and price maintenance.** Catalogue import from Excel/CSV/paste and the opening stock count (batch, printed expiry, strips or tablets, MRP per pack) are done and checked on iOS (28 September); Android re-check pending. Next: batch corrections, price maintenance and expiry workflows.
 6. **Drawer, EOD and owner dashboard — done; checked on iOS and Android (28 September).** Blind counts by notes for staff who take money (opening, mid-day, closing), cash in/out with reasons, overnight handover checked against the next opening, a day report made when the last drawer closes (also for the day before when closed after midnight) with sales, money, drawer, staff, cancellations and credit, shared as an A4 PDF. The owner's Overview shows the drawer, today or yesterday, what needs attention and each person's day. Not yet on a device: Hindi on these screens, a closing while other phones hold unsent sales.
-7. **Offline/device recovery and receipts.** Physical phones, real printer, gateway loss, app restart and backup recovery.
+7. **Offline/device recovery and receipts — software done; checked on the Android emulator and iOS simulator (29 September).**
+   - Checked: cash billing with no server; app restart while offline; sync on reconnect with phone-issued numbers; a lost phone's sales recovered from the shop gateway by the owner.
+   - An action that never left the phone no longer blocks offline cash billing.
+   - Also done: owner-side password reset and sign-out on disable; in-app photos of supplier bills (one photo per page, several pages as one PDF); a signed release APK; a server deployment kit.
+   - Waiting for the shop: real phones, the real printer, power loss, the Docker kit on a real server, and running the gateway as a Windows service.
 8. **Silent camera reviews.** Recorder/model setup, labelled replay, false exceptions, clips and outage handling.
 
 No pass is declared field-validated on the basis of mocked provider tests or native compilation alone.

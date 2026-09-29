@@ -96,7 +96,26 @@ $c exec postgres dropdb -U counterwell restore_check
 Uploaded bill photos and voice clips are in the `uploads` Docker volume. Bills stay readable in
 the app only while their file is kept.
 
-## 7. Updating the server
+## 7. The shop PC gateway
+
+The gateway runs on the shop's Windows PC (set up with [SHOP-PC-SETUP.md](SHOP-PC-SETUP.md)). It
+prints receipts and keeps a second copy of every sale a phone makes while offline. Give it a `.env`
+in the repository folder on that PC:
+
+```
+BETTER_AUTH_URL=https://<DOMAIN>          # the server
+BUSINESS_ID=<same as the server>
+GATEWAY_TOKEN=<same as the server>
+OFFLINE_SIGNING_SECRET=<same as the server>
+PRINTER_HOST=<printer IP on the shop Wi-Fi>
+```
+
+Start it with `npm run dev:gateway` and check `http://localhost:4101/health`. Give the PC a fixed
+address on the shop Wi-Fi (a reservation in the router), then in the app set More →
+Administration → Local gateway URL to `http://<that address>:4101`. The owner's Overview shows
+whether the gateway is reporting.
+
+## 8. Updating the server
 
 ```bash
 git pull && docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --build
