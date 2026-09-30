@@ -2,7 +2,7 @@
 # HTTPS domain, so there is no Caddy here; otherwise this matches deploy/compose.yaml. Coolify runs
 # compose from the repository root, so build paths are relative to the root, not to deploy/.
 # Environment (set in Coolify): DOMAIN, BUSINESS_ID, POSTGRES_PASSWORD, BETTER_AUTH_SECRET,
-# OFFLINE_SIGNING_SECRET, GATEWAY_TOKEN, OPENROUTER_API_KEY, OPENAI_API_KEY and the limits.
+# OFFLINE_SIGNING_KEY, GATEWAY_TOKEN, OPENROUTER_API_KEY, OPENAI_API_KEY and the limits.
 services:
   postgres:
     image: postgres:17-alpine
@@ -42,7 +42,7 @@ services:
       BETTER_AUTH_URL: https://${DOMAIN}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       TRUSTED_ORIGINS: counterwell://
-      OFFLINE_SIGNING_SECRET: ${OFFLINE_SIGNING_SECRET}
+      OFFLINE_SIGNING_KEY: ${OFFLINE_SIGNING_KEY}
       GATEWAY_TOKEN: ${GATEWAY_TOKEN}
       BUSINESS_ID: ${BUSINESS_ID}
       UPLOAD_DIR: /data/uploads
@@ -76,7 +76,7 @@ services:
       NODE_ENV: production
       BETTER_AUTH_URL: https://${DOMAIN}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      OFFLINE_SIGNING_SECRET: ${OFFLINE_SIGNING_SECRET}
+      OFFLINE_SIGNING_KEY: ${OFFLINE_SIGNING_KEY}
       UPLOAD_DIR: /data/uploads
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}

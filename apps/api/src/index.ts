@@ -1,11 +1,11 @@
 import { serve } from "@hono/node-server";
 import { app } from "./app";
-for (const name of [
-  "DATABASE_URL",
-  "BETTER_AUTH_SECRET",
-  "OFFLINE_SIGNING_SECRET",
-])
+for (const name of ["DATABASE_URL", "BETTER_AUTH_SECRET"])
   if (!process.env[name]) throw new Error(`${name} is required`);
+if (!process.env.OFFLINE_SIGNING_KEY && !process.env.OFFLINE_SIGNING_SECRET)
+  throw new Error(
+    "OFFLINE_SIGNING_KEY is required (OFFLINE_SIGNING_SECRET for local development)",
+  );
 serve(
   {
     fetch: app.fetch,

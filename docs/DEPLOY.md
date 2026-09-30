@@ -29,7 +29,9 @@ cp deploy/.env.example deploy/.env
 ```
 
 Fill in `deploy/.env`. Make each secret with `openssl rand -base64 32`. Keep the file only on the
-server (it is git-ignored). `OFFLINE_SIGNING_SECRET` and `GATEWAY_TOKEN` also go on the shop PC.
+server (it is git-ignored). Make `OFFLINE_SIGNING_KEY` with `node scripts/make-offline-keys.mjs`; its public
+half, `OFFLINE_VERIFY_KEY`, and `GATEWAY_TOKEN` go on the shop PC. The shop PC never gets the private key,
+so nobody with access to it can create offline permissions and post sales in someone else's name.
 
 ## 3. Start it
 
@@ -106,7 +108,7 @@ in the repository folder on that PC:
 BETTER_AUTH_URL=https://<DOMAIN>          # the server
 BUSINESS_ID=<same as the server>
 GATEWAY_TOKEN=<same as the server>
-OFFLINE_SIGNING_SECRET=<same as the server>
+OFFLINE_VERIFY_KEY=<public key from make-offline-keys>
 PRINTER_HOST=<printer IP on the shop Wi-Fi>
 ```
 

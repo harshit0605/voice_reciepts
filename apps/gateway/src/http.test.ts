@@ -4,6 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createServer } from "node:net";
+import { generateKeyPairSync } from "node:crypto";
+import { SignJWT } from "jose";
 import { signLease } from "../../api/src/lease";
 import { demoState, execute, type Invoice } from "@counterwell/core";
 let child: ChildProcess,
@@ -12,7 +14,14 @@ let child: ChildProcess,
   lease: string,
   employeeLease: string,
   invoice: Invoice;
-const secret = "gateway-test-signing-secret-32-characters";
+// The server's key pair; the gateway gets only the public half.
+const pair = generateKeyPairSync("ed25519");
+const keys = {
+  privateKey: Buffer.from(
+    pair.privateKey.export({ type: "pkcs8", format: "pem" }) as string,
+  ).toString("base64"),
+  publicKey: pair.publicKey.export({ type: "spki", format: "pem" }) as string,
+};
 const token = "gateway-test-operator-token-32-characters";
 async function request(
   route: string,
@@ -48,7 +57,10 @@ describe("Gateway authentication and HTTP queue", () => {
           GATEWAY_DATA_DIR: dir,
           CAMERA_CLIP_DIR: path.join(dir, "clips"),
           BUSINESS_ID: "pilot-pharmacy",
-          OFFLINE_SIGNING_SECRET: secret,
+          // Like the shop PC: it can check offline permissions but not create them.
+          OFFLINE_SIGNING_SECRET: "",
+          OFFLINE_SIGNING_KEY: "",
+          OFFLINE_VERIFY_KEY: keys.publicKey,
           GATEWAY_TOKEN: token,
           PRINTER_HOST: "",
           BETTER_AUTH_URL: "http://127.0.0.1:1",
@@ -56,7 +68,7 @@ describe("Gateway authentication and HTTP queue", () => {
         stdio: "ignore",
       },
     );
-    process.env.OFFLINE_SIGNING_SECRET = secret;
+    process.env.OFFLINE_SIGNING_KEY = keys.privateKey;
     const now = new Date().toISOString();
     const grant = {
       businessId: "pilot-pharmacy",
@@ -160,6 +172,34 @@ describe("Gateway authentication and HTTP queue", () => {
         })
       ).status,
     ).toBe(400);
+  });
+  it("refuses an offline permission not signed by the server's private key", async () => {
+    const now = new Date().toISOString();
+    const forged = await new SignJWT({
+      businessId: "pilot-pharmacy",
+      userId: "demo-employee",
+      deviceId: "demo-device",
+      series: "D01",
+      counterId: "counter-1",
+      role: "owner",
+      issuedAt: now,
+      expiresAt: new Date(Date.now() + 86400000).toISOString(),
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuer("counterwell-api")
+      .setAudience("counterwell-offline")
+      .sign(new TextEncoder().encode("anyone-in-the-shop-could-guess-this"));
+    const other = generateKeyPairSync("ed25519");
+    const wrongKey = await new SignJWT({ businessId: "pilot-pharmacy" })
+      .setProtectedHeader({ alg: "EdDSA" })
+      .setIssuer("counterwell-api")
+      .setAudience("counterwell-offline")
+      .sign(other.privateKey);
+    for (const bad of [forged, wrongKey])
+      expect((await request("/print", { lease: bad, invoice })).status).toBe(
+        400,
+      );
+    expect((await request("/print", { lease, invoice })).status).toBe(202);
   });
   it("idempotently queues print jobs and refuses premature reprints", async () => {
     const a = await request("/print", { lease, invoice });
