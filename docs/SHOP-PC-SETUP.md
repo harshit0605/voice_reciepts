@@ -71,8 +71,12 @@ ssh cwsupport@counterwell-shop        # or its 100.x address
 type C:\ProgramData\CounterwellRemote\shop-pc-report.txt
 ```
 
-Next steps for printing:
+Then install the gateway from the Mac (it copies the settings over SSH; see [DEPLOY.md](DEPLOY.md#7-the-shop-pc-gateway)):
 
-- **Network Epson ePOS printer** (the report shows an IP port that answered ePOS): install the gateway on the PC with `PRINTER_HOST=<printer IP>`. Point the shop's gateway URL (Administration) at the PC.
-- **USB or other printers:** the gateway cannot print to them yet; it needs a Windows spooler path first.
-- **API address:** while the API runs on the owner's laptop, the gateway reaches it at the laptop's Tailscale address.
+```bash
+node scripts/windows/install-gateway.mjs --host cwsupport@counterwell-shop --printer <printer IP>
+```
+
+- **Network Epson ePOS printer** (the report shows an IP port that answered ePOS): pass its address as `--printer`, then set the Local gateway URL the installer prints in the app (More → Administration).
+- **USB or other printers:** the gateway cannot print to them yet; it needs a Windows spooler path first. The report shows which kind the shop has.
+- **Server:** the gateway talks to the production server (`https://counterwell.72.62.241.119.sslip.io`) and gets only the public key for offline permissions.
