@@ -13,6 +13,7 @@ import { useSession } from "./session";
 import { colors, Txt, Icon, Button, Field, Row, Badge, useText } from "./ui";
 import { SellScreen, ReceiptSheet } from "./selling";
 import { useAttention } from "./payments";
+import { ShopSetup } from "./setup";
 import {
   OrdersScreen,
   StockScreen,
@@ -342,6 +343,9 @@ export default function App() {
                 </Txt>
               </Pressable>
             ))}
+          {(page === "sell" || page === "overview") && (
+            <ShopSetup navigate={setPage} wide={wide} />
+          )}
           <View style={{ flex: 1 }}>{content}</View>
           {!wide && (
             <View
