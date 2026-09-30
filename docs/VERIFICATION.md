@@ -405,7 +405,7 @@ Strict TypeScript and all 172 tests (141 unit, 31 PostgreSQL/API) passed.
 **iPhone:**
 
 - **Signing:** `scripts/make-ios-signing.mjs` created an Apple Distribution certificate, whose key is kept in a project-only keychain, and an App Store profile through the API, with no device registered. Automatic signing had failed with "Your team has no devices".
-- **Build and upload:** `build-ios-release.mjs` archived, signed ("Apple Distribution: Harshit Karnatak (8X78GGWB32)", profile "Counterwell App Store 2026-09-30") and uploaded build `202609300924`. Apple processed it as `VALID` with no export-compliance hold, because the app declares no non-exempt encryption and SQLCipher uses Apple's CommonCrypto. The build expires on 29 December 2026.
+- **Build and upload:** `build-ios-release.mjs` archived, signed ("Apple Distribution: Harshit Karnatak (8X78GGWB32)", profile "Counterwell App Store 2026-09-30") and uploaded build `202609300924`. Apple processed it as `VALID` with no export-compliance hold, because the app declares no non-exempt encryption and SQLCipher uses Apple's CommonCrypto. The build expires on 29 December 2026. Build `202609301011`, with both fixes above, followed and was also processed as `VALID`.
 - The archived app is entitled for production pushes (`aps-environment` production), and the server sends to Apple's production host.
 - Afterwards the keychain search list was back to the login keychain alone.
 - **Testers:** the internal TestFlight group "Shop" receives every build. `scripts/add-tester.mjs` invites a person and then adds them to it. No tester has been added yet.
