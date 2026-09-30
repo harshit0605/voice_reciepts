@@ -40,6 +40,8 @@ describe("Voice-assisted entry", () => {
     expect(readableQuantity("a few")).toBe("a few");
     expect(readableUnit("गोलियां")).toBe("tablet");
     expect(readableUnit("strips")).toBe("strip");
+    expect(readableUnit("patte")).toBe("strip");
+    expect(readableUnit("shishi")).toBe("bottle");
     expect(readableUnit("sachet")).toBe("sachet");
     expect(spokenUnit("गोलियाँ", state.products.dolo)).toBe("tablet");
     expect(spokenUnit("STRIPS", state.products.dolo)).toBe("strip");

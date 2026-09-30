@@ -34,7 +34,7 @@ export async function enqueueExtraction(
   } = {},
 ) {
   const hash = createHash("sha256")
-    .update(kind === "voice" ? "voice-v4" : EXTRACTION_VERSION)
+    .update(kind === "voice" ? "voice-v5" : EXTRACTION_VERSION)
     .update(kind === "voice" ? (options.saleId ?? "legacy") : "")
     .update(mimeType)
     .update(bytes)
@@ -103,7 +103,7 @@ export async function enqueueExtraction(
           mimeType,
           name,
           hash,
-          version: kind === "voice" ? "voice-v4" : EXTRACTION_VERSION,
+          version: kind === "voice" ? "voice-v5" : EXTRACTION_VERSION,
           model,
           reservedSeconds,
           ...(options.saleId ? { saleId: options.saleId } : {}),
