@@ -15,7 +15,9 @@ import {
   receiptHtml,
   dayReport,
   sameFingerprint,
+  noticesFor,
   type Actor,
+  type Notice,
   type State,
 } from "@counterwell/core";
 import {
@@ -34,6 +36,7 @@ import {
   voiceAudioLimit,
 } from "./extraction-jobs";
 import { signLease, verifyLease } from "./lease";
+import { deliver } from "./push";
 const safeEqual = (a: string, b: string) =>
   a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 export const app = new Hono<{
@@ -203,16 +206,21 @@ app.post("/api/v1/commands", async (c) => {
       );
   }
   let result: unknown;
+  let notices: Notice[] = [],
+    after: State | undefined;
   try {
     result = await transact(actor.businessId, (s) => {
       const current = s.members[actor.id];
       if (!current?.active)
         throw new DomainError("FORBIDDEN", "Account disabled");
-      return execute(s, cmd, {
+      const out = execute(s, cmd, {
         ...actor,
         role: current.role,
         canCollect: current.canCollect,
       });
+      notices = noticesFor(s, out.state, actor.id);
+      after = out.state;
+      return out;
     });
   } catch (e) {
     if (e instanceof DomainError && e.code === "PAYMENT_REFERENCE_REUSED")
@@ -241,7 +249,65 @@ app.post("/api/v1/commands", async (c) => {
       });
     throw e;
   }
+  if (notices.length && after) void notify(actor.businessId, after, notices);
   return c.json({ result });
+});
+/** Sends notices after the change is saved, and forgets phones Apple or Google no longer know. */
+async function notify(businessId: string, state: State, notices: Notice[]) {
+  try {
+    const gone = await deliver(state, notices);
+    if (gone.length)
+      await transact(businessId, (s) => {
+        const next = structuredClone(s);
+        for (const d of Object.values(next.devices))
+          if (d.pushToken && gone.includes(d.pushToken)) {
+            delete d.pushToken;
+            delete d.pushPlatform;
+          }
+        return { state: next, result: true };
+      });
+  } catch (e) {
+    console.warn(
+      JSON.stringify({ event: "notify_failed", error: (e as Error).message }),
+    );
+  }
+}
+// A phone says where its notifications go. One token belongs to one phone: a reinstalled app
+// gets its token back under a new device, so the old device stops receiving.
+app.post("/api/v1/devices/push", async (c) => {
+  const actor = c.get("actor");
+  const b = z
+    .object({
+      deviceId: z.string().uuid(),
+      token: z.string().min(8).max(4096),
+      platform: z.enum(["ios", "android"]),
+      language: z.enum(["en", "hi"]),
+    })
+    .parse(await c.req.json());
+  await transact(actor.businessId, (s) => {
+    const device = s.devices[b.deviceId];
+    if (!device || device.userId !== actor.id || device.revoked)
+      throw new DomainError("FORBIDDEN", "Not your device");
+    if (
+      device.pushToken === b.token &&
+      device.pushPlatform === b.platform &&
+      device.pushLanguage === b.language
+    )
+      return { state: s, result: true };
+    const next = structuredClone(s);
+    for (const other of Object.values(next.devices))
+      if (other.id !== b.deviceId && other.pushToken === b.token) {
+        delete other.pushToken;
+        delete other.pushPlatform;
+      }
+    Object.assign(next.devices[b.deviceId], {
+      pushToken: b.token,
+      pushPlatform: b.platform,
+      pushLanguage: b.language,
+    });
+    return { state: next, result: true };
+  });
+  return c.json({ ok: true });
 });
 app.post("/api/v1/devices/register", async (c) => {
   const data = z

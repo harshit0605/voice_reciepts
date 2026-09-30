@@ -22,4 +22,9 @@ await sharp(
 await sharp(svg(layers(0.62, 0, -12)))
   .png()
   .toFile("apps/mobile/assets/adaptive-icon.png");
+// Android draws notification icons as a white shape on transparency.
+await sharp(svg(layers(0.8, 0, -12)))
+  .resize(96, 96)
+  .png()
+  .toFile("apps/mobile/assets/notification-icon.png");
 console.log("icons written");

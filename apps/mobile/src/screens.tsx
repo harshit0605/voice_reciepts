@@ -65,6 +65,7 @@ import {
   openDrawerSession,
   invoiceNumber,
   deviceLabel,
+  approvalSummary,
   type ReturnLine,
 } from "@counterwell/core";
 const money = (value: string) => {
@@ -1694,30 +1695,7 @@ export function MoneyScreen() {
 }
 /** "Credit ₹120 · Meera Sharma", "Return on bill 2627-004-000001 · ₹35". */
 function approvalTitle(state: State, a: Approval, hi: boolean) {
-  const p = a.payload;
-  const customer =
-    state.customers[
-      String(
-        p.customerId ??
-          state.orders[String(p.orderId)]?.customerId ??
-          state.invoices[String(p.invoiceId)]?.customerId ??
-          "",
-      )
-    ]?.name;
-  if (a.kind === "refund") {
-    const invoice = state.invoices[String(p.invoiceId)];
-    let amount = "";
-    try {
-      amount = invoice
-        ? ` · ${rupees(refundQuote(state, invoice, p.lines as ReturnLine[]).payablePaise)}`
-        : "";
-    } catch {}
-    return `${hi ? "वापसी · बिल" : "Return on bill"} ${invoice?.number ?? ""}${amount}`;
-  }
-  if (a.kind === "stock") return hi ? "स्टॉक बदलाव" : "Stock change";
-  const what =
-    a.kind === "credit" ? (hi ? "उधार" : "Credit") : hi ? "छूट" : "Discount";
-  return `${what} ${rupees(Number(p.amountPaise))}${customer ? ` · ${customer}` : ""}`;
+  return approvalSummary(state, a, hi);
 }
 function ApprovalDetails({ approval }: { approval: Approval }) {
   const { state } = useSession();

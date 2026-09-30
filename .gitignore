@@ -13,3 +13,5 @@ apps/mobile/android/
 apps/mobile/ios/
 *.tsbuildinfo
 deploy/backups/
+apps/mobile/google-services.json
+apps/mobile/GoogleService-Info.plist

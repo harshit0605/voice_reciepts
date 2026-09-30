@@ -655,6 +655,42 @@ describe.skipIf(!enabled)("PostgreSQL and authenticated API", () => {
     );
     expect((await req("/api/v1/me", undefined, afterReset)).status).toBe(401);
   }, 30_000);
+  it("records where each phone's notifications go, one phone per token", async () => {
+    const push = (device: string, token: string, cookie = ownerCookie) =>
+      req(
+        "/api/v1/devices/push",
+        { deviceId: device, token, platform: "ios", language: "hi" },
+        cookie,
+      );
+    expect((await push(deviceId, "apns-token-1")).status).toBe(200);
+    // Someone else's phone cannot be pointed at.
+    expect((await push(deviceId, "apns-token-2", employeeCookie)).status).toBe(
+      403,
+    );
+    // A reinstalled app registers as a new device and takes its token with it.
+    const reinstalled = randomUUID();
+    expect(
+      (
+        await req("/api/v1/devices/register", {
+          id: reinstalled,
+          name: "Reinstalled",
+          counterId: "counter-1",
+        })
+      ).status,
+    ).toBe(200);
+    expect((await push(reinstalled, "apns-token-1")).status).toBe(200);
+    const state = (await req("/api/v1/state")).data;
+    expect(state.devices[reinstalled]).toMatchObject({
+      pushToken: "apns-token-1",
+      pushPlatform: "ios",
+      pushLanguage: "hi",
+    });
+    expect(state.devices[deviceId].pushToken).toBeUndefined();
+    // Staff never see another phone's token.
+    const staffView = (await req("/api/v1/state", undefined, employeeCookie))
+      .data;
+    expect(staffView.devices[reinstalled]?.pushToken).toBeUndefined();
+  });
   it("lets the owner fix names but not switch off their own access", async () => {
     const patch = (id: string, body: unknown, cookie = ownerCookie) =>
       req(`/api/v1/employees/${id}`, body, cookie, businessId, "PATCH");

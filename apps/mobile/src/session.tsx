@@ -9,6 +9,7 @@ import { AppState, Platform } from "react-native";
 import * as Crypto from "expo-crypto";
 import { authClient, API_URL, cookieHeaders } from "./auth";
 import * as storage from "./storage";
+import { devicePushToken } from "./push";
 import {
   demoState,
   execute,
@@ -98,6 +99,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   stateRef.current = state;
   const identityRef = useRef(identity);
   identityRef.current = identity;
+  const languageRef = useRef(language);
+  languageRef.current = language;
   const syncing = useRef(false);
   const operating = useRef(false);
   // Refreshes can overlap (the quick poll, a command, a full sync); never let an older answer win.
@@ -121,6 +124,32 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   function setLanguage(value: "en" | "hi") {
     changeLanguage(value);
     void storage.set("language", value);
+    // Notifications arrive in the language this phone uses.
+    void registerPush(value);
+  }
+  /** Tells the server where this phone's notifications go, when that changed. */
+  async function registerPush(chosen = languageRef.current) {
+    const i = identityRef.current;
+    if (!i?.deviceId || demoRef.current) return;
+    const push = await devicePushToken();
+    if (!push) return;
+    const key = `push:${scope()}`;
+    const fingerprint = `${i.deviceId}:${push.token}:${chosen}`;
+    if ((await storage.get<string>(key)) === fingerprint) return;
+    try {
+      await request("/devices/push", {
+        method: "POST",
+        body: JSON.stringify({
+          deviceId: i.deviceId,
+          token: push.token,
+          platform: push.platform,
+          language: chosen,
+        }),
+      });
+      await storage.set(key, fingerprint);
+    } catch {
+      /* tried again at the next sign-in or language change */
+    }
   }
   async function request(route: string, init: RequestInit = {}) {
     const a = identityRef.current?.actor;
@@ -214,6 +243,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     await refresh();
     // Resolve unanswered actions and queued sales now rather than at the next 30-second tick.
     void sync();
+    void registerPush();
   }
   async function login(username: string, password: string) {
     setError("");

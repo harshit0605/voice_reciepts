@@ -14,6 +14,7 @@ import { colors, Txt, Icon, Button, Field, Row, Badge, useText } from "./ui";
 import { SellScreen, ReceiptSheet } from "./selling";
 import { useAttention } from "./payments";
 import { ShopSetup } from "./setup";
+import { onNotificationTap } from "./push";
 import {
   OrdersScreen,
   StockScreen,
@@ -57,6 +58,8 @@ export default function App() {
       session.startDemo(params.demo);
   }, []);
   useEffect(() => setPage("sell"), [session.identity?.actor.id]);
+  // A tapped notification opens its screen (a request, an answer, the drawer or the day report).
+  useEffect(() => onNotificationTap(setPage), []);
   if (session.loading)
     return (
       <View

@@ -42,6 +42,10 @@ export type Device = Entity & {
   lastSyncedRevision?: number;
   pendingCount: number;
   counterId: string;
+  /** Where to send this phone's notifications: an APNs device token (iOS) or FCM token (Android). */
+  pushToken?: string;
+  pushPlatform?: "ios" | "android";
+  pushLanguage?: "en" | "hi";
 };
 export type Member = Entity & {
   name: string;

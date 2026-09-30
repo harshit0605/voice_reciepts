@@ -1228,6 +1228,12 @@ export function employeeView(state: State, userId: string): State {
       .map((m) => [m.id, m]),
   );
   for (const m of values(s.members)) if (m.id !== userId) delete m.username;
+  for (const d of values(s.devices))
+    if (d.userId !== userId) {
+      delete d.pushToken;
+      delete d.pushPlatform;
+      delete d.pushLanguage;
+    }
   s.audit = {};
   s.reviews = {};
   s.observations = {};

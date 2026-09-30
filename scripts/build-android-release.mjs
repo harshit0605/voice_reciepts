@@ -109,6 +109,14 @@ const env = {
   COUNTERWELL_KEY_ALIAS: credentials.alias,
   COUNTERWELL_KEY_PASSWORD: credentials.password,
 };
+// Firebase's Android settings (notifications) live in the git-ignored .data/firebase.
+const googleServices = path.join(root, ".data/firebase/google-services.json");
+if (existsSync(googleServices))
+  copyFileSync(googleServices, path.join(mobile, "google-services.json"));
+else
+  console.warn(
+    "No .data/firebase/google-services.json: this build will have no notifications on Android.",
+  );
 console.log(`Building for ${env.EXPO_PUBLIC_API_URL} …`);
 execFileSync(
   "npx",

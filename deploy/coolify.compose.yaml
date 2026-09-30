@@ -2,7 +2,8 @@
 # HTTPS domain, so there is no Caddy here; otherwise this matches deploy/compose.yaml. Coolify runs
 # compose from the repository root, so build paths are relative to the root, not to deploy/.
 # Environment (set in Coolify): DOMAIN, BUSINESS_ID, POSTGRES_PASSWORD, BETTER_AUTH_SECRET,
-# OFFLINE_SIGNING_KEY, GATEWAY_TOKEN, OPENROUTER_API_KEY, OPENAI_API_KEY and the limits.
+# OFFLINE_SIGNING_KEY, GATEWAY_TOKEN, OPENROUTER_API_KEY, OPENAI_API_KEY, the limits, and the
+# notification keys APNS_KEY, APNS_KEY_ID, APNS_TEAM_ID and FCM_SERVICE_ACCOUNT.
 services:
   postgres:
     image: postgres:17-alpine
@@ -51,6 +52,12 @@ services:
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       INVOICE_MONTHLY_LIMIT: ${INVOICE_MONTHLY_LIMIT:-100}
       VOICE_MONTHLY_LIMIT: ${VOICE_MONTHLY_LIMIT:-3000}
+      # Phone notifications: Apple (APNs) for iPhones, Firebase (FCM) for Android.
+      APNS_KEY: ${APNS_KEY:-}
+      APNS_KEY_ID: ${APNS_KEY_ID:-}
+      APNS_TEAM_ID: ${APNS_TEAM_ID:-}
+      APNS_TOPIC: ${APNS_TOPIC:-com.counterwell.mobile}
+      FCM_SERVICE_ACCOUNT: ${FCM_SERVICE_ACCOUNT:-}
     volumes:
       - counterwell-uploads:/data/uploads
     healthcheck:
