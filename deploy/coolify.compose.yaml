@@ -1,0 +1,113 @@
+# Counterwell on Coolify (Docker Compose build pack). Coolify's proxy gives the api service its
+# HTTPS domain, so there is no Caddy here; otherwise this matches deploy/compose.yaml.
+# Environment (set in Coolify): DOMAIN, BUSINESS_ID, POSTGRES_PASSWORD, BETTER_AUTH_SECRET,
+# OFFLINE_SIGNING_SECRET, GATEWAY_TOKEN, OPENROUTER_API_KEY, OPENAI_API_KEY and the limits.
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: counterwell
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: counterwell
+    volumes:
+      - counterwell-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U counterwell"]
+      interval: 5s
+      retries: 20
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: "no"
+    exclude_from_hc: true
+    command: ["tsx", "packages/db/src/migrate.ts"]
+    environment:
+      DATABASE_URL: postgres://counterwell:${POSTGRES_PASSWORD}@postgres:5432/counterwell
+    depends_on:
+      postgres:
+        condition: service_healthy
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    command: ["tsx", "apps/api/src/index.ts"]
+    environment:
+      DATABASE_URL: postgres://counterwell:${POSTGRES_PASSWORD}@postgres:5432/counterwell
+      PORT: "4100"
+      NODE_ENV: production
+      BETTER_AUTH_URL: https://${DOMAIN}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      TRUSTED_ORIGINS: counterwell://
+      OFFLINE_SIGNING_SECRET: ${OFFLINE_SIGNING_SECRET}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN}
+      BUSINESS_ID: ${BUSINESS_ID}
+      UPLOAD_DIR: /data/uploads
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      INVOICE_MONTHLY_LIMIT: ${INVOICE_MONTHLY_LIMIT:-100}
+      VOICE_MONTHLY_LIMIT: ${VOICE_MONTHLY_LIMIT:-3000}
+    volumes:
+      - counterwell-uploads:/data/uploads
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:4100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    command: ["tsx", "apps/api/src/worker.ts"]
+    environment:
+      DATABASE_URL: postgres://counterwell:${POSTGRES_PASSWORD}@postgres:5432/counterwell
+      NODE_ENV: production
+      BETTER_AUTH_URL: https://${DOMAIN}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      OFFLINE_SIGNING_SECRET: ${OFFLINE_SIGNING_SECRET}
+      UPLOAD_DIR: /data/uploads
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      INVOICE_MONTHLY_LIMIT: ${INVOICE_MONTHLY_LIMIT:-100}
+      VOICE_MONTHLY_LIMIT: ${VOICE_MONTHLY_LIMIT:-3000}
+    volumes:
+      - counterwell-uploads:/data/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+  # A compressed dump every day, kept 30 days, in /data/counterwell/backups on the server.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - /data/counterwell/backups:/backups
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          f=/backups/counterwell-$$(date +%F-%H%M).sql.gz
+          pg_dump -h postgres -U counterwell -d counterwell --no-owner | gzip > "$$f.part" && mv "$$f.part" "$$f"
+          find /backups -name 'counterwell-*.sql.gz' -mtime +30 -delete
+          sleep 86400
+        done
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  counterwell-pgdata:
+  counterwell-uploads:
