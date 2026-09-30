@@ -18,6 +18,12 @@ Snapshot: 28 September 2026, after the checkout pass, catalogue import and openi
   - Verified on the emulator and simulator: offline cash billing, restart and sync; lost-phone recovery from the gateway; owner password reset; bill photos; a signed release APK (`scripts/build-android-release.mjs`).
   - Also added: a server kit (`deploy/`, [DEPLOY.md](DEPLOY.md)) and `scripts/create-shop.ts`.
   - **Blocked on the user:** where the server runs (recommended: a small Mumbai/Bangalore server with HTTPS), then an APK built for that address. Physical printing and camera tests wait for the shop visit.
+- **Production is live** (30 September) on the user's Hostinger VPS through Coolify: `https://counterwell.72.62.241.119.sslip.io`. See [DEPLOY.md](DEPLOY.md) for the Coolify application, secrets and backups.
+  - The real shop is `shop-1` with owner `owner`; the temporary password is in `.data/production/owner.json`.
+  - The production APK is in `.data/releases/`, and the iPhone release build compiles.
+  - Offline permissions are signed with an Ed25519 key; the shop PC gets only the public key.
+  - The gateway installs over SSH with `scripts/windows/install-gateway.mjs`.
+  - Waiting on the user: an App Store Connect API key for TestFlight; Firebase and APNs keys if push notifications are wanted; the shop's printer model.
 - **Phone uploads fixed:** invoice photos/PDFs and voice recordings had never reached the server from a phone (Expo `fetch` refused the file part). Sign-out and ended sessions were also fixed; see VERIFICATION.md. Voice now works end to end with OpenAI `gpt-4o-transcribe` when there is no Sarvam key (checked on the iPhone simulator; real voices not yet).
 - **Invoice reading works live** through OpenRouter when there is no Google key, after two fixes (shape-only schema; clearer MRP and expiry rules). Checked on six sample-invoice images; a real distributor bill is still needed. Android checks need the host load well below 50.
 - No production deployment, store cutover, paid-provider evaluation, TestFlight upload or Play internal release has happened.

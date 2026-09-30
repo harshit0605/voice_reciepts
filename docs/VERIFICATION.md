@@ -355,3 +355,34 @@ Found: the recovery review did not show the bill number the owner would match ag
 - **Defect found:** Android's keyboard autocorrected the username "shopowner" to "shop owner". Usernames, GSTIN, licence, UPI ID and gateway address fields no longer autocorrect; this needs the next release build.
 
 **Test-tool quirk, not an app defect:** closing a sheet with the emulator's Escape key left the Sell screen ignoring taps until another tab was opened. Android's Back key, which phones use, does not.
+
+## Production on Coolify (30 September 2026)
+
+Strict TypeScript, 136 unit tests, the 30-test PostgreSQL/API suite, the gateway HTTP suite and the shop PC setup checks (portable PowerShell 7.6) passed.
+
+**Server:** Coolify on the Hostinger VPS, project `counterwell`, Docker Compose application from `main` (`deploy/coolify.compose.yaml`), `https://counterwell.72.62.241.119.sslip.io` with a valid Let's Encrypt certificate.
+
+- **Running:** Postgres, the API, the worker and the daily backup; the one-off migration exits cleanly.
+- **Found and fixed during the deploy:**
+  - Coolify runs compose from the repository root, so build contexts are `.` there.
+  - Coolify had passed every variable into the image build as build arguments, secrets included. All are now runtime-only; the image history was checked clean and the earlier images are gone.
+  - The API was unreachable for about 30 seconds on each deploy until its first health check passed. It is now checked every 2 seconds while starting.
+- **Backups:** a dump is written at start and daily to `/data/counterwell/backups`. Restoring the newest into a scratch database gave the expected shops, members and bills.
+
+**Real shop:** `shop-1`, owner username `owner`. The temporary password is in `.data/production/owner.json`. Signing in over HTTPS returned "password change required".
+
+**Offline permissions are now asymmetric:** the server signs with an Ed25519 private key and the shop gateway verifies with the public key only. A test runs the gateway with just the public key and confirms that a permission signed with a guessed shared secret, or with another key, is refused. Production uses a new key pair; the old shared secret was removed.
+
+**Release APK against production** (throwaway `check-shop` with the demo catalogue, deleted afterwards with `scripts/check-shop.ts delete`):
+
+- **Online sale:** signed in over HTTPS and billed `2627-002-000001`.
+- **Airplane mode:** "Hold order" said "No connection, so this was not saved". The cash bill `2627-002-000002` then saved offline, the app restarted still showing "1 Pending", and it posted on reconnecting.
+- **AI worker in production:** "teen goli cetirizine, ek shishi betadine" came back as 3 goli and 1 shishi.
+  - The first try exposed a defect: "ek betadine ki bottle" gave the unit "ek" (one). The instruction and the unit words (patte, shishi …) were fixed and re-checked.
+
+**iPhone release build:** `scripts/build-ios-release.mjs --check` archives the Release configuration for iPhones ("ARCHIVE SUCCEEDED"). The bundle holds the production address and no `localhost`. Signing and TestFlight upload wait for an App Store Connect API key.
+
+**Shop PC gateway installer:**
+
+- Checked on this Mac: `install-gateway.ps1` parses with no errors and no PowerShell 7-only syntax. A gateway-only `npm install` in a fresh clone brings 15 packages, and the gateway starts from it with only the public key.
+- Not yet run on the real PC.
