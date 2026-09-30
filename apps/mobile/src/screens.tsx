@@ -2448,6 +2448,23 @@ export function AdministrationScreen() {
       </Section>
       <Section title="Employees">
         {Object.values(state.members)
+          .filter((m) => m.role === "owner")
+          .map((m) => (
+            <Pressable
+              key={m.id}
+              onPress={() => setEmployee(m.id)}
+              style={[styles.listRow, { gap: 4 }]}
+            >
+              <Row style={{ justifyContent: "space-between" }}>
+                <Txt bold>{m.name}</Txt>
+                <Icon name="chevron-forward" size={16} />
+              </Row>
+              <Txt muted size={11}>
+                Owner{m.username ? ` · ${m.username}` : ""}
+              </Txt>
+            </Pressable>
+          ))}
+        {Object.values(state.members)
           .filter((m) => m.role === "employee")
           .map((m) => (
             <Pressable
@@ -2515,13 +2532,19 @@ function EmployeeSheet({
   const s = useSession(),
     run = useRun();
   const [password, setPassword] = useState(""),
-    [done, setDone] = useState("");
+    [done, setDone] = useState(""),
+    [name, setName] = useState("");
+  const m = id ? s.state!.members[id] : undefined;
   useEffect(() => {
     setPassword("");
     setDone("");
+    setName(m?.name ?? "");
   }, [id]);
-  const m = id ? s.state!.members[id] : undefined;
-  const update = (change: { active: boolean; canCollect: boolean }) =>
+  const update = (change: {
+    active?: boolean;
+    canCollect?: boolean;
+    name?: string;
+  }) =>
     run(async () => {
       if (s.demo) throw new Error("Manage real accounts after signing in");
       await s.request(`/employees/${m!.id}`, {
@@ -2535,60 +2558,81 @@ function EmployeeSheet({
       {m && (
         <View style={{ gap: 16 }}>
           {!!m.username && <Txt muted>Username: {m.username}</Txt>}
-          <Pressable
-            onPress={() =>
-              void update({ active: m.active, canCollect: !m.canCollect })
-            }
-          >
-            <Row>
-              <Icon name={m.canCollect ? "checkbox" : "square-outline"} />
-              <Txt style={{ flex: 1 }}>
-                May collect payments and handle the drawer
-              </Txt>
-            </Row>
-          </Pressable>
-          <Section title="Forgot password">
-            <Txt muted size={12}>
-              Set a temporary password. They are signed out on every phone and
-              choose their own password when they next sign in.
-            </Txt>
+          <View>
             <Field
-              label="Temporary password · at least 12 characters"
-              value={password}
-              onChange={setPassword}
-              secret
+              label="Name shown on bills and reports"
+              value={name}
+              onChange={setName}
             />
             <Button
               secondary
-              disabled={password.length < 12}
-              onPress={() =>
-                void run(async () => {
-                  if (s.demo)
-                    throw new Error("Manage real accounts after signing in");
-                  await s.request(`/employees/${m.id}/password`, {
-                    method: "POST",
-                    body: JSON.stringify({ password }),
-                  });
-                  await s.refresh();
-                  setPassword("");
-                  setDone(
-                    `Tell ${m.name} the temporary password. They will choose their own when they sign in.`,
-                  );
-                })
-              }
+              small
+              disabled={!name.trim() || name.trim() === m.name}
+              onPress={() => void update({ name: name.trim() })}
             >
-              Set temporary password
+              Save name
             </Button>
-            {!!done && <Txt style={{ color: colors.accent }}>{done}</Txt>}
-          </Section>
-          <Button
-            secondary
-            onPress={() =>
-              void update({ active: !m.active, canCollect: m.canCollect })
-            }
-          >
-            {m.active ? "Disable and sign out" : "Enable"}
-          </Button>
+          </View>
+          {m.role === "employee" && (
+            <>
+              <Pressable
+                onPress={() =>
+                  void update({ active: m.active, canCollect: !m.canCollect })
+                }
+              >
+                <Row>
+                  <Icon name={m.canCollect ? "checkbox" : "square-outline"} />
+                  <Txt style={{ flex: 1 }}>
+                    May collect payments and handle the drawer
+                  </Txt>
+                </Row>
+              </Pressable>
+              <Section title="Forgot password">
+                <Txt muted size={12}>
+                  Set a temporary password. They are signed out on every phone
+                  and choose their own password when they next sign in.
+                </Txt>
+                <Field
+                  label="Temporary password · at least 12 characters"
+                  value={password}
+                  onChange={setPassword}
+                  secret
+                />
+                <Button
+                  secondary
+                  disabled={password.length < 12}
+                  onPress={() =>
+                    void run(async () => {
+                      if (s.demo)
+                        throw new Error(
+                          "Manage real accounts after signing in",
+                        );
+                      await s.request(`/employees/${m.id}/password`, {
+                        method: "POST",
+                        body: JSON.stringify({ password }),
+                      });
+                      await s.refresh();
+                      setPassword("");
+                      setDone(
+                        `Tell ${m.name} the temporary password. They will choose their own when they sign in.`,
+                      );
+                    })
+                  }
+                >
+                  Set temporary password
+                </Button>
+                {!!done && <Txt style={{ color: colors.accent }}>{done}</Txt>}
+              </Section>
+              <Button
+                secondary
+                onPress={() =>
+                  void update({ active: !m.active, canCollect: m.canCollect })
+                }
+              >
+                {m.active ? "Disable and sign out" : "Enable"}
+              </Button>
+            </>
+          )}
         </View>
       )}
     </Sheet>

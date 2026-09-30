@@ -594,18 +594,29 @@ app.patch("/api/v1/employees/:id", async (c) => {
   const a = c.get("actor");
   if (a.role !== "owner") return c.json({ error: "Owner only" }, 403);
   const b = z
-    .object({ active: z.boolean(), canCollect: z.boolean() })
+    .object({
+      active: z.boolean().optional(),
+      canCollect: z.boolean().optional(),
+      name: z.string().trim().min(1).max(60).optional(),
+    })
     .parse(await c.req.json());
   await transact(a.businessId, (s) => {
     const next = structuredClone(s);
     const member = next.members[c.req.param("id")];
-    if (!member || member.role === "owner")
-      throw new DomainError("INVALID", "Employee missing");
-    Object.assign(member, b);
+    if (!member) throw new DomainError("INVALID", "Employee missing");
+    // The owner's own record can only be renamed; their access is not switched off here.
+    if (
+      member.role === "owner" &&
+      (b.active !== undefined || b.canCollect !== undefined)
+    )
+      throw new DomainError("INVALID", "The owner's access cannot be changed");
+    if (b.active !== undefined) member.active = b.active;
+    if (b.canCollect !== undefined) member.canCollect = b.canCollect;
+    if (b.name) member.name = b.name;
     return { state: next, result: true };
   });
   // A disabled employee is signed out everywhere at once, not at their next action.
-  if (!b.active)
+  if (b.active === false)
     await (
       await auth.$context
     ).internalAdapter.deleteUserSessions(c.req.param("id"));

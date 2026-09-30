@@ -655,6 +655,23 @@ describe.skipIf(!enabled)("PostgreSQL and authenticated API", () => {
     );
     expect((await req("/api/v1/me", undefined, afterReset)).status).toBe(401);
   }, 30_000);
+  it("lets the owner fix names but not switch off their own access", async () => {
+    const patch = (id: string, body: unknown, cookie = ownerCookie) =>
+      req(`/api/v1/employees/${id}`, body, cookie, businessId, "PATCH");
+    expect((await patch(employeeId, { name: "Aarav Singh" })).status).toBe(200);
+    expect((await patch(ownerId, { name: "Ramesh Gupta" })).status).toBe(200);
+    expect((await patch(ownerId, { active: false })).status).toBe(400);
+    expect(
+      (await patch(employeeId, { name: "Someone else" }, employeeCookie))
+        .status,
+    ).toBe(403);
+    const state = (await req("/api/v1/state")).data;
+    expect(state.members[employeeId].name).toBe("Aarav Singh");
+    expect(state.members[ownerId]).toMatchObject({
+      name: "Ramesh Gupta",
+      active: true,
+    });
+  });
   it("enforces cross-business isolation and masks employee costs", async () => {
     expect(
       (await req("/api/v1/state", undefined, ownerCookie, otherBusinessId))
