@@ -12,7 +12,7 @@ RUN npm install --omit=dev --no-audit --no-fund --ignore-scripts \
 COPY packages/core packages/core
 COPY packages/db packages/db
 COPY apps/api apps/api
-COPY scripts/seed.ts scripts/create-shop.ts scripts/
+COPY scripts/seed.ts scripts/create-shop.ts scripts/check-shop.ts scripts/
 RUN mkdir -p /data/uploads && chown -R node:node /data
 USER node
 CMD ["tsx", "apps/api/src/index.ts"]
