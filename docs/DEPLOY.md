@@ -41,6 +41,18 @@ server (it is git-ignored). Make `OFFLINE_SIGNING_KEY` with `node scripts/make-o
 half, `OFFLINE_VERIFY_KEY`, and `GATEWAY_TOKEN` go on the shop PC. The shop PC never gets the private key,
 so nobody with access to it can create offline permissions and post sales in someone else's name.
 
+Phone notifications (approvals, handovers, drawer shortfalls, the day report) are optional and need
+two keys, each stored base64-encoded (`base64 -i <file>`):
+
+- `APNS_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID`: an Apple push key (developer.apple.com → Keys, with
+  Apple Push Notifications service enabled), its key ID and the team ID. One key serves both
+  TestFlight and App Store builds.
+- `FCM_SERVICE_ACCOUNT`: the Firebase project's service account key (Firebase console → Project
+  settings → Service accounts → Generate new private key). The Android build also needs that
+  project's `google-services.json` in `.data/firebase/`.
+
+Without them the app works the same, just without notifications.
+
 ## 3. Start it
 
 ```bash
@@ -79,8 +91,37 @@ or phones refuse to install it over the existing app. To update, raise `version`
 `android.versionCode` in `apps/mobile/app.json` and build again.
 
 Send the APK to each phone (WhatsApp, Google Drive or a cable). Android asks once to allow
-installing apps from that source. iPhones need an Apple Developer account and TestFlight; that is
-not set up yet.
+installing apps from that source.
+
+iPhones get the app through TestFlight. Once, on a Mac with Xcode, with the App Store Connect API
+key (Admin role) saved as `.data/apple/AuthKey_<key id>.p8` and described in `.data/apple/asc.json`:
+
+```bash
+node scripts/make-ios-signing.mjs
+```
+
+It creates an Apple Distribution certificate, whose private key stays in the project's own keychain
+`.data/apple/signing.keychain-db`, and an App Store provisioning profile. No iPhone needs to be
+registered. The profile lasts a year; run the script again to renew it. **Back up `.data/apple`.**
+Then, for each release:
+
+```bash
+node scripts/build-ios-release.mjs --api https://$DOMAIN
+```
+
+It builds, signs and uploads to App Store Connect. Apple takes 5 to 30 minutes to process a build,
+then it goes to the internal TestFlight group "Shop", which receives every build. To give someone
+the app:
+
+```bash
+node scripts/add-tester.mjs name@example.com First Last
+```
+
+The first run invites them to the App Store Connect team (Marketing role, this app only), because
+TestFlight's internal testers must be team members. Once they accept Apple's email, run it again to
+add them to the group. TestFlight then emails them; they install Apple's TestFlight app and install
+Counterwell from there, and later builds arrive as updates. A TestFlight build stops opening after
+90 days, so upload a new one before then.
 
 ## 6. Backups
 

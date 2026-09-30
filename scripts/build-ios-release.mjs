@@ -3,10 +3,11 @@
 //   node scripts/build-ios-release.mjs --api https://shop.example.in [--check]
 //
 // Uploading needs an App Store Connect API key (Users and Access → Integrations → App Store
-// Connect API, role App Manager) described in .data/apple/asc.json (git-ignored):
-//   { "keyId": "ABC123DEFG", "issuerId": "…-…", "teamId": "XYZ987", "keyPath": "~/.appstoreconnect/private_keys/AuthKey_ABC123DEFG.p8" }
-// and the app created once in App Store Connect with bundle ID com.counterwell.mobile.
-// With --check, or without that file, it only proves the release build compiles for iPhones.
+// Connect API, role Admin) described in .data/apple/asc.json (git-ignored):
+//   { "keyId": "ABC123DEFG", "issuerId": "…-…", "teamId": "XYZ987", "keyPath": "~/.appstoreconnect/private_keys/AuthKey_ABC123DEFG.p8", "bundleId": "com.counterwell.mobile", "appAppleId": "…" }
+// the app created once in App Store Connect with that bundle ID, and the signing made once by
+// scripts/make-ios-signing.mjs. With --check, or without that file, it only proves the release
+// build compiles for iPhones.
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -78,6 +79,86 @@ execFileSync("/usr/libexec/PlistBuddy", [
   path.join(mobile, "ios/Counterwell/Info.plist"),
 ]);
 
+// Distribution signing set up by scripts/make-ios-signing.mjs: a distribution certificate in a
+// project-only keychain and an App Store profile. Only the app target's Release build is switched
+// to it; the pods are not signed and development builds are untouched.
+const signing = asc?.signing;
+if (asc && !signing) {
+  console.error("Run node scripts/make-ios-signing.mjs first.");
+  process.exit(1);
+}
+let searchList = [];
+if (signing) {
+  const project = path.join(
+    mobile,
+    "ios/Counterwell.xcodeproj/project.pbxproj",
+  );
+  const settings = {
+    CODE_SIGN_STYLE: "Manual",
+    CODE_SIGN_IDENTITY: '"Apple Distribution"',
+    DEVELOPMENT_TEAM: asc.teamId,
+    PROVISIONING_PROFILE_SPECIFIER: `"${signing.profileName}"`,
+  };
+  let patched = 0;
+  const text = readFileSync(project, "utf8").replace(
+    /(\/\* Release \*\/ = \{\s*isa = XCBuildConfiguration;[\s\S]*?buildSettings = \{)([\s\S]*?)(\n\t\t\t\};\s*name = Release;)/g,
+    (block, head, body, tail) => {
+      if (!body.includes(`PRODUCT_BUNDLE_IDENTIFIER = ${asc.bundleId};`))
+        return block;
+      patched++;
+      let lines = body
+        .split("\n")
+        .filter(
+          (line) =>
+            !Object.keys(settings).some(
+              (key) =>
+                line.trim().startsWith(`${key} =`) ||
+                line.trim().startsWith(`"${key}[`),
+            ),
+        );
+      lines.push(
+        ...Object.entries(settings).map(
+          ([key, value]) => `\t\t\t\t${key} = ${value};`,
+        ),
+      );
+      return head + lines.join("\n") + tail;
+    },
+  );
+  if (patched !== 1)
+    throw new Error(`Expected one app Release configuration, found ${patched}`);
+  writeFileSync(project, text);
+  // Codesign finds the intermediate only in keychains on the search list: add ours for the build.
+  searchList = execFileSync("security", ["list-keychains", "-d", "user"], {
+    encoding: "utf8",
+  })
+    .split("\n")
+    .map((line) => line.trim().replace(/^"|"$/g, ""))
+    .filter((k) => k && k !== signing.keychain);
+  execFileSync("security", [
+    "list-keychains",
+    "-d",
+    "user",
+    "-s",
+    ...searchList,
+    signing.keychain,
+  ]);
+  execFileSync("security", [
+    "unlock-keychain",
+    "-p",
+    signing.keychainPassword,
+    signing.keychain,
+  ]);
+  process.on("exit", () =>
+    execFileSync("security", [
+      "list-keychains",
+      "-d",
+      "user",
+      "-s",
+      ...searchList,
+    ]),
+  );
+}
+
 mkdirSync(out, { recursive: true });
 const archive = path.join(out, `Counterwell-${build}.xcarchive`);
 run("xcodebuild", [
@@ -92,8 +173,8 @@ run("xcodebuild", [
   "-archivePath",
   archive,
   ...auth,
-  ...(asc
-    ? [`DEVELOPMENT_TEAM=${asc.teamId}`, "CODE_SIGN_STYLE=Automatic"]
+  ...(signing
+    ? [`OTHER_CODE_SIGN_FLAGS=--keychain ${signing.keychain}`]
     : ["CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO"]),
   "archive",
 ]);
@@ -113,7 +194,11 @@ writeFileSync(
   <key>method</key><string>app-store-connect</string>
   <key>destination</key><string>upload</string>
   <key>teamID</key><string>${asc.teamId}</string>
-  <key>signingStyle</key><string>automatic</string>
+  <key>signingStyle</key><string>manual</string>
+  <key>signingCertificate</key><string>Apple Distribution</string>
+  <key>provisioningProfiles</key><dict>
+    <key>${asc.bundleId}</key><string>${signing.profileName}</string>
+  </dict>
   <key>manageAppVersionAndBuildNumber</key><false/>
 </dict></plist>
 `,
