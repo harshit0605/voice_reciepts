@@ -40,6 +40,8 @@ if (action === "create") {
   await createBusiness(state);
   console.log(JSON.stringify({ businessId: id, username, password }));
 } else if (action === "delete") {
+  // Staff added while checking are accounts of this shop too.
+  const members = Object.keys((await readState(id))?.members ?? {});
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -50,13 +52,13 @@ if (action === "create") {
     await client.query("DELETE FROM jobs WHERE business_id=$1", [id]);
     await client.query("DELETE FROM gateway_health WHERE business_id=$1", [id]);
     await client.query("DELETE FROM businesses WHERE id=$1", [id]);
-    // Sessions and the password record go with the account.
+    // Sessions and the password record go with each account.
     const removed = await client.query(
-      "DELETE FROM auth_user WHERE username=$1 AND email=$2",
-      [username, `${id}@accounts.invalid`],
+      "DELETE FROM auth_user WHERE (username=$1 AND email=$2) OR (id = ANY($3::text[]) AND email LIKE '%@accounts.invalid')",
+      [username, `${id}@accounts.invalid`, members],
     );
     await client.query("COMMIT");
-    console.log(`Deleted ${id} and ${removed.rowCount} owner account.`);
+    console.log(`Deleted ${id} and ${removed.rowCount} member accounts.`);
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;

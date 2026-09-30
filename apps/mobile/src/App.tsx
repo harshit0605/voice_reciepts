@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   ScrollView,
@@ -57,9 +57,25 @@ export default function App() {
     if (DEMO && (params.demo === "owner" || params.demo === "employee"))
       session.startDemo(params.demo);
   }, []);
-  useEffect(() => setPage("sell"), [session.identity?.actor.id]);
   // A tapped notification opens its screen (a request, an answer, the drawer or the day report).
-  useEffect(() => onNotificationTap(setPage), []);
+  // When the tap started the app, it is read before the session is restored, so it is kept until
+  // then instead of being replaced by the start page.
+  const actorId = session.identity?.actor.id;
+  const signedIn = useRef(actorId),
+    tapped = useRef<string | undefined>(undefined);
+  signedIn.current = actorId;
+  useEffect(() => {
+    setPage(tapped.current ?? "sell");
+    tapped.current = undefined;
+  }, [actorId]);
+  useEffect(
+    () =>
+      onNotificationTap((target) => {
+        if (signedIn.current) setPage(target);
+        else tapped.current = target;
+      }),
+    [],
+  );
   if (session.loading)
     return (
       <View

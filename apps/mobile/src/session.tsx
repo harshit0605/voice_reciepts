@@ -9,7 +9,7 @@ import { AppState, Platform } from "react-native";
 import * as Crypto from "expo-crypto";
 import { authClient, API_URL, cookieHeaders } from "./auth";
 import * as storage from "./storage";
-import { devicePushToken } from "./push";
+import { devicePushToken, freshPushToken } from "./push";
 import {
   demoState,
   execute,
@@ -103,6 +103,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   languageRef.current = language;
   const syncing = useRef(false);
   const operating = useRef(false);
+  const registeringPush = useRef(false);
   // Refreshes can overlap (the quick poll, a command, a full sync); never let an older answer win.
   const applied = useRef({ scope: "", revision: -1 });
   const scope = () =>
@@ -127,16 +128,31 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     // Notifications arrive in the language this phone uses.
     void registerPush(value);
   }
-  /** Tells the server where this phone's notifications go, when that changed. */
+  /**
+   * Tells the server where this phone's notifications go, when that differs from what the server
+   * has. The server forgets a token Apple or Google stop accepting; when it has forgotten the one
+   * this phone sent, the phone asks for a new token instead of sending the dead one again.
+   */
   async function registerPush(chosen = languageRef.current) {
     const i = identityRef.current;
-    if (!i?.deviceId || demoRef.current) return;
-    const push = await devicePushToken();
-    if (!push) return;
-    const key = `push:${scope()}`;
-    const fingerprint = `${i.deviceId}:${push.token}:${chosen}`;
-    if ((await storage.get<string>(key)) === fingerprint) return;
+    if (!i?.deviceId || demoRef.current || registeringPush.current) return;
+    registeringPush.current = true;
     try {
+      let push = await devicePushToken();
+      if (!push) return;
+      const onServer = stateRef.current?.devices[i.deviceId];
+      if (
+        onServer?.pushToken === push.token &&
+        onServer.pushLanguage === chosen
+      )
+        return;
+      const key = `push:${scope()}`;
+      if (
+        onServer &&
+        !onServer.pushToken &&
+        (await storage.get<string>(key)) === `${i.deviceId}:${push.token}`
+      )
+        push = (await freshPushToken()) ?? push;
       await request("/devices/push", {
         method: "POST",
         body: JSON.stringify({
@@ -146,9 +162,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           language: chosen,
         }),
       });
-      await storage.set(key, fingerprint);
+      await storage.set(key, `${i.deviceId}:${push.token}`);
     } catch {
-      /* tried again at the next sign-in or language change */
+      /* tried again at the next sign-in, language change or refresh */
+    } finally {
+      registeringPush.current = false;
     }
   }
   async function request(route: string, init: RequestInit = {}) {
@@ -397,6 +415,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setState(projected);
     setPending(entries);
     await storage.set(`state:${currentScope}`, projected);
+    // Notifications stopped reaching this phone: the server dropped the token it sent.
+    const own = fresh.devices[identityRef.current?.deviceId ?? ""];
+    if (
+      own &&
+      !own.pushToken &&
+      (await storage.get<string>(`push:${currentScope}`))
+    )
+      void registerPush();
   }
   async function command(operation: Operation) {
     if (operating.current) throw new Error("Another action is being saved");

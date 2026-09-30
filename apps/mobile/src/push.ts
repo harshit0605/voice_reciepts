@@ -54,6 +54,18 @@ export async function devicePushToken(): Promise<{
   }
 }
 
+/**
+ * A new token for this phone, for when Google stopped accepting the old one: a token handed out
+ * just after the app was reinstalled can be dead from the start. iPhones keep theirs.
+ */
+export async function freshPushToken() {
+  const n = await notifications();
+  if (!n) return null;
+  if (Platform.OS === "android")
+    await n.unregisterForNotificationsAsync().catch(() => {});
+  return devicePushToken();
+}
+
 /** Calls `open(page)` when someone taps a notification, including the one that started the app. */
 export function onNotificationTap(open: (page: string) => void) {
   let stop = () => {};

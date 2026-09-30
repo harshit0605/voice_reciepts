@@ -256,7 +256,11 @@ app.post("/api/v1/commands", async (c) => {
 async function notify(businessId: string, state: State, notices: Notice[]) {
   try {
     const gone = await deliver(state, notices);
-    if (gone.length)
+    if (gone.length) {
+      // Phones then ask for a new token at their next refresh.
+      console.info(
+        JSON.stringify({ event: "push_tokens_dropped", count: gone.length }),
+      );
       await transact(businessId, (s) => {
         const next = structuredClone(s);
         for (const d of Object.values(next.devices))
@@ -266,6 +270,7 @@ async function notify(businessId: string, state: State, notices: Notice[]) {
           }
         return { state: next, result: true };
       });
+    }
   } catch (e) {
     console.warn(
       JSON.stringify({ event: "notify_failed", error: (e as Error).message }),

@@ -380,9 +380,33 @@ Strict TypeScript, 136 unit tests, the 30-test PostgreSQL/API suite, the gateway
 - **AI worker in production:** "teen goli cetirizine, ek shishi betadine" came back as 3 goli and 1 shishi.
   - The first try exposed a defect: "ek betadine ki bottle" gave the unit "ek" (one). The instruction and the unit words (patte, shishi …) were fixed and re-checked.
 
-**iPhone release build:** `scripts/build-ios-release.mjs --check` archives the Release configuration for iPhones ("ARCHIVE SUCCEEDED"). The bundle holds the production address and no `localhost`. Signing and TestFlight upload wait for an App Store Connect API key.
+**iPhone release build:** `scripts/build-ios-release.mjs --check` archives the Release configuration for iPhones ("ARCHIVE SUCCEEDED"). The bundle holds the production address and no `localhost`. Signing and the TestFlight upload were done later the same day (see "Notifications and TestFlight").
 
 **Shop PC gateway installer:**
 
 - Checked on this Mac: `install-gateway.ps1` parses with no errors and no PowerShell 7-only syntax. A gateway-only `npm install` in a fresh clone brings 15 packages, and the gateway starts from it with only the public key.
 - Not yet run on the real PC.
+
+## Notifications and TestFlight (30 September 2026)
+
+Strict TypeScript and all 172 tests (141 unit, 31 PostgreSQL/API) passed.
+
+**Keys:** Apple's push key and the Firebase service account are Coolify variables. A made-up token got `BadDeviceToken` from Apple and `INVALID_ARGUMENT` from Google, so both accepted the keys.
+
+**Android, release APK against production** (the throwaway `check-shop`, with a check cashier added through the API):
+
+- After sign-in the app asked for notification permission. The phone's Firebase token reached the server within seconds.
+- The cashier closed the drawer ₹500 short. The owner's phone showed "Drawer closed ₹500.00 short" and "Day report ready · 2026-09-30", with the app's icon. Tapping the first opened Money.
+- It also works with the app closed (Home, then the process killed): Android started the app to receive the notification. A force-stopped app gets nothing until it is opened again; that is Android's rule for force-stop, not the app's.
+- **Found and fixed:** tapping a notification when the app was closed opened Sell. The page was read before the session was restored, and the switch to the start page then replaced it. The requested page now waits for the session; checked on the emulator, where it opens Money.
+- **Found and fixed:** after uninstalling and at once reinstalling, the new install's Firebase token was dead from the start. Firebase answered `UNREGISTERED` even with the app open, while a new Firebase installation's token was accepted. This matches a Play services race: the uninstall's unregistration lands after the reinstall's registration. The server already forgot rejected tokens, but the phone kept its dead token and never sent another. Now, when the server has dropped the token a phone sent, the phone asks Firebase for a new one at its next refresh. Production logs `push_tokens_dropped` when that happens.
+  - The race did not happen again on a second reinstall, so the recovery was checked by moving the phone's token to another device record through the API. Within 25 seconds the phone had deleted the old token (Firebase then answered `UNREGISTERED` for it) and registered a new one. A drawer closed short reached the phone through the new token, and the server dropped the dead one.
+
+**iPhone:**
+
+- **Signing:** `scripts/make-ios-signing.mjs` created an Apple Distribution certificate, whose key is kept in a project-only keychain, and an App Store profile through the API, with no device registered. Automatic signing had failed with "Your team has no devices".
+- **Build and upload:** `build-ios-release.mjs` archived, signed ("Apple Distribution: Harshit Karnatak (8X78GGWB32)", profile "Counterwell App Store 2026-09-30") and uploaded build `202609300924`. Apple processed it as `VALID` with no export-compliance hold, because the app declares no non-exempt encryption and SQLCipher uses Apple's CommonCrypto. The build expires on 29 December 2026.
+- The archived app is entitled for production pushes (`aps-environment` production), and the server sends to Apple's production host.
+- Afterwards the keychain search list was back to the login keychain alone.
+- **Testers:** the internal TestFlight group "Shop" receives every build. `scripts/add-tester.mjs` invites a person and then adds them to it. No tester has been added yet.
+- **Not checked:** delivery to a real iPhone. This needs the TestFlight build on a phone, because simulators cannot receive remote notifications.
