@@ -62,6 +62,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      # The proxy only routes to a healthy container: check every 2s while starting.
+      start_period: 30s
+      start_interval: 2s
     depends_on:
       migrate:
         condition: service_completed_successfully
