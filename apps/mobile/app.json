@@ -10,7 +10,8 @@
       "bundleIdentifier": "com.counterwell.mobile",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "Connect to your shop printer and backup gateway."
+        "NSLocalNetworkUsageDescription": "Connect to your shop printer and backup gateway.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "buildNumber": "1"
     },

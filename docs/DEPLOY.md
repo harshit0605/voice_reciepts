@@ -1,5 +1,13 @@
 # Running Counterwell for a real shop
 
+**Production today (30 September 2026):** Coolify on the Hostinger VPS, project `counterwell`,
+application `counterwell` (Docker Compose, `deploy/coolify.compose.yaml`, built from `main` on
+GitHub), at `https://counterwell.72.62.241.119.sslip.io`. Its settings are Coolify environment
+variables, with a copy in the git-ignored `.data/production/secrets.json`; daily dumps go to
+`/data/counterwell/backups` on the VPS. To deploy a new commit, press Redeploy in Coolify (or call
+its `/api/v1/deploy?uuid=zws0coocgcs84k048ok0g4os`). Sections 1 to 4 below describe the same
+setup on a plain Docker server without Coolify.
+
 The phones need a server they can reach from the shop and from the owner's home. This guide puts
 it on a small rented Linux server with HTTPS, daily database backups and the AI keys. The shop's
 Windows PC stays in the shop as the gateway (receipt printer, backup of sales made offline); see
@@ -100,22 +108,22 @@ the app only while their file is kept.
 
 ## 7. The shop PC gateway
 
-The gateway runs on the shop's Windows PC (set up with [SHOP-PC-SETUP.md](SHOP-PC-SETUP.md)). It
-prints receipts and keeps a second copy of every sale a phone makes while offline. Give it a `.env`
-in the repository folder on that PC:
+The gateway runs on the shop's Windows PC. It prints receipts and keeps a second copy of every
+sale a phone makes while offline. First an employee runs the shop PC setup
+([SHOP-PC-SETUP.md](SHOP-PC-SETUP.md)), which puts the PC on Tailscale with SSH, Git and Node.js.
+Then install the gateway from the Mac:
 
-```
-BETTER_AUTH_URL=https://<DOMAIN>          # the server
-BUSINESS_ID=<same as the server>
-GATEWAY_TOKEN=<same as the server>
-OFFLINE_VERIFY_KEY=<public key from make-offline-keys>
-PRINTER_HOST=<printer IP on the shop Wi-Fi>
+```bash
+node scripts/windows/install-gateway.mjs --host cwsupport@counterwell-shop --printer <printer IP>
 ```
 
-Start it with `npm run dev:gateway` and check `http://localhost:4101/health`. Give the PC a fixed
-address on the shop Wi-Fi (a reservation in the router), then in the app set More →
-Administration → Local gateway URL to `http://<that address>:4101`. The owner's Overview shows
-whether the gateway is reporting.
+It copies the settings over SSH (never through anyone at the shop), installs only the gateway's
+packages, registers a task that starts it with Windows and restarts it if it stops, opens port 4101
+to the shop Wi-Fi only, and prints the address to enter in the app (More → Administration → Local
+gateway URL). Run it again to update the gateway or change the printer. Give the PC a fixed address
+on the shop Wi-Fi (a reservation in the router) so that address does not change.
+
+The PC gets `OFFLINE_VERIFY_KEY`, which can check phones' offline permissions but not create them.
 
 ## 8. Updating the server
 
