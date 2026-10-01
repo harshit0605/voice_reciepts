@@ -31,6 +31,14 @@
       "port": 8081
     },
     {
+      "name": "fake-printer",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "scripts/fake-printer.mjs"
+      ],
+      "port": 8090
+    },
+    {
       "name": "gateway-test-printer",
       "runtimeExecutable": "env",
       "runtimeArgs": [
