@@ -8,6 +8,8 @@
 //   --raw-printer 192.168.1.60 a network receipt printer taking raw ESC/POS on port 9100
 //   --printer 192.168.1.50     an Epson printer with ePOS-Print
 // --paper is the roll width in mm, 80 (default) or 58. --test-print prints a sample receipt.
+// For ESC/POS printers, --model names a printer ReceiptPrinterEncoder knows (such as pos-5890), and
+// --image-mode column helps a printer that garbles the receipt.
 //
 // The PC must have run the shop PC setup (Tailscale, SSH, Git, Node.js). Settings come from
 // .data/production/secrets.json. The PC receives the public key that checks phones' offline
@@ -56,6 +58,12 @@ if ([printer, rawPrinter, usbPrinter].filter(Boolean).length > 1)
   throw new Error(
     "Give one printer: --usb-printer, --raw-printer or --printer",
   );
+const model = argument("model") ?? "";
+if (model && !/^[a-z0-9-]+$/.test(model))
+  throw new Error("--model is a printer model such as pos-5890");
+const imageMode = argument("image-mode") ?? "";
+if (imageMode && !["raster", "column"].includes(imageMode))
+  throw new Error("--image-mode is raster or column");
 const paper = argument("paper") ?? "80";
 if (!["58", "80"].includes(paper)) throw new Error("--paper is 58 or 80 (mm)");
 
@@ -68,6 +76,8 @@ const settings = {
   CW_PRINTER_RAW: rawPrinter,
   CW_PRINTER_NAME: usbPrinter,
   CW_PRINTER_WIDTH: paper,
+  CW_PRINTER_MODEL: model,
+  CW_PRINTER_IMAGE_MODE: imageMode,
   CW_TEST_PRINT: flag("test-print") ? "1" : "",
   CW_REPO_REF: argument("ref") ?? "main",
 };

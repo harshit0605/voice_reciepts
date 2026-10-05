@@ -12,6 +12,8 @@
 #   CW_PRINTER_RAW    a network printer taking raw ESC/POS, address[:port] (port 9100)
 #   CW_PRINTER_HOST   an Epson printer with ePOS-Print on the shop Wi-Fi
 #   CW_PRINTER_WIDTH  paper roll width in mm, 80 (default) or 58
+#   CW_PRINTER_MODEL  for ESC/POS printers, a model ReceiptPrinterEncoder knows (optional)
+#   CW_PRINTER_IMAGE_MODE  raster (default) or column, for printers that garble the receipt
 #   CW_TEST_PRINT     1 to print a sample receipt at the end
 #   CW_REPO_REF       git commit or branch to install (default main)
 
@@ -57,6 +59,8 @@ $verifyKey = Need 'CW_VERIFY_KEY'
 $printer = [Environment]::GetEnvironmentVariable('CW_PRINTER_HOST')
 $rawPrinter = [Environment]::GetEnvironmentVariable('CW_PRINTER_RAW')
 $printerName = [Environment]::GetEnvironmentVariable('CW_PRINTER_NAME')
+$model = [Environment]::GetEnvironmentVariable('CW_PRINTER_MODEL')
+$imageMode = [Environment]::GetEnvironmentVariable('CW_PRINTER_IMAGE_MODE')
 $paper = [Environment]::GetEnvironmentVariable('CW_PRINTER_WIDTH')
 if (-not $paper) { $paper = '80' }
 if ($paper -ne '58' -and $paper -ne '80') { throw 'CW_PRINTER_WIDTH must be 58 or 80' }
@@ -118,6 +122,8 @@ $lines = @(
   "PRINTER_RAW=$rawPrinter",
   "PRINTER_NAME=`"$printerName`"",
   "PRINTER_WIDTH_MM=$paper",
+  "PRINTER_MODEL=$model",
+  "PRINTER_IMAGE_MODE=$imageMode",
   'TRUSTED_ORIGINS=counterwell://'
 )
 [IO.File]::WriteAllLines($envFile, $lines)

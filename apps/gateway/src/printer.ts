@@ -8,6 +8,7 @@ import type { Invoice } from "@counterwell/core";
 import {
   escposCommands,
   paperDots,
+  printerModels,
   receiptRaster,
   type Raster,
 } from "./receipt";
@@ -20,7 +21,9 @@ const UNCONFIRMED =
  * PRINTER_NAME  a printer installed in Windows, such as a USB receipt printer;
  * PRINTER_RAW   a network receipt printer taking raw ESC/POS, "address[:port]" (port 9100);
  * PRINTER_HOST  an Epson printer with ePOS-Print, "address[:port]".
- * PRINTER_WIDTH_MM is the paper width, 80 (default) or 58.
+ * PRINTER_WIDTH_MM is the paper width, 80 (default) or 58. For ESC/POS printers, PRINTER_MODEL
+ * names a model ReceiptPrinterEncoder knows (such as "pos-5890"), and PRINTER_IMAGE_MODE=column
+ * helps a printer that garbles the receipt.
  */
 export function printerConnection() {
   const env = process.env;
@@ -48,7 +51,19 @@ export async function printInvoice(invoice: Invoice, reprint = false) {
     paperDots(Number(process.env.PRINTER_WIDTH_MM ?? 80)),
   );
   if (connection.kind === "epos") return printEpos(connection.address, raster);
-  const commands = escposCommands(raster);
+  const model = process.env.PRINTER_MODEL || undefined,
+    imageMode = process.env.PRINTER_IMAGE_MODE || undefined;
+  if (model && !printerModels().includes(model))
+    throw new Error(
+      `Unknown PRINTER_MODEL ${model}; known models: ${printerModels().join(", ")}`,
+    );
+  if (
+    imageMode !== undefined &&
+    imageMode !== "raster" &&
+    imageMode !== "column"
+  )
+    throw new Error("PRINTER_IMAGE_MODE is raster or column");
+  const commands = escposCommands(raster, { model, imageMode });
   if (connection.kind === "raw") return printRaw(connection.address, commands);
   return printWindows(connection.name, commands);
 }

@@ -1,5 +1,10 @@
+import ReceiptPrinterEncoder from "@point-of-sale/receipt-printer-encoder";
 import sharp from "sharp";
 import { rupees, type Invoice } from "@counterwell/core";
+
+type PrinterModel = NonNullable<
+  ConstructorParameters<typeof ReceiptPrinterEncoder>[0]
+>["printerModel"];
 
 const xml = (s: string) =>
   s.replace(
@@ -88,30 +93,56 @@ export function wrap(value: string, fit: number): string[] {
     .map((part) => part.trimEnd());
 }
 
+export type EscposOptions = {
+  /** A model from ReceiptPrinterEncoder's list, such as "pos-5890" or "epson-tm-t88vi". */
+  model?: string;
+  /** "column" suits very old printers that garble raster pictures. */
+  imageMode?: "raster" | "column";
+};
+
+/** Printer models ReceiptPrinterEncoder knows. */
+export const printerModels = () =>
+  ReceiptPrinterEncoder.printerModels.map((m) => m.id);
+
 /**
- * ESC/POS commands that print the picture and cut the paper: reset, the picture in bands of rows
- * ("GS v 0", which nearly every thermal printer understands, and small bands keep cheap printers'
- * buffers from overflowing), a few blank lines, then a partial cut (ignored without a cutter).
+ * ESC/POS commands for the receipt picture, made by ReceiptPrinterEncoder: reset, the picture, a
+ * few blank lines and a partial cut (ignored without a cutter). A known printer model applies that
+ * printer's own settings; otherwise the picture goes as a raster image ("GS v 0"), which nearly
+ * every thermal printer understands.
  */
-export function escposCommands(raster: Raster, band = 128): Buffer {
-  const rowBytes = raster.width / 8;
-  const parts: Buffer[] = [Buffer.from([0x1b, 0x40])];
-  for (let top = 0; top < raster.height; top += band) {
-    const rows = Math.min(band, raster.height - top);
-    parts.push(
-      Buffer.from([
-        0x1d,
-        0x76,
-        0x30,
-        0,
-        rowBytes & 0xff,
-        rowBytes >> 8,
-        rows & 0xff,
-        rows >> 8,
-      ]),
-      raster.bits.subarray(top * rowBytes, (top + rows) * rowBytes),
-    );
-  }
-  parts.push(Buffer.from([0x1b, 0x64, 4, 0x1d, 0x56, 66, 0]));
-  return Buffer.concat(parts);
+export function escposCommands(
+  raster: Raster,
+  options: EscposOptions = {},
+): Buffer {
+  const rgba = Buffer.alloc(raster.width * raster.height * 4, 255);
+  for (let y = 0; y < raster.height; y++)
+    for (let x = 0; x < raster.width; x++)
+      if (raster.bits[y * (raster.width / 8) + (x >> 3)] & (0x80 >> (x & 7))) {
+        const at = (y * raster.width + x) * 4;
+        rgba.fill(0, at, at + 3);
+      }
+  const encoder = new ReceiptPrinterEncoder({
+    language: "esc-pos",
+    ...(options.model
+      ? { printerModel: options.model as PrinterModel }
+      : {
+          columns: raster.width === 384 ? 32 : 48,
+          imageMode: "raster",
+          feedBeforeCut: 4,
+        }),
+    ...(options.imageMode ? { imageMode: options.imageMode } : {}),
+  });
+  return Buffer.from(
+    encoder
+      .initialize()
+      .image(
+        { data: rgba, width: raster.width, height: raster.height },
+        raster.width,
+        raster.height,
+        "threshold",
+        128,
+      )
+      .cut("partial")
+      .encode(),
+  );
 }

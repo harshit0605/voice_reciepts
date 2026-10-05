@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { demoState, execute, type Invoice } from "@counterwell/core";
 import { printerConnection, printInvoice } from "./printer";
-import { escposCommands, receiptRaster, wrap } from "./receipt";
+import { escposCommands, receiptRaster, wrap, type Raster } from "./receipt";
+import { readEscpos } from "../../../scripts/escpos-read.mjs";
 
 function invoice() {
   const s = demoState();
@@ -45,26 +46,19 @@ function invoice() {
   ).result as Invoice;
 }
 
-/** Reads back what a printer would print from the commands the gateway sends. */
-function decode(b: Buffer) {
-  let width = 0,
-    cut = false;
-  const bands: Buffer[] = [];
-  for (let i = 0; i < b.length;) {
-    if (b[i] === 0x1b && b[i + 1] === 0x40) i += 2;
-    else if (b[i] === 0x1d && b[i + 1] === 0x76 && b[i + 2] === 0x30) {
-      const rowBytes = b[i + 4] | (b[i + 5] << 8),
-        rows = b[i + 6] | (b[i + 7] << 8);
-      width = rowBytes * 8;
-      bands.push(b.subarray(i + 8, i + 8 + rowBytes * rows));
-      i += 8 + rowBytes * rows;
-    } else if (b[i] === 0x1b && b[i + 1] === 0x64) i += 3;
-    else if (b[i] === 0x1d && b[i + 1] === 0x56) {
-      cut = true;
-      i += 4;
-    } else throw new Error(`unexpected byte ${b[i]} at ${i}`);
-  }
-  return { width, bits: Buffer.concat(bands), bands: bands.length, cut };
+/** The picture a printer would print from the commands the gateway sends. */
+const decode = (b: Uint8Array) => readEscpos(b);
+
+/** The decoded picture is the receipt, padded with blank rows to whole bands. */
+function samePicture(back: ReturnType<typeof decode>, raster: Raster) {
+  const rowBytes = raster.width / 8;
+  return (
+    back.width === raster.width &&
+    back.bits.subarray(0, raster.bits.length).equals(raster.bits) &&
+    back.bits.subarray(raster.bits.length).every((byte) => byte === 0) &&
+    back.height - raster.height < 24 &&
+    back.bits.length === back.height * rowBytes
+  );
 }
 
 const saved = { ...process.env };
@@ -75,6 +69,8 @@ afterEach(() => {
     "PRINTER_HOST",
     "PRINTER_WIDTH_MM",
     "PRINTER_POWERSHELL",
+    "PRINTER_MODEL",
+    "PRINTER_IMAGE_MODE",
     "GATEWAY_DATA_DIR",
   ])
     if (saved[key] === undefined) delete process.env[key];
@@ -82,16 +78,20 @@ afterEach(() => {
 });
 
 describe("receipt printing", () => {
-  it("encodes the receipt picture as ESC/POS bands that read back exactly", async () => {
+  it("encodes the receipt picture as ESC/POS that reads back exactly", async () => {
     const raster = await receiptRaster(invoice(), false, 576);
-    const commands = escposCommands(raster, 50);
-    const back = decode(commands);
-    expect(back.width).toBe(576);
-    expect(back.bands).toBe(Math.ceil(raster.height / 50));
-    expect(back.bits.equals(raster.bits)).toBe(true);
-    expect(back.cut).toBe(true);
     // Something is drawn: the receipt is not blank.
     expect(raster.bits.some((byte) => byte !== 0)).toBe(true);
+    for (const options of [
+      {},
+      { model: "pos-8360" },
+      { model: "epson-tm-t88vi" },
+      { imageMode: "column" as const },
+    ]) {
+      const back = decode(escposCommands(raster, options));
+      expect(samePicture(back, raster), JSON.stringify(options)).toBe(true);
+      expect(back.cut).toBe(true);
+    }
   });
 
   it("fits 58 mm paper and wraps long medicine names", async () => {
@@ -134,6 +134,14 @@ describe("receipt printing", () => {
     } finally {
       printer.close();
     }
+  });
+
+  it("refuses a printer model the encoder does not know", async () => {
+    process.env.PRINTER_RAW = "127.0.0.1:9";
+    process.env.PRINTER_MODEL = "made-up-printer";
+    await expect(printInvoice(invoice())).rejects.toThrow(
+      /Unknown PRINTER_MODEL made-up-printer; known models: .*pos-5890/,
+    );
   });
 
   it("reports a closed raw printer as unconfirmed", async () => {

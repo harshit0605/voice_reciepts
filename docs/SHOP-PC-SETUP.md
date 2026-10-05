@@ -80,7 +80,7 @@ node scripts/windows/install-gateway.mjs --host cwsupport@counterwell-shop --usb
 Choose the printer option from the report:
 
 - **USB receipt printer** (the shop's): `--usb-printer` uses the one printer Windows has on a USB port, or give its name, `--usb-printer "POS-80"`. Before that, someone at the shop plugs it in, installs the driver from its box or the maker's site, and prints a Windows test page from Settings → Printers.
-  - The gateway sends standard ESC/POS commands through the Windows print queue. Nearly every thermal receipt printer understands them (Epson, TVS, Rugtek, Everycom and unbranded POS-58/POS-80).
+  - The gateway sends standard ESC/POS commands through the Windows print queue, made by the open-source [ReceiptPrinterEncoder](https://github.com/at-point-of-sale/ReceiptPrinterEncoder). Nearly every thermal receipt printer understands them (Epson, TVS, Rugtek, Xprinter, Everycom and unbranded POS-58/POS-80). If the printer is on its list, `--model` uses its own settings (for example `--model pos-5890` or `--model epson-tm-t88vi`). If the test receipt comes out garbled, run again with `--image-mode column`, which very old printers need.
   - A receipt counts as printed only once Windows has passed it to the printer. If the printer is offline or out of paper, the job is cancelled and the phone shows the print as uncertain, so it cannot come out later on top of a reprint.
 - **Network receipt printer:** `--raw-printer <IP>` for one that takes raw ESC/POS on port 9100, or `--printer <IP>` for an Epson that answered ePOS in the report.
 - **Paper width:** `--paper 58` for 2-inch rolls; the default is 80 (3-inch).

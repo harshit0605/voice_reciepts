@@ -9,6 +9,7 @@ import { createServer } from "node:http";
 import { createServer as createTcpServer } from "node:net";
 import { mkdirSync } from "node:fs";
 import sharp from "sharp";
+import { readEscpos } from "./escpos-read.mjs";
 const dir = process.argv[2] ?? ".data/printer";
 const port = Number(process.env.FAKE_PRINTER_PORT ?? 8090);
 // Not 9100, which real printers use and other tools on a development machine often hold.
@@ -59,36 +60,13 @@ createServer((req, res) => {
   console.log(`fake printer on 127.0.0.1:${port}, saving to ${dir}`),
 );
 
-// Understands the commands the gateway sends: reset, "GS v 0" picture bands, feed and cut.
-function decodeEscpos(b) {
-  let width = 0,
-    cut = false;
-  const bands = [];
-  for (let i = 0; i < b.length;) {
-    if (b[i] === 0x1b && b[i + 1] === 0x40) i += 2;
-    else if (b[i] === 0x1d && b[i + 1] === 0x76 && b[i + 2] === 0x30) {
-      const rowBytes = b[i + 4] | (b[i + 5] << 8),
-        rows = b[i + 6] | (b[i + 7] << 8);
-      width = rowBytes * 8;
-      bands.push(b.subarray(i + 8, i + 8 + rowBytes * rows));
-      i += 8 + rowBytes * rows;
-    } else if (b[i] === 0x1b && b[i + 1] === 0x64) i += 3;
-    else if (b[i] === 0x1d && b[i + 1] === 0x56) {
-      cut = true;
-      i += b[i + 2] >= 65 ? 4 : 3;
-    } else throw new Error(`unknown byte 0x${b[i].toString(16)} at ${i}`);
-  }
-  const bits = Buffer.concat(bands);
-  return { width, height: bits.length / (width / 8), bits, cut };
-}
-
 createTcpServer((socket) => {
   const chunks = [];
   socket.on("data", (chunk) => chunks.push(chunk));
   socket.on("end", async () => {
     socket.end();
     try {
-      const r = decodeEscpos(Buffer.concat(chunks));
+      const r = readEscpos(Buffer.concat(chunks));
       await save(
         r.width,
         r.height,
