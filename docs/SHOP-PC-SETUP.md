@@ -74,9 +74,18 @@ type C:\ProgramData\CounterwellRemote\shop-pc-report.txt
 Then install the gateway from the Mac (it copies the settings over SSH; see [DEPLOY.md](DEPLOY.md#7-the-shop-pc-gateway)):
 
 ```bash
-node scripts/windows/install-gateway.mjs --host cwsupport@counterwell-shop --printer <printer IP>
+node scripts/windows/install-gateway.mjs --host cwsupport@counterwell-shop --usb-printer --paper 80 --test-print
 ```
 
-- **Network Epson ePOS printer** (the report shows an IP port that answered ePOS): pass its address as `--printer`, then set the Local gateway URL the installer prints in the app (More → Administration).
-- **USB or other printers:** the gateway cannot print to them yet; it needs a Windows spooler path first. The report shows which kind the shop has.
+Choose the printer option from the report:
+
+- **USB receipt printer** (the shop's): `--usb-printer` uses the one printer Windows has on a USB port, or give its name, `--usb-printer "POS-80"`. Before that, someone at the shop plugs it in, installs the driver from its box or the maker's site, and prints a Windows test page from Settings → Printers.
+  - The gateway sends standard ESC/POS commands through the Windows print queue. Nearly every thermal receipt printer understands them (Epson, TVS, Rugtek, Everycom and unbranded POS-58/POS-80).
+  - A receipt counts as printed only once Windows has passed it to the printer. If the printer is offline or out of paper, the job is cancelled and the phone shows the print as uncertain, so it cannot come out later on top of a reprint.
+- **Network receipt printer:** `--raw-printer <IP>` for one that takes raw ESC/POS on port 9100, or `--printer <IP>` for an Epson that answered ePOS in the report.
+- **Paper width:** `--paper 58` for 2-inch rolls; the default is 80 (3-inch).
+- **Test print:** `--test-print` prints a sample receipt with a Hindi line at the end. Check that nothing is cut off and that the Hindi reads correctly.
+
+Then set the Local gateway URL the installer prints in the app (More → Administration).
+
 - **Server:** the gateway talks to the production server (`https://counterwell.72.62.241.119.sslip.io`) and gets only the public key for offline permissions.

@@ -1,6 +1,13 @@
 // Installs or updates the shop gateway on the shop PC over SSH (Tailscale), from this Mac.
 //
-//   node scripts/windows/install-gateway.mjs --host cwsupport@counterwell-shop [--printer 192.168.1.50] [--ref main]
+//   node scripts/windows/install-gateway.mjs --host cwsupport@counterwell-shop [printer] [--paper 58] [--test-print] [--ref main]
+//
+// The receipt printer, one of:
+//   --usb-printer [name]       a printer installed in Windows, usually USB; without a name, the one
+//                              USB printer Windows has
+//   --raw-printer 192.168.1.60 a network receipt printer taking raw ESC/POS on port 9100
+//   --printer 192.168.1.50     an Epson printer with ePOS-Print
+// --paper is the roll width in mm, 80 (default) or 58. --test-print prints a sample receipt.
 //
 // The PC must have run the shop PC setup (Tailscale, SSH, Git, Node.js). Settings come from
 // .data/production/secrets.json. The PC receives the public key that checks phones' offline
@@ -30,9 +37,27 @@ for (const name of [
   "OFFLINE_VERIFY_KEY",
 ])
   if (!secrets[name]) throw new Error(`${name} is missing from secrets.json`);
-const printer = argument("printer") ?? "";
-if (printer && !/^[a-zA-Z0-9.-]+(:\d+)?$/.test(printer))
-  throw new Error("--printer is an address such as 192.168.1.50");
+const flag = (name) => process.argv.includes(`--${name}`);
+const address = (name) => {
+  const value = argument(name) ?? "";
+  if (value && !/^[a-zA-Z0-9.-]+(:\d+)?$/.test(value))
+    throw new Error(`--${name} is an address such as 192.168.1.50`);
+  return value;
+};
+const printer = address("printer"),
+  rawPrinter = address("raw-printer");
+const usbName = argument("usb-printer");
+const usbPrinter = flag("usb-printer")
+  ? !usbName || usbName.startsWith("--")
+    ? "auto"
+    : usbName
+  : "";
+if ([printer, rawPrinter, usbPrinter].filter(Boolean).length > 1)
+  throw new Error(
+    "Give one printer: --usb-printer, --raw-printer or --printer",
+  );
+const paper = argument("paper") ?? "80";
+if (!["58", "80"].includes(paper)) throw new Error("--paper is 58 or 80 (mm)");
 
 const settings = {
   CW_API_URL: `https://${secrets.DOMAIN}`,
@@ -40,6 +65,10 @@ const settings = {
   CW_GATEWAY_TOKEN: secrets.GATEWAY_TOKEN,
   CW_VERIFY_KEY: secrets.OFFLINE_VERIFY_KEY,
   CW_PRINTER_HOST: printer,
+  CW_PRINTER_RAW: rawPrinter,
+  CW_PRINTER_NAME: usbPrinter,
+  CW_PRINTER_WIDTH: paper,
+  CW_TEST_PRINT: flag("test-print") ? "1" : "",
   CW_REPO_REF: argument("ref") ?? "main",
 };
 const work = mkdtempSync(path.join(tmpdir(), "cw-gateway-"));

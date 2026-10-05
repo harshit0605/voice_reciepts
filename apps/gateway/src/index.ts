@@ -13,7 +13,7 @@ import { z } from "zod";
 import { commandSchema, type Invoice } from "@counterwell/core";
 import { verifyLease } from "../../api/src/lease";
 import { GatewayQueue } from "./queue";
-import { printInvoice } from "./printer";
+import { printerConfigured, printInvoice } from "./printer";
 const queue = new GatewayQueue(
   path.resolve(repositoryRoot, process.env.GATEWAY_DATA_DIR ?? ".data/gateway"),
 );
@@ -50,7 +50,7 @@ function ownerToken(value: string | undefined) {
 app.get("/health", (c) =>
   c.json({
     ok: true,
-    printerConfigured: !!process.env.PRINTER_HOST,
+    printerConfigured: printerConfigured(),
     queued: queue.list().filter((j) => j.status === "queued").length,
   }),
 );
@@ -260,7 +260,7 @@ async function tick() {
             "X-Gateway-Token": process.env.GATEWAY_TOKEN ?? "",
           },
           body: JSON.stringify({
-            printerConfigured: !!process.env.PRINTER_HOST,
+            printerConfigured: printerConfigured(),
             printBacklog: jobs.filter((j) => j.status === "queued").length,
             uncertainPrints: jobs.filter((j) => j.status === "uncertain")
               .length,
@@ -276,7 +276,7 @@ async function tick() {
       .list()
       .reverse()
       .find((j) => j.status === "queued");
-    if (job && process.env.PRINTER_HOST) {
+    if (job && printerConfigured()) {
       queue.update({ ...job, status: "printing" });
       try {
         await printInvoice(job.invoice, !!job.reprintOf);

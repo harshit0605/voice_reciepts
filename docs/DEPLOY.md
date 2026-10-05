@@ -155,8 +155,12 @@ sale a phone makes while offline. First an employee runs the shop PC setup
 Then install the gateway from the Mac:
 
 ```bash
-node scripts/windows/install-gateway.mjs --host cwsupport@counterwell-shop --printer <printer IP>
+node scripts/windows/install-gateway.mjs --host cwsupport@counterwell-shop --usb-printer --test-print
 ```
+
+The printer is `--usb-printer [name]` for one installed in Windows (USB), `--raw-printer <IP>` for
+a network printer taking raw ESC/POS, or `--printer <IP>` for an Epson with ePOS-Print; `--paper 58`
+for 2-inch rolls. [SHOP-PC-SETUP.md](SHOP-PC-SETUP.md) explains how to choose.
 
 It copies the settings over SSH (never through anyone at the shop), installs only the gateway's
 packages, registers a task that starts it with Windows and restarts it if it stops, opens port 4101

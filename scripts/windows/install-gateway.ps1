@@ -7,7 +7,12 @@
 #   CW_BUSINESS_ID    the shop's ID on the server
 #   CW_GATEWAY_TOKEN  shared with the server for health reports
 #   CW_VERIFY_KEY     public key that checks phones' offline permissions (it cannot create them)
-#   CW_PRINTER_HOST   receipt printer address on the shop Wi-Fi (optional; add it later)
+#   The receipt printer, at most one (optional; add it later):
+#   CW_PRINTER_NAME   a printer installed in Windows, usually USB; 'auto' picks the one USB printer
+#   CW_PRINTER_RAW    a network printer taking raw ESC/POS, address[:port] (port 9100)
+#   CW_PRINTER_HOST   an Epson printer with ePOS-Print on the shop Wi-Fi
+#   CW_PRINTER_WIDTH  paper roll width in mm, 80 (default) or 58
+#   CW_TEST_PRINT     1 to print a sample receipt at the end
 #   CW_REPO_REF       git commit or branch to install (default main)
 
 param([string]$SettingsFile)
@@ -50,6 +55,11 @@ $businessId = Need 'CW_BUSINESS_ID'
 $gatewayToken = Need 'CW_GATEWAY_TOKEN'
 $verifyKey = Need 'CW_VERIFY_KEY'
 $printer = [Environment]::GetEnvironmentVariable('CW_PRINTER_HOST')
+$rawPrinter = [Environment]::GetEnvironmentVariable('CW_PRINTER_RAW')
+$printerName = [Environment]::GetEnvironmentVariable('CW_PRINTER_NAME')
+$paper = [Environment]::GetEnvironmentVariable('CW_PRINTER_WIDTH')
+if (-not $paper) { $paper = '80' }
+if ($paper -ne '58' -and $paper -ne '80') { throw 'CW_PRINTER_WIDTH must be 58 or 80' }
 $ref = [Environment]::GetEnvironmentVariable('CW_REPO_REF')
 if (-not $ref) { $ref = 'main' }
 if ($apiUrl -notmatch '^https://') { throw 'CW_API_URL must be an https:// address' }
@@ -78,6 +88,24 @@ $tsx = Join-Path $env:APPDATA 'npm\tsx.cmd'
 if (-not (Test-Path $tsx)) { $tsx = (Get-Command tsx.cmd -ErrorAction Stop).Source }
 
 Write-Step '3. Settings'
+if ($printerName -eq 'auto') {
+  $usb = @(Get-Printer | Where-Object { $_.PortName -like 'USB*' })
+  if ($usb.Count -eq 0) {
+    throw 'Windows has no USB printer. Plug the receipt printer in, install its driver, print a Windows test page, then run this again.'
+  }
+  if ($usb.Count -gt 1) {
+    throw "Windows has several USB printers: $(($usb | ForEach-Object { $_.Name }) -join ', '). Run again with --usb-printer `"<name>`"."
+  }
+  $printerName = $usb[0].Name
+}
+if ($printerName) {
+  if ($printerName -match '"') { throw 'The printer name cannot contain a double quote' }
+  if (-not (Get-Printer -Name $printerName -ErrorAction SilentlyContinue)) {
+    $known = (Get-Printer | ForEach-Object { "$($_.Name) [$($_.PortName)]" }) -join '; '
+    throw "Windows has no printer called '$printerName'. Its printers: $known"
+  }
+  Write-Host "   Receipt printer: $printerName ($paper mm)"
+}
 $envFile = Join-Path $App '.env'
 $lines = @(
   "BETTER_AUTH_URL=$apiUrl",
@@ -87,6 +115,9 @@ $lines = @(
   "GATEWAY_PORT=$Port",
   "GATEWAY_DATA_DIR=$(Join-Path $Root 'data')",
   "PRINTER_HOST=$printer",
+  "PRINTER_RAW=$rawPrinter",
+  "PRINTER_NAME=`"$printerName`"",
+  "PRINTER_WIDTH_MM=$paper",
   'TRUSTED_ORIGINS=counterwell://'
 )
 [IO.File]::WriteAllLines($envFile, $lines)
@@ -148,6 +179,9 @@ if (-not $healthy) {
   throw 'The gateway did not answer on port 4101; the log is above.'
 }
 Write-Host "   Gateway answers. Printer configured: $($health.printerConfigured)"
+if ([Environment]::GetEnvironmentVariable('CW_TEST_PRINT') -eq '1') {
+  Invoke-Checked $tsx @('--env-file=..\..\.env', 'src\test-print.ts') (Join-Path $App 'apps\gateway')
+}
 $addresses = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
   Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -notlike '100.*' } |
   Select-Object -ExpandProperty IPAddress

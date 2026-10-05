@@ -1,64 +1,60 @@
-import sharp from "sharp";
-import { rupees, type Invoice } from "@counterwell/core";
-const xml = (s: string) =>
-  s.replace(
-    /[<>&"']/g,
-    (c) =>
-      ({
-        "<": "&lt;",
-        ">": "&gt;",
-        "&": "&amp;",
-        '"': "&quot;",
-        "'": "&apos;",
-      })[c]!,
-  );
+import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { connect } from "node:net";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import type { Invoice } from "@counterwell/core";
+import {
+  escposCommands,
+  paperDots,
+  receiptRaster,
+  type Raster,
+} from "./receipt";
+
+const UNCONFIRMED =
+  "Printer did not confirm completion. Inspect paper and printer status before explicit reprint.";
+
+/**
+ * Where receipts go, from the gateway's settings:
+ * PRINTER_NAME  a printer installed in Windows, such as a USB receipt printer;
+ * PRINTER_RAW   a network receipt printer taking raw ESC/POS, "address[:port]" (port 9100);
+ * PRINTER_HOST  an Epson printer with ePOS-Print, "address[:port]".
+ * PRINTER_WIDTH_MM is the paper width, 80 (default) or 58.
+ */
+export function printerConnection() {
+  const env = process.env;
+  if (env.PRINTER_NAME)
+    return { kind: "windows", name: env.PRINTER_NAME } as const;
+  if (env.PRINTER_RAW)
+    return { kind: "raw", address: env.PRINTER_RAW } as const;
+  if (env.PRINTER_HOST)
+    return { kind: "epos", address: env.PRINTER_HOST } as const;
+  return null;
+}
+export const printerConfigured = () => printerConnection() !== null;
+
 export async function printInvoice(invoice: Invoice, reprint = false) {
-  const host = process.env.PRINTER_HOST;
-  if (!host) throw new Error("PRINTER_HOST is not configured");
-  if (!/^[a-zA-Z0-9.-]+(:\d+)?$/.test(host))
-    throw new Error("Invalid printer host");
-  const lines = [
-    invoice.business.name,
-    ...wrap(invoice.business.address),
-    `GSTIN ${invoice.business.gstin}`,
-    `Licence ${invoice.business.drugLicence}`,
-    `${reprint ? "COPY · " : ""}${invoice.number}`,
-    new Date(invoice.occurredAt).toLocaleString("en-IN", {
-      timeZone: "Asia/Kolkata",
-    }),
-    "────────────────────────────",
-    ...invoice.lines.flatMap((l) => [
-      `${l.name} ${l.strength}`,
-      `${l.quantity} ${l.unit}  ${rupees(l.netPaise)}`,
-      `Batch ${l.batchCode} · Exp ${l.expiry}`,
-      `HSN ${l.hsn} · GST ${l.taxBps / 100}%`,
-    ]),
-    "────────────────────────────",
-    `Discount ${rupees(invoice.discountPaise)}`,
-    `CGST ${rupees(invoice.lines.reduce((n, l) => n + l.cgstPaise, 0))}`,
-    `SGST ${rupees(invoice.lines.reduce((n, l) => n + l.sgstPaise, 0))}`,
-    `TOTAL ${rupees(invoice.totalPaise)}`,
-    // Sent by the phone that billed it: "Paid ₹50.00 by cash".
-    ...((invoice as Invoice & { paid?: string }).paid
-      ? [(invoice as Invoice & { paid?: string }).paid!]
-      : []),
-    "Thank you. Keep this bill.",
-  ];
-  const width = 576,
-    height = lines.length * 32 + 24;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="white"/>${lines.map((l, i) => `<text x="12" y="${30 + i * 32}" font-family="Noto Sans Devanagari, sans-serif" font-size="23" fill="black">${xml(l)}</text>`).join("")}</svg>`;
-  const pixels = await sharp(Buffer.from(svg))
-    .flatten({ background: "#fff" })
-    .greyscale()
-    .threshold(160)
-    .raw()
-    .toBuffer();
-  const raster = Buffer.alloc((width / 8) * height);
-  for (let y = 0; y < height; y++)
-    for (let x = 0; x < width; x++)
-      if (pixels[y * width + x] < 128)
-        raster[y * (width / 8) + (x >> 3)] |= 0x80 >> (x & 7);
-  const document = `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print"><image width="${width}" height="${height}" color="color_1" mode="mono">${raster.toString("base64")}</image><feed line="3"/><cut type="feed"/></epos-print></s:Body></s:Envelope>`;
+  const connection = printerConnection();
+  if (!connection) throw new Error("No printer is configured");
+  if (
+    connection.kind !== "windows" &&
+    !/^[a-zA-Z0-9.-]+(:\d+)?$/.test(connection.address)
+  )
+    throw new Error("Invalid printer address");
+  const raster = await receiptRaster(
+    invoice,
+    reprint,
+    paperDots(Number(process.env.PRINTER_WIDTH_MM ?? 80)),
+  );
+  if (connection.kind === "epos") return printEpos(connection.address, raster);
+  const commands = escposCommands(raster);
+  if (connection.kind === "raw") return printRaw(connection.address, commands);
+  return printWindows(connection.name, commands);
+}
+
+async function printEpos(host: string, raster: Raster) {
+  const document = `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print"><image width="${raster.width}" height="${raster.height}" color="color_1" mode="mono">${raster.bits.toString("base64")}</image><feed line="3"/><cut type="feed"/></epos-print></s:Body></s:Envelope>`;
   const response = await fetch(
     `http://${host}/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000`,
     {
@@ -70,10 +66,76 @@ export async function printInvoice(invoice: Invoice, reprint = false) {
   );
   const body = await response.text();
   if (!response.ok || !/<response\b[^>]*\bsuccess="true"/.test(body))
-    throw new Error(
-      "Printer did not confirm completion. Inspect paper and printer status before explicit reprint.",
-    );
+    throw new Error(UNCONFIRMED);
 }
-function wrap(value: string) {
-  return value.match(/.{1,38}(\s|$)|.{1,38}/g) ?? [""];
+
+/**
+ * Raw printers answer nothing: every byte acknowledged and the connection closed is as much as
+ * they confirm. Some never close their side, so a quiet second after sending also counts.
+ */
+function printRaw(address: string, commands: Buffer) {
+  const [host, port] = address.split(":");
+  return new Promise<void>((resolve, reject) => {
+    const socket = connect({ host, port: Number(port ?? 9100) });
+    socket.setTimeout(15000, () => socket.destroy(new Error("timed out")));
+    socket.on("error", (e) =>
+      reject(new Error(`${UNCONFIRMED} (${e.message})`)),
+    );
+    socket.on("close", (failed) => {
+      if (!failed) resolve();
+    });
+    socket.end(commands, () =>
+      setTimeout(() => {
+        resolve();
+        socket.destroy();
+      }, 1000),
+    );
+  });
+}
+
+/**
+ * Hands the receipt to the Windows print queue and waits until Windows has sent it to the
+ * printer (windows/print-raw.ps1). A job still queued or in error is cancelled there, so it
+ * cannot print later on top of a reprint.
+ */
+async function printWindows(name: string, commands: Buffer) {
+  if (!name.trim() || name.length > 200 || /[\0-\x1f"]/.test(name))
+    throw new Error("Invalid printer name");
+  const folder = path.join(
+    process.env.GATEWAY_DATA_DIR ?? tmpdir(),
+    "print-jobs",
+  );
+  await mkdir(folder, { recursive: true });
+  const file = path.join(folder, `${randomUUID()}.bin`);
+  await writeFile(file, commands);
+  try {
+    await new Promise<void>((resolve, reject) =>
+      execFile(
+        process.env.PRINTER_POWERSHELL ?? "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          path.resolve(import.meta.dirname, "../windows/print-raw.ps1"),
+          "-Printer",
+          name,
+          "-Path",
+          file,
+        ],
+        { timeout: 45000, windowsHide: true },
+        (error, _stdout, stderr) => {
+          const reason = String(stderr).trim().split(/\r?\n/).at(-1);
+          if (error)
+            reject(
+              new Error(reason ? `${UNCONFIRMED} (${reason})` : UNCONFIRMED),
+            );
+          else resolve();
+        },
+      ),
+    );
+  } finally {
+    await rm(file, { force: true });
+  }
 }

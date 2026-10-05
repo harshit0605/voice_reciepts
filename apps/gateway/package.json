@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx --env-file=../../.env src/index.ts"
+    "dev": "tsx --env-file=../../.env src/index.ts",
+    "test-print": "tsx --env-file=../../.env src/test-print.ts"
   },
   "dependencies": {
     "@counterwell/core": "0.1.0",
