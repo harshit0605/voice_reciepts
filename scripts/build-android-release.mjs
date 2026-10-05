@@ -98,11 +98,15 @@ if (!existsSync(sdk)) {
 }
 // Libraries fetched ahead of time on a slow connection (see docs/DEPLOY.md), used before the internet.
 const mavenLocal = path.join(root, ".data/maven-local");
+// Minutes since 2024: always higher than the last build, so phones accept each new APK as an
+// update of the one installed.
+const versionCode = Math.floor((Date.now() - Date.UTC(2024, 0, 1)) / 60000);
 const env = {
   ...process.env,
   ANDROID_HOME: sdk,
   ...(existsSync(mavenLocal) ? { COUNTERWELL_MAVEN_LOCAL: mavenLocal } : {}),
   NODE_ENV: "production",
+  COUNTERWELL_VERSION_CODE: String(versionCode),
   EXPO_PUBLIC_API_URL: api.replace(/\/$/, ""),
   COUNTERWELL_KEYSTORE: keystore,
   COUNTERWELL_KEYSTORE_PASSWORD: credentials.password,
@@ -160,8 +164,10 @@ const host = new URL(env.EXPO_PUBLIC_API_URL).host.replace(
 );
 const target = path.join(
   releases,
-  `counterwell-${version}-${host}-${new Date().toISOString().slice(0, 10)}.apk`,
+  `counterwell-${version}-build${versionCode}-${host}.apk`,
 );
 copyFileSync(built, target);
 const sha = createHash("sha256").update(readFileSync(target)).digest("hex");
-console.log(`\nAPK: ${path.relative(root, target)}\nSHA-256: ${sha}`);
+console.log(
+  `\nAPK: ${path.relative(root, target)} (version ${version}, build ${versionCode})\nSHA-256: ${sha}`,
+);

@@ -87,11 +87,14 @@ node scripts/build-android-release.mjs --api https://$DOMAIN
 
 The signed APK is written to `.data/releases/`. The first build creates the signing key in
 `.data/android-signing/`. **Back that folder up.** Every update must be signed with the same key,
-or phones refuse to install it over the existing app. To update, raise `version` and
-`android.versionCode` in `apps/mobile/app.json` and build again.
+or phones refuse to install it over the existing app. Each build numbers itself (minutes since
+2024, shown in the file name and in the app under More → Device and synchronisation), so a newer
+APK always installs over an older one; raise `version` in `apps/mobile/app.json` for a release
+worth naming.
 
 Send the APK to each phone (WhatsApp, Google Drive or a cable). Android asks once to allow
-installing apps from that source.
+installing apps from that source. To update, send the new APK the same way: opening it offers
+to update the installed app, and the phone keeps its sign-in and any sales not yet synced.
 
 iPhones get the app through TestFlight. Once, on a Mac with Xcode, with the App Store Connect API
 key (Admin role) saved as `.data/apple/AuthKey_<key id>.p8` and described in `.data/apple/asc.json`:

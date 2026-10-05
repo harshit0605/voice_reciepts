@@ -13,6 +13,10 @@ module.exports = ({ config }) => {
     ...config,
     android: {
       ...config.android,
+      // Release builds number themselves so each APK installs over the one before it.
+      ...(process.env.COUNTERWELL_VERSION_CODE
+        ? { versionCode: Number(process.env.COUNTERWELL_VERSION_CODE) }
+        : {}),
       ...(googleServices
         ? { googleServicesFile: "./google-services.json" }
         : {}),

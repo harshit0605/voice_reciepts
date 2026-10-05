@@ -9,6 +9,7 @@ import {
 import { PurchaseForm } from "./receiving";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import Constants from "expo-constants";
 import { useSession, uid } from "./session";
 import {
   Txt,
@@ -2274,6 +2275,9 @@ export function MoreScreen({ navigate }: { navigate: (p: string) => void }) {
           Offline authorisation expires{" "}
           {new Date(s.identity!.expiresAt).toLocaleString("en-IN")}
         </Txt>
+        <Txt muted size={12}>
+          {appVersion()}
+        </Txt>
         <Button secondary onPress={() => void s.sync()} icon="sync-outline">
           {t("sync")}
         </Button>
@@ -2615,4 +2619,16 @@ function EmployeeSheet({
       )}
     </Sheet>
   );
+}
+
+/** "App 0.1.0 · build 1452340": which build a phone runs, when helping someone over the phone. */
+function appVersion() {
+  const config = Constants.expoConfig;
+  const build =
+    Platform.OS === "android"
+      ? config?.android?.versionCode
+      : Platform.OS === "ios"
+        ? config?.ios?.buildNumber
+        : undefined;
+  return `App ${config?.version ?? ""}${build ? ` · build ${build}` : ""}`;
 }
