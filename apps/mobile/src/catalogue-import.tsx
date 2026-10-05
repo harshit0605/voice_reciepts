@@ -152,9 +152,9 @@ export function CatalogueImport({ onDone }: { onDone: () => void }) {
     return (
       <View style={{ gap: 14 }}>
         <Txt muted>
-          Load products from an Excel (.xlsx) or CSV export of your billing
-          software or distributor, or paste rows copied from a spreadsheet.
-          Nothing is saved until you review the rows and confirm.
+          Load products from an Excel (.xls or .xlsx) or CSV export of your
+          billing software or distributor, or paste rows copied from a
+          spreadsheet. Nothing is saved until you review the rows and confirm.
         </Txt>
         <Txt size={12} muted>
           Columns it understands: item name, pack (10's, 1x15, 100ML), GST %,

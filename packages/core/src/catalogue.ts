@@ -1,4 +1,4 @@
-import { unzipSync } from "fflate";
+import { read, utils, type CellObject, type WorkBook } from "xlsx";
 import { productSchema } from "./contracts";
 import { barcodesOf, normalCode } from "./scan";
 import type { Batch, Product, State } from "./types";
@@ -141,90 +141,56 @@ function trimTrailing(rows: string[][]) {
   while (end && blank(rows[end - 1])) end--;
   return rows.slice(0, end);
 }
-const entities = (s: string) =>
-  s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (_, e: string) => {
-    const k = e.toLowerCase();
-    if (k[0] === "#")
-      return String.fromCodePoint(
-        k[1] === "x" ? parseInt(k.slice(2), 16) : Number(k.slice(1)),
-      );
-    return { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" }[k] ?? _;
-  });
-const textOf = (xml: string) =>
-  entities(
-    [...xml.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)].map((m) => m[1]).join(""),
-  );
-const column = (ref: string) => {
-  let n = 0;
-  for (const ch of /^[A-Z]+/.exec(ref)?.[0] ?? "A")
-    n = n * 26 + ch.charCodeAt(0) - 64;
-  return n - 1;
-};
 /** Excel stores computed values like 12.000000000000002; show what the cell displays. */
 const tidyNumber = (v: string) =>
   /^-?\d+\.\d{9,}$/.test(v) ? String(Number(Number(v).toFixed(6))) : v;
-/** First worksheet of an .xlsx file, as rows of cell text. */
-export function readXlsx(bytes: Uint8Array): string[][] {
-  const files = unzipSync(bytes, {
-    filter: (f) =>
-      f.name === "xl/workbook.xml" ||
-      f.name === "xl/_rels/workbook.xml.rels" ||
-      f.name === "xl/sharedStrings.xml" ||
-      f.name.startsWith("xl/worksheets/"),
-  });
-  const read = (name: string) => (files[name] ? decodeText(files[name]) : "");
-  const rid = /<sheet\b[^>]*\br:id="([^"]+)"/.exec(
-    read("xl/workbook.xml"),
-  )?.[1];
-  const target = rid
-    ? (new RegExp(`<Relationship\\b[^>]*Id="${rid}"[^>]*Target="([^"]+)"`).exec(
-        read("xl/_rels/workbook.xml.rels"),
-      )?.[1] ??
-      new RegExp(`<Relationship\\b[^>]*Target="([^"]+)"[^>]*Id="${rid}"`).exec(
-        read("xl/_rels/workbook.xml.rels"),
-      )?.[1])
-    : undefined;
-  const sheetName = target
-    ? target.startsWith("/")
-      ? target.slice(1)
-      : `xl/${target}`
-    : "xl/worksheets/sheet1.xml";
-  const sheet = read(sheetName) || read("xl/worksheets/sheet1.xml");
-  if (!sheet) throw new Error("The spreadsheet has no readable sheet");
-  const shared = [
-    ...read("xl/sharedStrings.xml").matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g),
-  ].map((m) => textOf(m[1]));
-  const rows: string[][] = [];
-  for (const r of sheet.matchAll(/<row\b([^>]*)>([\s\S]*?)<\/row>/g)) {
-    const index = Number(/\br="(\d+)"/.exec(r[1])?.[1] ?? rows.length + 1) - 1;
-    const cells: string[] = [];
-    for (const c of r[2].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
-      const attrs = c[1],
-        inner = c[2] ?? "";
-      const ref = /\br="([A-Z]+)\d+"/.exec(attrs)?.[1];
-      const type = /\bt="(\w+)"/.exec(attrs)?.[1];
-      const v = entities(/<v>([\s\S]*?)<\/v>/.exec(inner)?.[1] ?? "");
-      const value =
-        type === "s"
-          ? (shared[Number(v)] ?? "")
-          : type === "inlineStr"
-            ? textOf(inner)
-            : type === "b"
-              ? v === "1"
-                ? "TRUE"
-                : "FALSE"
-              : tidyNumber(v);
-      cells[ref ? column(ref) : cells.length] = value;
-    }
-    rows[index] = Array.from(cells, (x) => x ?? "");
+/** What a cell shows, except that a plain number keeps all its digits (barcodes). */
+function cellText(cell: CellObject | undefined): string {
+  if (!cell || cell.v === undefined || cell.v === null) return "";
+  if (cell.t === "n" && (!cell.z || cell.z === "General"))
+    return tidyNumber(String(cell.v));
+  if (cell.t === "b") return cell.v ? "TRUE" : "FALSE";
+  return String(cell.w ?? cell.v);
+}
+/**
+ * First worksheet of an Excel (.xlsx, or the older .xls that billing software often exports) or
+ * OpenDocument spreadsheet, read with SheetJS, as rows of cell text. Row positions match the
+ * spreadsheet's row numbers.
+ */
+export function readSpreadsheet(bytes: Uint8Array): string[][] {
+  let book: WorkBook | undefined;
+  try {
+    book = read(bytes, { type: "array", dense: true, cellNF: true });
+  } catch {
+    /* reported below */
   }
-  return trimTrailing(Array.from(rows, (x) => x ?? []));
+  // A damaged file is read back as text, without the workbook part a real spreadsheet has.
+  if (!book?.Workbook)
+    throw new Error(
+      "This file could not be read as a spreadsheet. Save it again as .xlsx or CSV.",
+    );
+  const sheet = book.Sheets[book.SheetNames[0]];
+  if (!sheet?.["!ref"])
+    throw new Error("The spreadsheet has no readable sheet");
+  const range = utils.decode_range(sheet["!ref"]);
+  const data = sheet["!data"] ?? [];
+  const rows: string[][] = [];
+  for (let r = 0; r <= range.e.r; r++) {
+    const cells: string[] = [];
+    for (let c = 0; c <= range.e.c; c++) cells.push(cellText(data[r]?.[c]));
+    while (cells.length && cells[cells.length - 1] === "") cells.pop();
+    rows.push(cells);
+  }
+  return trimTrailing(rows);
 }
 /** Any supported spreadsheet or text file. */
 export function readTable(bytes: Uint8Array): string[][] {
-  if (bytes[0] === 0x50 && bytes[1] === 0x4b) return readXlsx(bytes);
-  if (bytes[0] === 0xd0 && bytes[1] === 0xcf)
-    throw new Error("Old .xls files cannot be read. Save it as .xlsx or CSV.");
+  // Zip (.xlsx, .ods) or the older Office format (.xls).
+  if (
+    (bytes[0] === 0x50 && bytes[1] === 0x4b) ||
+    (bytes[0] === 0xd0 && bytes[1] === 0xcf)
+  )
+    return readSpreadsheet(bytes);
   return parseDelimited(decodeText(bytes));
 }
 

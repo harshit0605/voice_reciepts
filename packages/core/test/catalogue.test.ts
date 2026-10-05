@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { zipSync, strToU8 } from "fflate";
+import { utils, write } from "xlsx";
 import {
   decodeText,
   parseDelimited,
@@ -37,18 +38,27 @@ function xlsx(rows: (string | number | null)[][]) {
           .join("")}</row>`,
     )
     .join("");
+  const main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+  const rel =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
   return zipSync({
+    "[Content_Types].xml": strToU8(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/items.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/></Types>`,
+    ),
+    "_rels/.rels": strToU8(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${rel}/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    ),
     "xl/workbook.xml": strToU8(
-      `<workbook xmlns:r="r"><sheets><sheet name="Items" sheetId="1" r:id="rId7"/></sheets></workbook>`,
+      `<workbook xmlns="${main}" xmlns:r="${rel}"><sheets><sheet name="Items" sheetId="1" r:id="rId7"/></sheets></workbook>`,
     ),
     "xl/_rels/workbook.xml.rels": strToU8(
-      `<Relationships><Relationship Id="rId7" Type="ws" Target="worksheets/items.xml"/></Relationships>`,
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId7" Type="${rel}/worksheet" Target="worksheets/items.xml"/><Relationship Id="rId8" Type="${rel}/sharedStrings" Target="sharedStrings.xml"/></Relationships>`,
     ),
     "xl/sharedStrings.xml": strToU8(
-      `<sst>${shared.map((s) => `<si><t>${s.replace(/&/g, "&amp;")}</t></si>`).join("")}</sst>`,
+      `<sst xmlns="${main}">${shared.map((s) => `<si><t>${s.replace(/&/g, "&amp;")}</t></si>`).join("")}</sst>`,
     ),
     "xl/worksheets/items.xml": strToU8(
-      `<worksheet><sheetData>${sheet}</sheetData></worksheet>`,
+      `<worksheet xmlns="${main}"><sheetData>${sheet}</sheetData></worksheet>`,
     ),
   });
 }
@@ -98,9 +108,41 @@ describe("reading catalogue files", () => {
       ["ENO & Co", "", "12"],
     ]);
   });
-  it("refuses old binary .xls files with a clear message", () => {
+  it("reads the older .xls files billing software exports", () => {
+    const sheet = utils.aoa_to_sheet([
+      ["ABC Medicos - Item list"],
+      [],
+      ["Item Name", "Pack", "MRP", "Barcode"],
+      ["DOLO 650 TAB", "15's", 30.5, 8901234567890],
+    ]);
+    const book = utils.book_new();
+    utils.book_append_sheet(book, sheet, "Items");
+    const xls = new Uint8Array(write(book, { type: "array", bookType: "xls" }));
+    expect(xls[0]).toBe(0xd0);
+    expect(readTable(xls)).toEqual([
+      ["ABC Medicos - Item list"],
+      [],
+      ["Item Name", "Pack", "MRP", "Barcode"],
+      ["DOLO 650 TAB", "15's", "30.5", "8901234567890"],
+    ]);
+  });
+  it("shows dates and formatted prices as the cells display them", () => {
+    const sheet = utils.aoa_to_sheet([
+      ["Item", "Expiry", "Rate"],
+      ["ENO", 46691, 9.5],
+    ]);
+    sheet.B2.z = "mm/yyyy";
+    sheet.C2.z = "0.00";
+    const book = utils.book_new();
+    utils.book_append_sheet(book, sheet, "Items");
+    const xlsxFile = new Uint8Array(
+      write(book, { type: "array", bookType: "xlsx" }),
+    );
+    expect(readTable(xlsxFile)[1]).toEqual(["ENO", "10/2027", "9.50"]);
+  });
+  it("explains a damaged spreadsheet instead of reading it as text", () => {
     expect(() => readTable(new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]))).toThrow(
-      "xlsx or CSV",
+      "could not be read as a spreadsheet",
     );
   });
 });
