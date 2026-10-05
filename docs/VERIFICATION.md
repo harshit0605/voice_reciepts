@@ -410,3 +410,25 @@ Strict TypeScript and all 172 tests (141 unit, 31 PostgreSQL/API) passed.
 - Afterwards the keychain search list was back to the login keychain alone.
 - **Testers:** the internal TestFlight group "Shop" receives every build. `scripts/add-tester.mjs` invites a person and then adds them to it. No tester has been added yet.
 - **Not checked:** delivery to a real iPhone. This needs the TestFlight build on a phone, because simulators cannot receive remote notifications.
+
+## USB printing, .xls import and numbered Android builds (5 October 2026)
+
+Strict TypeScript and all 181 tests (150 unit, 31 PostgreSQL/API) passed.
+
+**Printing on USB and raw network printers:**
+
+- **Encoding:** the gateway now builds ESC/POS commands with ReceiptPrinterEncoder (MIT, maintained) instead of hand-written ones.
+- **Tests:** the receipt picture reads back pixel for pixel from the default raster commands, the `pos-8360` and `epson-tm-t88vi` profiles, and column mode. An unknown `PRINTER_MODEL` is refused with the list of known models.
+- **Printer stand-in (port 9109):** `src/test-print.ts` was sent over raw TCP and the stand-in decoded it. On 58 mm paper the long address and licence wrap; on 80 mm they fit on one line. The Hindi line and the rupee signs are legible on both, and both end with a cut.
+- **Windows print queue:** `windows/print-raw.ps1` was not run on Windows here. The Node side that calls it was tested with a stand-in for PowerShell: the printer name and the receipt bytes arrive intact, and a reported "PaperOut" becomes an uncertain print that names the reason. PowerShell isn't installed on this Mac, so the script hasn't even been parsed yet. The first real run is at the shop, with `install-gateway.mjs --usb-printer --test-print`.
+
+**Catalogue import from billing software:**
+
+- **Reading spreadsheets:** SheetJS (Apache-2.0, 0.20.3 from its CDN) replaced the hand-written reader. The import used to refuse `.xls` files.
+- **Tests:** real `.xls` and `.xlsx` files written by SheetJS read correctly, with the title rows, blank row and 13-digit barcode intact. Formatted cells read as displayed (expiry "10/2027", price "9.50"), and a damaged file gets a clear message.
+- **Release APK against production** (throwaway check shop, deleted afterwards): a sample Item Master `.xls` (title rows, header on row 4) was chosen through Android's file picker.
+  - The app found the header, matched the name, pack, GST, HSN, barcode and company columns, and converted the packs (10'S → strip of 10, 100ML → bottle, 30GM → tube).
+  - It warned that the file has no schedule column, so H and H1 medicines must be marked afterwards.
+  - It added 5 of 5; the server then held 11 products (6 demo plus 5).
+
+**Android builds:** each release now takes minutes since 2024 as its version code. Build 1452357 installed with `versionCode=1452357`, and the app shows its version and build under More. The APK name now carries the build number.

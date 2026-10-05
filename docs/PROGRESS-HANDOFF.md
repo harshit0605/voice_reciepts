@@ -24,7 +24,16 @@ Snapshot: 28 September 2026, after the checkout pass, catalogue import and openi
   - Offline permissions are signed with an Ed25519 key; the shop PC gets only the public key.
   - The gateway installs over SSH with `scripts/windows/install-gateway.mjs`.
   - Phone notifications work in production through Apple (APNs) and Firebase (FCM), checked end to end on Android.
-  - Waiting on the user: the cousin's Apple ID email (then `node scripts/add-tester.mjs`), and the shop's printer model.
+  - iPhone testing is deferred (the user's choice on 5 October): the cousin starts on the Android APK, sent on WhatsApp.
+- **Shop go-live tools (5 October):**
+  - USB receipt printers on the shop PC print through the Windows print queue, with ESC/POS made by ReceiptPrinterEncoder. Run `install-gateway.mjs --usb-printer --test-print`; see SHOP-PC-SETUP.md.
+  - Catalogue import reads the `.xls` exports that billing software produces (SheetJS).
+  - Android builds number themselves, so each APK sent on WhatsApp installs over the last.
+  - A Hindi + English owner start guide exists as an artifact and a PDF; its source is not in the repository.
+  - Waiting on the user:
+    - the shop's billing software, and a sample export;
+    - the printer's make and model;
+    - whether the export has a schedule (H/H1) column.
 - **Phone uploads fixed:** invoice photos/PDFs and voice recordings had never reached the server from a phone (Expo `fetch` refused the file part). Sign-out and ended sessions were also fixed; see VERIFICATION.md. Voice now works end to end with OpenAI `gpt-4o-transcribe` when there is no Sarvam key (checked on the iPhone simulator; real voices not yet).
 - **Invoice reading works live** through OpenRouter when there is no Google key, after two fixes (shape-only schema; clearer MRP and expiry rules). Checked on six sample-invoice images; a real distributor bill is still needed. Android checks need the host load well below 50.
 - No store release (App Store or Play), cutover from the shop's current system, or paid-provider evaluation has happened.
