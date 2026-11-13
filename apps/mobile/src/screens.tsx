@@ -56,6 +56,7 @@ import {
   type Approval,
   type State,
   groupBatches,
+  expiryRows,
   matchesSearch,
   bySearch,
   returnable,
@@ -115,7 +116,7 @@ function OrderLines({ order }: { order: Order }) {
     </View>
   );
 }
-function Page({ title, subtitle, action, children }: any) {
+export function Page({ title, subtitle, action, children }: any) {
   return (
     <ScrollView
       contentContainerStyle={{ padding: 24, paddingBottom: 50 }}
@@ -139,7 +140,7 @@ function Page({ title, subtitle, action, children }: any) {
     </ScrollView>
   );
 }
-function useRun() {
+export function useRun() {
   const s = useSession();
   const running = useRef(false);
   // Ignore a second tap while the first action is still being saved.
@@ -188,7 +189,6 @@ export function OverviewScreen({
   const lastCount = drawer?.checks?.at(-1);
   const sinceCount =
     drawer && now - Date.parse(lastCount?.at ?? drawer.openedAt);
-  const soon = indiaDate(new Date(now + 90 * 86_400_000).toISOString());
   // Only medicines the shop has stocked; imported ones never counted are not "running low".
   const low = Object.values(state.products).filter((p) => {
     const batches = Object.values(state.batches).filter(
@@ -200,9 +200,7 @@ export function OverviewScreen({
       batches.reduce((n, b) => n.plus(b.quantity), D(0)).lte(p.reorderAt)
     );
   }).length;
-  const expiring = Object.values(state.batches).filter(
-    (b) => D(b.quantity).gt(0) && b.expiry <= soon,
-  ).length;
+  const expiring = expiryRows(state, today).length;
   const waiting = Object.values(state.approvals).filter(
     (a) => a.status === "pending",
   ).length;
@@ -321,9 +319,9 @@ export function OverviewScreen({
           {
             icon: "hourglass-outline",
             text: hi
-              ? `${expiring} बैच 90 दिन में एक्सपायर`
-              : `${expiring} ${expiring === 1 ? "batch expires" : "batches expire"} within 90 days`,
-            page: "inventory",
+              ? `${expiring} बैच एक्सपायर हो चुके या 90 दिन में होंगे`
+              : `${expiring} ${expiring === 1 ? "batch is" : "batches are"} expired or expiring within 90 days`,
+            page: "expiry",
           },
         ]
       : []),
@@ -1267,7 +1265,13 @@ export function CustomersScreen() {
     </Page>
   );
 }
-export function StockScreen({ manage = false }: { manage?: boolean }) {
+export function StockScreen({
+  manage = false,
+  navigate,
+}: {
+  manage?: boolean;
+  navigate?: (page: string) => void;
+}) {
   const s = useSession(),
     state = s.state!,
     t = useText(),
@@ -1288,6 +1292,7 @@ export function StockScreen({ manage = false }: { manage?: boolean }) {
       | "supplier_return"
       | "release"
       | "quarantine_disposal"
+      | "quarantine"
     >("correction");
   const batchesByProduct = useMemo(
     () => groupBatches(state.batches),
@@ -1336,6 +1341,16 @@ export function StockScreen({ manage = false }: { manage?: boolean }) {
           >
             Count stock
           </Button>
+          {navigate && (
+            <Button
+              small
+              secondary
+              onPress={() => navigate("expiry")}
+              icon="hourglass-outline"
+            >
+              {t("expiry")}
+            </Button>
+          )}
         </Row>
       )}
       {matching.length > SHOWN_PRODUCTS && (
@@ -1440,6 +1455,7 @@ export function StockScreen({ manage = false }: { manage?: boolean }) {
                   "supplier_return",
                   "release",
                   "quarantine_disposal",
+                  "quarantine",
                 ] as const
               ).map((k) => (
                 <Chip key={k} active={kind === k} onPress={() => setKind(k)}>

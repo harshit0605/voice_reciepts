@@ -522,4 +522,23 @@ export const hindiCopy: Record<string, string> = {
     "बिक्री कीमत रुपये में भरें, अधिकतम दो दशमलव",
   "Enter the purchase cost in rupees, up to two decimals":
     "खरीद कीमत रुपये में भरें, अधिकतम दो दशमलव",
+  "Expired batch cannot be sold":
+    "एक्सपायर बैच नहीं बेचा जा सकता। इसे शेल्फ़ से हटाएँ।",
+  "Only recorded sellable stock can be taken off the shelf":
+    "सिर्फ़ दर्ज बिक्री योग्य स्टॉक ही शेल्फ़ से हटाया जा सकता है",
+  quarantine: "शेल्फ़ से हटाएँ",
+  "Take off the shelf": "शेल्फ़ से हटाएँ",
+  "Dispose of set-aside stock": "अलग रखे माल का निपटारा",
+  "Record disposal": "निपटारा दर्ज करें",
+  "Expired; taken off the shelf": "एक्सपायर; शेल्फ़ से हटाया",
+  "Expiring soon; taken off the shelf": "जल्द एक्सपायर; शेल्फ़ से हटाया",
+  "Expired; disposed": "एक्सपायर; निपटारा किया",
+  "Quantity to set aside": "अलग रखने की मात्रा",
+  "Quantity disposed": "निपटाई गई मात्रा",
+  "This moves the stock out of what can be sold and sets it aside. It cannot be sold from here on. You can dispose of it afterwards.":
+    "यह माल बिक्री से हटाकर अलग रख देता है। इसके बाद इसे बेचा नहीं जा सकेगा। बाद में आप इसका निपटारा दर्ज कर सकते हैं।",
+  "This batch has not expired yet. Moving it sets it aside now and it cannot be sold. Do this only if you are pulling it early.":
+    "यह बैच अभी एक्सपायर नहीं हुआ है। इसे हटाने पर यह अभी अलग रखा जाएगा और बिक नहीं सकेगा। इसे जल्दी हटाना हो तभी करें।",
+  "This records the set-aside stock as disposed of and removes it from your stock value. It cannot be undone.":
+    "यह अलग रखे माल का निपटारा दर्ज करता है और स्टॉक की कीमत से हटा देता है। इसे वापस नहीं किया जा सकता।",
 };

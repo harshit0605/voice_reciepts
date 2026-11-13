@@ -143,6 +143,7 @@ export type StockMovement = Entity & {
     | "sale"
     | "return"
     | "release"
+    | "quarantine"
     | "supplier_return"
     | "damage"
     | "expiry"

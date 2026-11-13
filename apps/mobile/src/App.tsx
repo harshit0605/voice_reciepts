@@ -25,6 +25,7 @@ import {
   ReviewsScreen,
   AdministrationScreen,
 } from "./screens";
+import { ExpiryScreen } from "./expiry";
 import type { Invoice } from "@counterwell/core";
 const tabs = [
   ["sell", "bag-handle-outline"],
@@ -168,7 +169,9 @@ export default function App() {
     ) : page === "orders" ? (
       <OrdersScreen onInvoice={setInvoice} />
     ) : page === "stock" || page === "inventory" ? (
-      <StockScreen manage={owner && page === "inventory"} />
+      <StockScreen manage={owner && page === "inventory"} navigate={setPage} />
+    ) : page === "expiry" && owner ? (
+      <ExpiryScreen navigate={setPage} />
     ) : page === "customers" ? (
       <CustomersScreen />
     ) : page === "overview" ? (

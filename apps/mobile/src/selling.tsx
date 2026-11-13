@@ -220,6 +220,14 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
     }
     return out;
   }, [state.batches, today]);
+  // Medicines whose only stock has expired: shown with a label, never offered for sale.
+  const expiredOnly = useMemo(() => {
+    const ids = new Set<string>();
+    for (const b of Object.values(state.batches))
+      if (D(b.quantity).gt(0) && b.expiry < today && !sellable.has(b.productId))
+        ids.add(b.productId);
+    return ids;
+  }, [state.batches, sellable, today]);
   const stockOf = (id: string) =>
     (sellable.get(id) ?? []).reduce((n, b) => n + Number(b.quantity), 0);
   const products = useMemo(() => {
@@ -637,11 +645,19 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                               : colors.accent,
                         }}
                       />
-                      <Txt size={10} muted>
-                        {s.language === "hi"
-                          ? `${count} ${w(p.baseUnit)} उपलब्ध`
-                          : `${count} ${p.baseUnit}${count === 1 ? "" : "s"} available`}
-                      </Txt>
+                      {expiredOnly.has(p.id) ? (
+                        <Txt size={10} style={{ color: colors.red }}>
+                          {s.language === "hi"
+                            ? "सारा माल एक्सपायर है, न बेचें"
+                            : "All stock expired · do not sell"}
+                        </Txt>
+                      ) : (
+                        <Txt size={10} muted>
+                          {s.language === "hi"
+                            ? `${count} ${w(p.baseUnit)} उपलब्ध`
+                            : `${count} ${p.baseUnit}${count === 1 ? "" : "s"} available`}
+                        </Txt>
+                      )}
                       {p.schedule !== "OTC" && (
                         <Txt size={10} muted>
                           · Rx

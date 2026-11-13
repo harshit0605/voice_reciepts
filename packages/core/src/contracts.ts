@@ -351,6 +351,7 @@ export const approvalSchemas = {
         "expiry",
         "release",
         "quarantine_disposal",
+        "quarantine",
       ]),
       reason: z.string().min(3),
     })

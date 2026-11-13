@@ -32,7 +32,8 @@ export function quote(
     if (!batch) throw new Error("Batch not found");
     const p = state.products[batch.productId];
     if (!p?.active) throw new Error("Product unavailable");
-    if (batch.expiry < indiaDate(at)) throw new Error("Expired batch");
+    if (batch.expiry < indiaDate(at))
+      throw new Error("Expired batch cannot be sold");
     if (!line.confirmed) throw new Error("Confirm the physical batch");
     const multiplier = p.units[line.unit];
     if (!multiplier) throw new Error("Unknown selling unit");

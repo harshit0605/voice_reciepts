@@ -206,6 +206,15 @@ export function execute(
       occurredAt: cmd.occurredAt,
     };
   };
+  // A bad line (for example an expired batch) is a clear rejection, never a server fault.
+  const quoteLines = (...args: Parameters<typeof quote>) => {
+    try {
+      return quote(...args);
+    } catch (e) {
+      if (e instanceof DomainError) throw e;
+      throw new DomainError("INVALID", (e as Error).message);
+    }
+  };
   const quoteRefund = (invoice: Invoice, lines: ReturnLineInput[]) => {
     try {
       return refundQuote(s, invoice, lines);
@@ -316,7 +325,7 @@ export function execute(
         );
       } else ensure(op.version === 0, "Invalid initial version");
       if (op.customerId) ensure(s.customers[op.customerId], "Customer missing");
-      quote(s, op.lines, cmd.occurredAt);
+      quoteLines(s, op.lines, cmd.occurredAt);
       s.orders[op.orderId] = {
         id: op.orderId,
         lines: op.lines,
@@ -488,7 +497,7 @@ export function execute(
           amountPaise: credit,
         });
       }
-      const lines = quote(
+      const lines = quoteLines(
         s,
         o.lines,
         cmd.occurredAt,
@@ -757,6 +766,20 @@ export function execute(
           "Invalid quarantine disposal",
         );
         move(b.id, "0", "damage", a.id, p.reason, p.quantity);
+      } else if (p.kind === "quarantine") {
+        // Takes sellable stock (for example an expired batch) off the shelf; it can then be disposed of.
+        ensure(
+          D(p.quantity).gt(0) && D(b.quantity).gte(p.quantity),
+          "Only recorded sellable stock can be taken off the shelf",
+        );
+        move(
+          b.id,
+          D(p.quantity).neg().toFixed(),
+          "quarantine",
+          a.id,
+          p.reason,
+          p.quantity,
+        );
       } else if (p.kind === "release") {
         ensure(
           D(p.quantity).gt(0) && D(b.quarantined).gte(p.quantity),

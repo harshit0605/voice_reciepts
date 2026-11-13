@@ -13,6 +13,7 @@ export * from "./scan";
 export * from "./fingerprint";
 export * from "./catalogue";
 export * from "./opening";
+export * from "./expiry";
 export * from "./returns";
 export * from "./drawer";
 export * from "./report-html";

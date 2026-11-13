@@ -1158,6 +1158,111 @@ describe("offline and evidence", () => {
     expect(s.batches["dolo-b1"].quantity).toBe("32");
     expect(s.batches["dolo-b1"].quarantined).toBe("2");
   });
+  it("takes expired stock off the shelf into quarantine, then disposes of it", () => {
+    let s = demoState(undefined, undefined, undefined, now);
+    s.batches["dolo-b1"].expiry = "2026-09-01";
+    s = approve(s, "stock", {
+      batchId: "dolo-b1",
+      quantity: "30",
+      kind: "quarantine",
+      reason: "Expired; taken off the shelf",
+    });
+    s = apply(s, { type: "stock.execute", approvalId: "approval-1" });
+    expect(s.batches["dolo-b1"].quantity).toBe("2");
+    expect(s.batches["dolo-b1"].quarantined).toBe("30");
+    const move = Object.values(s.stock).find((m) => m.kind === "quarantine")!;
+    expect(move).toMatchObject({
+      quantity: "-30",
+      quarantineDelta: "30",
+      reason: "Expired; taken off the shelf",
+      actorId: owner.id,
+    });
+    // The approval is single-use and the existing disposal flow now applies.
+    expect(() =>
+      apply(s, { type: "stock.execute", approvalId: "approval-1" }),
+    ).toThrow("approval");
+    s = approve(
+      s,
+      "stock",
+      {
+        batchId: "dolo-b1",
+        quantity: "-30",
+        kind: "quarantine_disposal",
+        reason: "Expired; disposed",
+      },
+      "approval-2",
+    );
+    s = apply(s, { type: "stock.execute", approvalId: "approval-2" });
+    expect(s.batches["dolo-b1"].quarantined).toBe("0");
+    expect(s.batches["dolo-b1"].quantity).toBe("2");
+  });
+  it("only quarantines recorded sellable stock, by the owner", () => {
+    const s = demoState(undefined, undefined, undefined, now);
+    const request = (quantity: string) =>
+      approve(s, "stock", {
+        batchId: "dolo-b1",
+        quantity,
+        kind: "quarantine",
+        reason: "Expired",
+      });
+    expect(() =>
+      apply(request("33"), { type: "stock.execute", approvalId: "approval-1" }),
+    ).toThrow("sellable stock");
+    expect(() =>
+      apply(request("-1"), { type: "stock.execute", approvalId: "approval-1" }),
+    ).toThrow("sellable stock");
+    expect(() =>
+      apply(
+        request("1"),
+        { type: "stock.execute", approvalId: "approval-1" },
+        employee,
+      ),
+    ).toThrow("Owner");
+  });
+  it("never sells expired stock: saving, collecting and offline sales are refused", () => {
+    // Valid through the printed date in India; the day after it is expired.
+    const last = demoState(undefined, undefined, undefined, now);
+    last.batches["dolo-b1"].expiry = "2026-09-23";
+    expect(() => apply(order(last), checkout())).not.toThrow();
+    const expired = demoState(undefined, undefined, undefined, now);
+    expired.batches["dolo-b1"].expiry = "2026-09-22";
+    expect(() => order(expired)).toThrowError(
+      expect.objectContaining({ code: "INVALID" }),
+    );
+    expect(() => order(expired)).toThrow("Expired batch cannot be sold");
+    // Expires after the order was saved: collecting it is refused with a clear rejection.
+    const held = order();
+    held.batches["dolo-b1"].expiry = "2026-09-22";
+    expect(() => apply(held, checkout())).toThrow(
+      "Expired batch cannot be sold",
+    );
+    // An offline sale is judged on the day it was made, not the day it reaches the server.
+    const offlineOp = {
+      type: "offline.checkout",
+      deviceId: "demo-device",
+      sequence: 1,
+      orderId: "offline-order",
+      counterId: "counter-1",
+      lines: [{ ...line, pricePaise: 280, taxBps: 1200 }],
+      cashPaise: 2800,
+      dispenserId: owner.id,
+    } as Operation;
+    const lease = { ...owner, offlineAuthorized: true };
+    const lateSync = "2026-09-24T05:00:00.000Z";
+    const soldBeforeExpiry = demoState(undefined, undefined, undefined, now);
+    soldBeforeExpiry.batches["dolo-b1"].expiry = "2026-09-23";
+    expect(() =>
+      execute(soldBeforeExpiry, cmd(offlineOp, now), lease, lateSync),
+    ).not.toThrow();
+    expect(() =>
+      execute(
+        soldBeforeExpiry,
+        cmd(offlineOp, "2026-09-24T04:00:00.000Z"),
+        lease,
+        lateSync,
+      ),
+    ).toThrow("Expired batch cannot be sold");
+  });
   it("keeps EOD provisional until every device syncs after the close cutoff", () => {
     let s = demoState(undefined, undefined, undefined, now);
     s.devices["second"] = {
