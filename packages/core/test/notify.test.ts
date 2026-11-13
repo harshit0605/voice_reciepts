@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   demoState,
   execute,
+  gatewayNotices,
   noticesFor,
   type Actor,
   type Command,
@@ -119,5 +120,33 @@ describe("phone notifications", () => {
       owner,
     );
     expect(closed.notices).toEqual([]);
+  });
+});
+
+describe("gateway silence notices", () => {
+  it("tells only the active owners, in both languages, and opens the reviews page", () => {
+    const s = demoState("2026-09-23T08:00:00.000Z");
+    const [silent] = gatewayNotices(s, "silent", 31.4);
+    expect(silent.to).toEqual(["demo-owner"]);
+    expect(silent.en.title).toMatch(/not responding/i);
+    expect(silent.en.body).toContain("31 minutes");
+    expect(silent.hi.body).toContain("31");
+    expect(silent.page).toBe("reviews");
+    const [back] = gatewayNotices(s, "back", 52);
+    expect(back.en.title).toMatch(/back/i);
+    expect(back.en.body).toContain("52 minutes");
+  });
+  it("skips the gateway's own service account and disabled owners", () => {
+    const s = structuredClone(demoState("2026-09-23T08:00:00.000Z"));
+    s.members["service:gateway"] = {
+      id: "service:gateway",
+      name: "Shop gateway",
+      role: "owner",
+      active: true,
+      mustChangePassword: false,
+      canCollect: false,
+    };
+    s.members["demo-owner"].active = false;
+    expect(gatewayNotices(s, "silent", 30)).toEqual([]);
   });
 });

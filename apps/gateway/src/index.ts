@@ -14,9 +14,12 @@ import { commandSchema, type Invoice } from "@counterwell/core";
 import { verifyLease } from "../../api/src/lease";
 import { GatewayQueue } from "./queue";
 import { printerConfigured, printInvoice } from "./printer";
-const queue = new GatewayQueue(
-  path.resolve(repositoryRoot, process.env.GATEWAY_DATA_DIR ?? ".data/gateway"),
+import { startBackupSync } from "./backup-sync";
+const dataDir = path.resolve(
+  repositoryRoot,
+  process.env.GATEWAY_DATA_DIR ?? ".data/gateway",
 );
+const queue = new GatewayQueue(dataDir);
 const app = new Hono();
 const businessId = process.env.BUSINESS_ID;
 app.use(
@@ -238,6 +241,21 @@ app.post("/clips/:id/preserve", async (c) => {
   );
   return c.json({ ok: true });
 });
+// Encrypted database backups copied from the server, kept beside the other gateway data. This runs
+// on its own timer, apart from the one-second loop below, so a slow download never delays printing.
+let lastBackupCopiedAt: string | null = null;
+if (
+  process.env.BETTER_AUTH_URL &&
+  (process.env.GATEWAY_TOKEN ?? "").length >= 32
+)
+  startBackupSync(
+    {
+      apiUrl: process.env.BETTER_AUTH_URL.replace(/\/$/, ""),
+      token: process.env.GATEWAY_TOKEN!,
+      dir: path.join(dataDir, "backups"),
+    },
+    (at) => (lastBackupCopiedAt = at),
+  );
 let lastHeartbeat = 0;
 let running = false;
 async function tick() {
@@ -265,6 +283,7 @@ async function tick() {
             uncertainPrints: jobs.filter((j) => j.status === "uncertain")
               .length,
             cameraBacklog: pending.n,
+            lastBackupCopiedAt,
           }),
           signal: AbortSignal.timeout(5000),
         });

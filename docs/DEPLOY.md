@@ -147,16 +147,63 @@ template does the same.
 
 ## 6. Backups
 
-A compressed database dump is written to `deploy/backups/` every day and kept for 30 days. Keep a
-copy somewhere other than the server, for example by pulling it to the shop PC or the Mac each
-night:
+The server writes a compressed database dump every day and keeps 30 days of them
+(`/data/counterwell/backups` on the Coolify VPS, `deploy/backups/` with plain Docker). A backup on
+the server's own disk is lost with the server, so each dump is also written **encrypted**, and the
+shop PC copies those off the server by itself.
+
+**How it works.** The backup service encrypts each dump with [age](https://age-encryption.org) to
+the owner's public key (`BACKUP_AGE_RECIPIENT`), giving `counterwell-<date>.sql.gz.age` next to the
+plain `.sql.gz`. The plain file stays on the server because anyone who can read that disk can already read
+the live database, and it restores without a key. Only the owner's private key opens the encrypted
+copy, so nobody at the shop can read the files on the PC. The API lists and serves only the `.age`
+files (`/api/v1/gateway/backups`, checked with `GATEWAY_TOKEN` like every gateway call; the API
+mounts the folder read-only). The gateway checks on start and every 3 hours, downloads what it does
+not have into `data\backups` beside its other data (on the PC:
+`C:\ProgramData\Counterwell\gateway\data\backups`), checks size and SHA-256, keeps the newest 30, and
+reports when the newest copy arrived (`lastBackupCopiedAt` in its health report). A failed copy is
+logged and retried; it never delays printing or sale backup.
+
+**Once: make the key.** On the Mac, save the private key where only you keep it, with a second
+copy somewhere else (a password manager, a printed copy). **Losing it makes every encrypted backup
+unreadable; the server never has it.**
 
 ```bash
-rsync -a server:counterwell/deploy/backups/ ~/counterwell-backups/
+node scripts/make-backup-key.mjs .data/production/backup-age.key    # prints BACKUP_AGE_RECIPIENT=age1...
 ```
 
-Check that a backup restores before relying on it (this uses a scratch database next to the real
-one and removes it afterwards):
+Set that public key as `BACKUP_AGE_RECIPIENT` in Coolify (or `deploy/.env`) and redeploy. The
+redeploy restarts the backup service, which writes an encrypted dump straight away; the shop PC
+fetches it at its next check (every 3 hours). The PC needs the gateway version that copies backups:
+install or update it as in section 7. Until the variable is set, backups behave as before.
+
+**A manual off-server copy** (for example before a risky change, or to hold one on the Mac):
+
+```bash
+node scripts/pull-backup.mjs --api https://$DOMAIN --token-file .data/production/gateway-token.txt
+```
+
+The token file holds only the `GATEWAY_TOKEN` value, and is never printed. The newest encrypted
+backup goes to `~/counterwell-backups/` (`--out` for another folder) after its size and checksum are
+verified. It is still encrypted, so the copy is safe on any disk.
+
+**Check that a backup restores** before relying on it. This decrypts it, loads it into a scratch
+database on a PostgreSQL server you can create databases on (your local one is fine; never the
+live one), counts the sales bills and removes the scratch database:
+
+```bash
+RESTORE_ADMIN_URL=postgres://user:password@localhost:5432 \
+  node scripts/restore-check.mjs --backup ~/counterwell-backups/<file>.sql.gz.age \
+  --key .data/production/backup-age.key
+```
+
+It needs `psql` on the PATH and a PostgreSQL server of version 17 or newer, like the one that made
+the dump. To restore for real
+after losing the server, decrypt the same way (`age --decrypt -i <key> <file>.age | gunzip | psql
+...` works with the age command line tool too) into the new server's empty `counterwell`
+database, then deploy and run the migration as usual.
+
+The plain dumps can be checked on the server itself:
 
 ```bash
 c="docker compose -f deploy/compose.yaml --env-file deploy/.env"
@@ -165,6 +212,16 @@ gunzip -c deploy/backups/<newest file>.sql.gz | $c exec -T postgres psql -q -U c
 $c exec postgres psql -U counterwell -d restore_check -c "select count(*) from retail_invoices"
 $c exec postgres dropdb -U counterwell restore_check
 ```
+
+**Down alerts.** `/health` also reports `backupAgeHours`, the age of the newest backup (once
+encrypted copies exist, of the newest encrypted one, so a broken encryption step shows up too).
+`.github/workflows/uptime.yml` checks it from GitHub every 30 minutes and fails when the server does
+not answer, or the newest backup is older than 26 hours; GitHub emails the repository owner when a
+scheduled run fails. It reads the full health address from the repository variable `HEALTH_URL`
+(Settings → Secrets and variables → Actions → Variables; the value looks like
+`https://<server>/health`), falling back to the production address above. Separately, the worker sends the owner's phone **one** notification when a shop's gateway
+(the shop PC) has been silent for more than 30 minutes, and one when it is back; shops whose
+gateway never reported are never alerted, and a restart of the server does not repeat the alert.
 
 Uploaded bill photos and voice clips are in the `uploads` Docker volume. Bills stay readable in
 the app only while their file is kept.
@@ -191,6 +248,8 @@ gateway URL). Run it again to update the gateway or change the printer. Give the
 on the shop Wi-Fi (a reservation in the router) so that address does not change.
 
 The PC gets `OFFLINE_VERIFY_KEY`, which can check phones' offline permissions but not create them.
+The gateway also copies the server's encrypted database backups (section 6); it needs nothing extra for
+that, only the `GATEWAY_TOKEN` it already has.
 
 ## 8. Updating the server
 

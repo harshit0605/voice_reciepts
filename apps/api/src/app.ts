@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
 import { z, ZodError } from "zod";
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import {
@@ -36,9 +36,9 @@ import {
   voiceAudioLimit,
 } from "./extraction-jobs";
 import { signLease, verifyLease } from "./lease";
-import { deliver } from "./push";
-const safeEqual = (a: string, b: string) =>
-  a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+import { notify } from "./notifications";
+import { gatewayAuthorised } from "./gateway-auth";
+import { backupRoutes, newestBackupAgeHours } from "./backups";
 export const app = new Hono<{
   Variables: { actor: Actor; state: State; userId: string };
 }>();
@@ -112,7 +112,14 @@ app.use("*", async (c, next) => {
 });
 app.get("/health", async (c) => {
   await pool.query("SELECT 1");
-  return c.json({ ok: true, service: "counterwell-api" });
+  // How old the newest database backup is, so an outside check can tell that backups stopped.
+  // Left out when the backup folder is not mounted; never shows file names or paths.
+  const backupAgeHours = await newestBackupAgeHours(process.env.BACKUP_DIR);
+  return c.json({
+    ok: true,
+    service: "counterwell-api",
+    ...(backupAgeHours !== undefined && { backupAgeHours }),
+  });
 });
 // Provisioning calls auth.api internally. Public account creation is always blocked.
 app.on(["POST", "GET"], "/api/auth/*", (c) => {
@@ -252,31 +259,6 @@ app.post("/api/v1/commands", async (c) => {
   if (notices.length && after) void notify(actor.businessId, after, notices);
   return c.json({ result });
 });
-/** Sends notices after the change is saved, and forgets phones Apple or Google no longer know. */
-async function notify(businessId: string, state: State, notices: Notice[]) {
-  try {
-    const gone = await deliver(state, notices);
-    if (gone.length) {
-      // Phones then ask for a new token at their next refresh.
-      console.info(
-        JSON.stringify({ event: "push_tokens_dropped", count: gone.length }),
-      );
-      await transact(businessId, (s) => {
-        const next = structuredClone(s);
-        for (const d of Object.values(next.devices))
-          if (d.pushToken && gone.includes(d.pushToken)) {
-            delete d.pushToken;
-            delete d.pushPlatform;
-          }
-        return { state: next, result: true };
-      });
-    }
-  } catch (e) {
-    console.warn(
-      JSON.stringify({ event: "notify_failed", error: (e as Error).message }),
-    );
-  }
-}
 // A phone says where its notifications go. One token belongs to one phone: a reinstalled app
 // gets its token back under a new device, so the old device stops receiving.
 app.post("/api/v1/devices/push", async (c) => {
@@ -887,10 +869,10 @@ app.get("/api/v1/documents/:id", async (c) => {
     },
   });
 });
+// Encrypted database backups for the shop PC to copy (token-authenticated like the other gateway calls).
+app.route("/api/v1/gateway/backups", backupRoutes);
 app.post("/api/v1/gateway/heartbeat", async (c) => {
-  const expected = process.env.GATEWAY_TOKEN;
-  const supplied = c.req.header("X-Gateway-Token") ?? "";
-  if (!expected || expected.length < 32 || !safeEqual(expected, supplied))
+  if (!gatewayAuthorised(c.req.header("X-Gateway-Token")))
     return c.json({ error: "Gateway authentication required" }, 401);
   const data = z
     .object({
@@ -898,6 +880,8 @@ app.post("/api/v1/gateway/heartbeat", async (c) => {
       printBacklog: z.number().int().nonnegative(),
       uncertainPrints: z.number().int().nonnegative(),
       cameraBacklog: z.number().int().nonnegative(),
+      // When the newest encrypted database backup reached the shop PC (absent on older gateways).
+      lastBackupCopiedAt: z.string().datetime().nullable().optional(),
     })
     .parse(await c.req.json());
   await pool.query(
@@ -939,9 +923,7 @@ app.get("/api/v1/operations", async (c) => {
   });
 });
 app.post("/api/v1/gateway/observations", async (c) => {
-  const expected = process.env.GATEWAY_TOKEN;
-  const supplied = c.req.header("X-Gateway-Token") ?? "";
-  if (!expected || expected.length < 32 || !safeEqual(expected, supplied))
+  if (!gatewayAuthorised(c.req.header("X-Gateway-Token")))
     return c.json({ error: "Gateway authentication required" }, 401);
   const cmd = commandSchema.parse(await c.req.json());
   if (!["camera.observe", "coverage.gap"].includes(cmd.operation.type))

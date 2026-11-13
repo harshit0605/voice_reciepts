@@ -164,3 +164,53 @@ export function noticesFor(
   }
   return notices;
 }
+
+/**
+ * The owner's phone notification when the shop PC (gateway) stops reporting, and when it is back.
+ * The gateway prints receipts and keeps the second copy of offline sales, so a long silence is
+ * worth a call to the shop. `minutes` is how long it has been quiet (silent) or how long the
+ * outage lasted (back). Both are for owners only; the worker decides when to send them.
+ */
+export function gatewayNotices(
+  state: State,
+  kind: "silent" | "back",
+  minutes: number,
+): Notice[] {
+  const owners = Object.values(state.members)
+    // The gateway's own service account is an owner too but has no phone.
+    .filter(
+      (m) => m.role === "owner" && m.active && !m.id.startsWith("service:"),
+    )
+    .map((m) => m.id);
+  if (!owners.length) return [];
+  const mins = Math.max(1, Math.round(minutes));
+  return kind === "silent"
+    ? [
+        {
+          to: owners,
+          en: {
+            title: "Shop PC is not responding",
+            body: `No signal for ${mins} minutes. Receipt printing and the backup copy of offline sales may be down. Check the PC and its internet.`,
+          },
+          hi: {
+            title: "दुकान का PC जवाब नहीं दे रहा",
+            body: `${mins} मिनट से कोई संकेत नहीं। रसीद छपाई और ऑफ़लाइन बिक्री की बैकअप कॉपी बंद हो सकती है। PC और इंटरनेट देखें।`,
+          },
+          page: "reviews",
+        },
+      ]
+    : [
+        {
+          to: owners,
+          en: {
+            title: "Shop PC is back",
+            body: `It was silent for about ${mins} minutes and is reporting again.`,
+          },
+          hi: {
+            title: "दुकान का PC फिर चालू",
+            body: `लगभग ${mins} मिनट बंद रहने के बाद फिर से संकेत आ रहा है।`,
+          },
+          page: "reviews",
+        },
+      ];
+}

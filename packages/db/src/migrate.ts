@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS businesses(id text PRIMARY KEY,revision integer NOT N
 CREATE TABLE IF NOT EXISTS jobs(id text PRIMARY KEY,business_id text NOT NULL,actor_id text NOT NULL,kind text NOT NULL,status text NOT NULL DEFAULT 'pending',input jsonb NOT NULL,output jsonb,attempts integer NOT NULL DEFAULT 0,available_at timestamp NOT NULL DEFAULT now(),locked_at timestamp,error text,created_at timestamp NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS jobs_claim_idx ON jobs(status,available_at);
 CREATE TABLE IF NOT EXISTS gateway_health(business_id text PRIMARY KEY REFERENCES businesses(id),last_seen timestamptz NOT NULL,details jsonb NOT NULL,gap_reported boolean NOT NULL DEFAULT false);
+-- When the owner was told the gateway had gone silent; empty while it is reporting. Keeps it to one phone notification per outage, even across restarts.
+ALTER TABLE gateway_health ADD COLUMN IF NOT EXISTS outage_notified_at timestamptz;
 `);
   for (const name of collections)
     await c.query(

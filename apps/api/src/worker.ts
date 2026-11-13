@@ -3,6 +3,7 @@ import { execute } from "@counterwell/core";
 import { randomUUID } from "node:crypto";
 import { processClaimedExtraction } from "./process-extraction";
 import { recoverAbandonedExtractions } from "./extraction-jobs";
+import { checkGatewayOutages } from "./gateway-outage";
 let stopping = false;
 process.on("SIGTERM", () => {
   stopping = true;
@@ -53,8 +54,28 @@ async function monitorGateway() {
     );
   }
 }
+// After a restart (or a deploy) the gateway may simply not have reported yet, so the phone alert
+// waits a few minutes to hear it before judging it silent.
+const startedAt = Date.now();
+let lastOutageCheck = 0;
+async function alertGatewayOutages() {
+  if (Date.now() - startedAt < 3 * 60_000) return;
+  if (Date.now() - lastOutageCheck < 60_000) return;
+  lastOutageCheck = Date.now();
+  try {
+    await checkGatewayOutages();
+  } catch (e) {
+    console.warn(
+      JSON.stringify({
+        event: "gateway_alert_failed",
+        error: (e as Error).message,
+      }),
+    );
+  }
+}
 async function run() {
   await monitorGateway();
+  await alertGatewayOutages();
   // Recover crashed jobs. Voice files are deleted only after success or terminal failure.
   await recoverAbandonedExtractions();
   const claimed = await pool.query(

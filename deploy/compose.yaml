@@ -13,6 +13,7 @@ x-server: &server
     TRUSTED_ORIGINS: counterwell://
     UPLOAD_DIR: /data/uploads
     PORT: "4100"
+    BACKUP_DIR: /backups
   volumes: [uploads:/data/uploads]
 services:
   postgres:
@@ -35,6 +36,10 @@ services:
   api:
     <<: *server
     command: ["tsx", "apps/api/src/index.ts"]
+    # The backups folder, read-only: /health reports the newest backup's age (BACKUP_DIR, set for
+    # all services above) and the shop PC can fetch the encrypted ones. The api can never change
+    # or delete a backup.
+    volumes: [uploads:/data/uploads, "./backups:/backups:ro"]
     depends_on: { migrate: { condition: service_completed_successfully } }
   worker:
     <<: *server
@@ -50,23 +55,46 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on: [api]
-  # A compressed dump every day, kept for 30 days, in deploy/backups on the server.
-  # Copy that folder somewhere else too (see docs/DEPLOY.md): a backup on the same disk is not enough.
+  # A compressed dump every day, kept for 30 days, in deploy/backups on the server. With
+  # BACKUP_AGE_RECIPIENT (the owner's age public key, in deploy/.env) each dump is also written
+  # encrypted for the shop PC to copy: a backup on the same disk is not enough (docs/DEPLOY.md).
   backup:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
     volumes: ["./backups:/backups"]
     entrypoint:
       - sh
       - -c
       - |
+        # pipefail: a failed pg_dump must not leave a "successful" empty backup behind.
+        set -o pipefail
         while true; do
+          wait=86400
           f=/backups/counterwell-$$(date +%F-%H%M).sql.gz
-          pg_dump -h postgres -U counterwell -d counterwell --no-owner | gzip > "$$f.part" && mv "$$f.part" "$$f"
-          find /backups -name 'counterwell-*.sql.gz' -mtime +30 -delete
-          sleep 86400
+          if pg_dump -h postgres -U counterwell -d counterwell --no-owner | gzip > "$$f.part"; then
+            mv "$$f.part" "$$f"
+            # Also write a copy only the owner's private key can open, for the shop PC to fetch.
+            # The plain .sql.gz stays: anyone who can read this disk can already read the live
+            # database, so encrypting it protects nothing here, and it restores without the key.
+            if [ -n "$$BACKUP_AGE_RECIPIENT" ]; then
+              command -v age >/dev/null || apk add --no-cache age >/dev/null 2>&1
+              if age -r "$$BACKUP_AGE_RECIPIENT" -o "$$f.age.part" "$$f"; then
+                mv "$$f.age.part" "$$f.age"
+              else
+                echo "backup: encrypting the dump failed" >&2
+                find /backups -name '*.age.part' -delete
+              fi
+            fi
+            find /backups -name 'counterwell-*.sql.gz*' -mtime +30 -delete
+          else
+            find /backups -name '*.sql.gz.part' -delete
+            echo "backup: pg_dump failed, trying again in 30 minutes" >&2
+            wait=1800
+          fi
+          sleep $$wait
         done
     depends_on: { postgres: { condition: service_healthy } }
 volumes:

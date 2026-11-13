@@ -3,7 +3,8 @@
 # compose from the repository root, so build paths are relative to the root, not to deploy/.
 # Environment (set in Coolify): DOMAIN, BUSINESS_ID, POSTGRES_PASSWORD, BETTER_AUTH_SECRET,
 # OFFLINE_SIGNING_KEY, GATEWAY_TOKEN, OPENROUTER_API_KEY, OPENAI_API_KEY, the limits, and the
-# notification keys APNS_KEY, APNS_KEY_ID, APNS_TEAM_ID and FCM_SERVICE_ACCOUNT.
+# notification keys APNS_KEY, APNS_KEY_ID, APNS_TEAM_ID and FCM_SERVICE_ACCOUNT, and optionally
+# BACKUP_AGE_RECIPIENT (public key for the encrypted off-server backups).
 services:
   postgres:
     image: postgres:17-alpine
@@ -58,8 +59,12 @@ services:
       APNS_TEAM_ID: ${APNS_TEAM_ID:-}
       APNS_TOPIC: ${APNS_TOPIC:-com.counterwell.mobile}
       FCM_SERVICE_ACCOUNT: ${FCM_SERVICE_ACCOUNT:-}
+      # The backups folder, read-only, so /health can report the newest backup's age and the shop
+      # PC can fetch the encrypted ones. The api can never change or delete a backup.
+      BACKUP_DIR: /backups
     volumes:
       - counterwell-uploads:/data/uploads
+      - /data/counterwell/backups:/backups:ro
     healthcheck:
       test:
         - CMD
@@ -98,23 +103,47 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-  # A compressed dump every day, kept 30 days, in /data/counterwell/backups on the server.
+  # A compressed dump every day, kept 30 days, in /data/counterwell/backups on the server. With
+  # BACKUP_AGE_RECIPIENT (the owner's age public key, not a secret) each dump is also written
+  # encrypted (.sql.gz.age) for the shop PC to copy; see docs/DEPLOY.md section 6.
   backup:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
     volumes:
       - /data/counterwell/backups:/backups
     entrypoint:
       - sh
       - -c
       - |
+        # pipefail: a failed pg_dump must not leave a "successful" empty backup behind.
+        set -o pipefail
         while true; do
+          wait=86400
           f=/backups/counterwell-$$(date +%F-%H%M).sql.gz
-          pg_dump -h postgres -U counterwell -d counterwell --no-owner | gzip > "$$f.part" && mv "$$f.part" "$$f"
-          find /backups -name 'counterwell-*.sql.gz' -mtime +30 -delete
-          sleep 86400
+          if pg_dump -h postgres -U counterwell -d counterwell --no-owner | gzip > "$$f.part"; then
+            mv "$$f.part" "$$f"
+            # Also write a copy only the owner's private key can open, for the shop PC to fetch.
+            # The plain .sql.gz stays: anyone who can read this disk can already read the live
+            # database, so encrypting it protects nothing here, and it restores without the key.
+            if [ -n "$$BACKUP_AGE_RECIPIENT" ]; then
+              command -v age >/dev/null || apk add --no-cache age >/dev/null 2>&1
+              if age -r "$$BACKUP_AGE_RECIPIENT" -o "$$f.age.part" "$$f"; then
+                mv "$$f.age.part" "$$f.age"
+              else
+                echo "backup: encrypting the dump failed" >&2
+                find /backups -name '*.age.part' -delete
+              fi
+            fi
+            find /backups -name 'counterwell-*.sql.gz*' -mtime +30 -delete
+          else
+            find /backups -name '*.sql.gz.part' -delete
+            echo "backup: pg_dump failed, trying again in 30 minutes" >&2
+            wait=1800
+          fi
+          sleep $$wait
         done
     depends_on:
       postgres:

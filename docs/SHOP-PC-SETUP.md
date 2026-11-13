@@ -89,3 +89,4 @@ Choose the printer option from the report:
 Then set the Local gateway URL the installer prints in the app (More → Administration).
 
 - **Server:** the gateway talks to the production server (`https://counterwell.72.62.241.119.sslip.io`) and gets only the public key for offline permissions.
+- **Backup copies:** the gateway also copies the server's daily database backup onto this PC, in `C:\ProgramData\Counterwell\gateway\data\backups`, keeping the newest 30. They are encrypted with the owner's key (see [DEPLOY.md](DEPLOY.md#6-backups)): nobody at the shop can read them, so they must not be deleted or moved, and no password or key is needed on this PC. To check: `dir C:\ProgramData\Counterwell\gateway\data\backups` shows a file about every day, and the gateway's health report to the server (`GET /api/v1/operations`, as the owner) includes `lastBackupCopiedAt`.
