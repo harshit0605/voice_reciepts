@@ -432,3 +432,13 @@ Strict TypeScript and all 181 tests (150 unit, 31 PostgreSQL/API) passed.
   - It added 5 of 5; the server then held 11 products (6 demo plus 5).
 
 **Android builds:** each release now takes minutes since 2024 as its version code. Build 1452357 installed with `versionCode=1452357`, and the app shows its version and build under More. The APK name now carries the build number.
+
+## iPhone launch crash under the iOS 27 SDK (13 November 2026)
+
+**The crash:** TestFlight build `202611120405`, the first made with Xcode 27.2, closed as it opened on the owner's iPhone 17 (iOS 27.2). The phone's crash reports (copied with `devicectl` once Developer Mode was on) all stopped in UIKit's `_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption` (`EXC_BREAKPOINT`), before any app code ran. Apps built with the iOS 27 SDK must use the scene-based life cycle, and the Expo 57 template still started the old way. A release build in the iOS 27.2 simulator crashed identically.
+
+**The fix:** `apps/mobile/plugins/scene-lifecycle.js` makes the changes Expo 58's template makes: a `SceneDelegate` subclassing Expo's own `ExpoAppSceneDelegate`, the scene manifest in Info.plist, and an AppDelegate that hands its React Native factory to the scene. A third-party package that patches this in automatically (`react-native-uiscene-bridge`, a week old) was considered and not used.
+
+- **Simulator (iOS 27.2, release build against production, throwaway check shop):** opens to sign-in, accepts typing and the language toggle, and signs in and loads the shop, which reports up to date. It survives going to the background and back, and after a cold restart it reopens into the shop with the saved sign-in. No crash reports.
+- **The owner's iPhone over the cable:** release build `202611130742` with development signing (`build-ios-release.mjs --device`) installed, opened and kept running (process 818). No new crash report from it; the only later report is from the old TestFlight build, opened just before the install replaced it.
+- **Not checked:** notifications on the iPhone. Cable installs use Apple's development service and the server sends to the production one, so this needs the fixed TestFlight build.
