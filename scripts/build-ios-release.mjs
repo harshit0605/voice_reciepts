@@ -57,8 +57,12 @@ const auth = asc
       asc.issuerId,
     ]
   : [];
+// Every upload needs a new build number; the time of the build always increases.
+const build = new Date().toISOString().replace(/\D/g, "").slice(0, 12);
 const env = {
   ...process.env,
+  // Read by app.config.js, so the app can show which build it is (More → Device and synchronisation).
+  COUNTERWELL_BUILD_NUMBER: build,
   // CocoaPods fails under a non-UTF-8 locale ("Unicode Normalization not appropriate for ASCII-8BIT").
   LANG: "en_US.UTF-8",
   LC_ALL: "en_US.UTF-8",
@@ -71,8 +75,6 @@ const run = (file, args, cwd = mobile) =>
 console.log(`Building the iPhone app for ${env.EXPO_PUBLIC_API_URL} …`);
 run("npx", ["expo", "prebuild", "--platform", "ios", "--no-install"]);
 run("pod", ["install"], path.join(mobile, "ios"));
-// Every upload needs a new build number; the time of the build always increases.
-const build = new Date().toISOString().replace(/\D/g, "").slice(0, 12);
 execFileSync("/usr/libexec/PlistBuddy", [
   "-c",
   `Set :CFBundleVersion ${build}`,

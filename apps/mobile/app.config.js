@@ -11,6 +11,12 @@ module.exports = ({ config }) => {
   );
   return {
     ...config,
+    ios: {
+      ...config.ios,
+      ...(process.env.COUNTERWELL_BUILD_NUMBER
+        ? { buildNumber: process.env.COUNTERWELL_BUILD_NUMBER }
+        : {}),
+    },
     android: {
       ...config.android,
       // Release builds number themselves so each APK installs over the one before it.
