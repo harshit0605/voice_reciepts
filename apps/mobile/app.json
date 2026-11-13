@@ -51,7 +51,8 @@
       ],
       "expo-font",
       "expo-localization",
-      "./plugins/release"
+      "./plugins/release",
+      "./plugins/scene-lifecycle"
     ],
     "experiments": {
       "typedRoutes": false

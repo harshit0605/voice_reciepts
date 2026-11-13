@@ -126,6 +126,25 @@ add them to the group. TestFlight then emails them; they install Apple's TestFli
 Counterwell from there, and later builds arrive as updates. A TestFlight build stops opening after
 90 days, so upload a new one before then.
 
+To try a build on an iPhone connected to the Mac by cable, without waiting for TestFlight: turn
+on Developer Mode on the phone (Settings → Privacy & Security → Developer Mode), keep it unlocked,
+then once run `node scripts/make-ios-dev-signing.mjs`. It registers the phone with the team and
+makes a development certificate and profile. After that, each try is:
+
+```bash
+node scripts/build-ios-release.mjs --api https://$DOMAIN --device
+```
+
+It builds the release app, installs it on the phone and opens it. Crash reports come off the
+phone with `xcrun devicectl device copy from --device <UDID> --domain-type systemCrashLogs
+--source / --destination <folder>`. Such installs use Apple's development notification service,
+so notifications from the production server reach only TestFlight builds.
+
+Builds made with Xcode 27 (the iOS 27 SDK) must use the scene-based app life cycle or iOS stops
+them as they open. `apps/mobile/plugins/scene-lifecycle.js` adds it to the generated project,
+using Expo's own `ExpoAppSceneDelegate`. Remove the plugin after upgrading to Expo 58, whose
+template does the same.
+
 ## 6. Backups
 
 A compressed database dump is written to `deploy/backups/` every day and kept for 30 days. Keep a

@@ -35,10 +35,12 @@ module.exports = ({ config }) => {
           icon: "./assets/notification-icon.png",
           color: "#146D5A",
           // TestFlight and App Store builds use Apple's production notification service.
+          // Builds installed over the cable are development-signed and must use the development one.
           mode:
-            process.env.NODE_ENV === "production"
+            process.env.COUNTERWELL_APNS ??
+            (process.env.NODE_ENV === "production"
               ? "production"
-              : "development",
+              : "development"),
         },
       ],
     ],

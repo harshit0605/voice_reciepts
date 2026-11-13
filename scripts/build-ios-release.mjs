@@ -1,7 +1,11 @@
 // Builds the iPhone app for a shop server and uploads it to TestFlight.
 //
-//   node scripts/build-ios-release.mjs --api https://shop.example.in [--check]
+//   node scripts/build-ios-release.mjs --api https://shop.example.in [--check | --device]
 //
+// --device installs the release build on the iPhone connected by cable (Developer Mode on) instead
+// of uploading, signed for development after scripts/make-ios-dev-signing.mjs. Notifications reach
+// such installs only from a server sending to Apple's development service; TestFlight builds use
+// the production one.
 // Uploading needs an App Store Connect API key (Users and Access → Integrations → App Store
 // Connect API, role Admin) described in .data/apple/asc.json (git-ignored):
 //   { "keyId": "ABC123DEFG", "issuerId": "…-…", "teamId": "XYZ987", "keyPath": "~/.appstoreconnect/private_keys/AuthKey_ABC123DEFG.p8", "bundleId": "com.counterwell.mobile", "appAppleId": "…" }
@@ -34,6 +38,7 @@ if (!api || !/^https:\/\/[^\s/]+/.test(api)) {
   process.exit(1);
 }
 const credentialsFile = path.join(root, ".data/apple/asc.json");
+const device = process.argv.includes("--device");
 const upload = !process.argv.includes("--check") && existsSync(credentialsFile);
 const asc = upload ? JSON.parse(readFileSync(credentialsFile, "utf8")) : null;
 const keyPath = asc?.keyPath?.replace(/^~(?=\/)/, homedir());
@@ -63,6 +68,8 @@ const env = {
   ...process.env,
   // Read by app.config.js, so the app can show which build it is (More → Device and synchronisation).
   COUNTERWELL_BUILD_NUMBER: build,
+  // Development-signed installs must declare Apple's development notification service.
+  ...(device ? { COUNTERWELL_APNS: "development" } : {}),
   // CocoaPods fails under a non-UTF-8 locale ("Unicode Normalization not appropriate for ASCII-8BIT").
   LANG: "en_US.UTF-8",
   LC_ALL: "en_US.UTF-8",
@@ -84,11 +91,20 @@ execFileSync("/usr/libexec/PlistBuddy", [
 // Distribution signing set up by scripts/make-ios-signing.mjs: a distribution certificate in a
 // project-only keychain and an App Store profile. Only the app target's Release build is switched
 // to it; the pods are not signed and development builds are untouched.
-const signing = asc?.signing;
+const signing = device ? asc?.development : asc?.signing;
 if (asc && !signing) {
-  console.error("Run node scripts/make-ios-signing.mjs first.");
+  console.error(
+    `Run node scripts/${device ? "make-ios-dev-signing" : "make-ios-signing"}.mjs first.`,
+  );
   process.exit(1);
 }
+if (device && !asc) {
+  console.error("--device needs .data/apple/asc.json and development signing.");
+  process.exit(1);
+}
+// One project-only keychain holds both identities (made by make-ios-signing.mjs).
+const keychain = asc?.signing?.keychain,
+  keychainPassword = asc?.signing?.keychainPassword;
 let searchList = [];
 if (signing) {
   const project = path.join(
@@ -97,7 +113,7 @@ if (signing) {
   );
   const settings = {
     CODE_SIGN_STYLE: "Manual",
-    CODE_SIGN_IDENTITY: '"Apple Distribution"',
+    CODE_SIGN_IDENTITY: device ? '"Apple Development"' : '"Apple Distribution"',
     DEVELOPMENT_TEAM: asc.teamId,
     PROVISIONING_PROFILE_SPECIFIER: `"${signing.profileName}"`,
   };
@@ -135,20 +151,20 @@ if (signing) {
   })
     .split("\n")
     .map((line) => line.trim().replace(/^"|"$/g, ""))
-    .filter((k) => k && k !== signing.keychain);
+    .filter((k) => k && k !== keychain);
   execFileSync("security", [
     "list-keychains",
     "-d",
     "user",
     "-s",
     ...searchList,
-    signing.keychain,
+    keychain,
   ]);
   execFileSync("security", [
     "unlock-keychain",
     "-p",
-    signing.keychainPassword,
-    signing.keychain,
+    keychainPassword,
+    keychain,
   ]);
   process.on("exit", () =>
     execFileSync("security", [
@@ -159,6 +175,74 @@ if (signing) {
       ...searchList,
     ]),
   );
+}
+
+if (device) {
+  // The first iPhone connected by cable, unless --udid names one.
+  let udid = argument("udid");
+  if (!udid) {
+    const listing = path.join(out, "devices.json");
+    mkdirSync(out, { recursive: true });
+    execFileSync(
+      "xcrun",
+      ["devicectl", "list", "devices", "--json-output", listing],
+      {
+        stdio: "ignore",
+      },
+    );
+    udid = JSON.parse(readFileSync(listing, "utf8")).result.devices.find(
+      (d) =>
+        d.hardwareProperties?.platform === "iOS" &&
+        d.hardwareProperties?.reality === "physical" &&
+        d.connectionProperties?.tunnelState === "connected",
+    )?.hardwareProperties.udid;
+    if (!udid) {
+      console.error(
+        "No iPhone is connected: plug it in by cable and unlock it.",
+      );
+      process.exit(1);
+    }
+  }
+  const derived = path.join(root, ".data/ios-device");
+  run("xcodebuild", [
+    "-workspace",
+    "ios/Counterwell.xcworkspace",
+    "-scheme",
+    "Counterwell",
+    "-configuration",
+    "Release",
+    "-destination",
+    "generic/platform=iOS",
+    "-derivedDataPath",
+    derived,
+    `OTHER_CODE_SIGN_FLAGS=--keychain ${keychain}`,
+    "build",
+  ]);
+  const app = path.join(
+    derived,
+    "Build/Products/Release-iphoneos/Counterwell.app",
+  );
+  run("xcrun", [
+    "devicectl",
+    "device",
+    "install",
+    "app",
+    "--device",
+    udid,
+    app,
+  ]);
+  run("xcrun", [
+    "devicectl",
+    "device",
+    "process",
+    "launch",
+    "--terminate-existing",
+    "--device",
+    udid,
+    asc.bundleId,
+  ]);
+  console.log(`\nInstalled and opened build ${build} on the iPhone (${udid}).`);
+  process.exit(0);
 }
 
 mkdirSync(out, { recursive: true });
@@ -176,7 +260,7 @@ run("xcodebuild", [
   archive,
   ...auth,
   ...(signing
-    ? [`OTHER_CODE_SIGN_FLAGS=--keychain ${signing.keychain}`]
+    ? [`OTHER_CODE_SIGN_FLAGS=--keychain ${keychain}`]
     : ["CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO"]),
   "archive",
 ]);
