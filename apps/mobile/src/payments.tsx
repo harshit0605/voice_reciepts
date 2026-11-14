@@ -356,7 +356,10 @@ export function CustomerPicker({
     [name, setName] = useState(""),
     [phone, setPhone] = useState(""),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    // The customer just saved here, kept until the refreshed customer list carries it, so the
+    // bill shows them as chosen even if that refresh is slow or lands out of order.
+    [added, setAdded] = useState<{ id: string; name: string } | null>(null);
   const q = query.trim().toLowerCase();
   const matches = Object.values(state.customers)
     .filter(
@@ -368,18 +371,22 @@ export function CustomerPicker({
     )
     .sort((a, b) => a.name.localeCompare(b.name))
     .slice(0, 6);
-  const chosen = state.customers[value];
+  const chosen =
+    state.customers[value] ??
+    (added && added.id === value
+      ? { id: added.id, name: added.name }
+      : undefined);
   const owes = chosen ? balance(state, chosen.id) : 0;
   async function add() {
     if (busy) return;
     setBusy(true);
     setError("");
     try {
-      const id = uid();
-      await s.command({
-        type: "customer.create",
-        customer: { id, name: name.trim(), phone: phone.trim(), address: "" },
-      });
+      const id = uid(),
+        customer = { id, name: name.trim(), phone: phone.trim(), address: "" };
+      await s.command({ type: "customer.create", customer });
+      // Choose the customer this command just created, by the id it was created with.
+      setAdded({ id, name: customer.name });
       onChange(id);
       setAdding(false);
       setName("");
@@ -453,7 +460,13 @@ export function CustomerPicker({
               disabled={busy || !name.trim()}
               onPress={() => void add()}
             >
-              {hi ? "सेव करें" : "Save customer"}
+              {busy
+                ? hi
+                  ? "सेव हो रहा है…"
+                  : "Saving…"
+                : hi
+                  ? "सेव करें"
+                  : "Save customer"}
             </Button>
             <Button small secondary onPress={() => setAdding(false)}>
               {hi ? "रद्द" : "Cancel"}
