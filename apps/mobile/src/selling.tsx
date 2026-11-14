@@ -112,6 +112,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
       voice: { ...emptyVoice(uid()), appliedJobIds: v.voice.appliedJobIds },
       checkoutInterrupted: false,
       checkout: undefined,
+      customerId: undefined,
     }));
     if (!saved)
       s.setError(
@@ -827,6 +828,10 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
           pin={(attempt) =>
             selling.update((v) => ({ ...v, checkout: attempt }))
           }
+          customerId={selling.entry.customerId}
+          onCustomer={(id) =>
+            void selling.update((v) => ({ ...v, customerId: id || undefined }))
+          }
           onComplete={(i) => void finishEntry(i)}
           onHeld={() => void finishEntry()}
         />
@@ -861,6 +866,8 @@ export function Checkout({
   existingOrderId,
   attempt,
   pin,
+  customerId: draftCustomerId,
+  onCustomer,
 }: {
   lines: OrderLine[];
   onComplete: (i: Invoice) => void;
@@ -869,6 +876,9 @@ export function Checkout({
   existingOrderId?: string;
   attempt?: CheckoutAttempt;
   pin?: (attempt: CheckoutAttempt) => Promise<boolean>;
+  /** A new sale's customer from its saved draft, and where to save a change to it. */
+  customerId?: string;
+  onCustomer?: (id: string) => void;
 }) {
   const s = useSession(),
     t = useText(),
@@ -897,8 +907,12 @@ export function Checkout({
   );
   const approvedCreditPaise = Number(approvedCredit?.payload.amountPaise ?? 0);
   const [method, setMethod] = useState(approvedCredit ? "credit" : "cash"),
-    [customerId, setCustomer] = useState(
-      state.orders[existingOrderId ?? ""]?.customerId ?? "",
+    [customerId, setCustomerId] = useState(
+      existingOrderId
+        ? (state.orders[existingOrderId]?.customerId ?? "")
+        : (draftCustomerId ??
+            state.orders[attempt?.orderId ?? ""]?.customerId ??
+            ""),
     ),
     [cash, setCash] = useState(
       approvedCredit
@@ -918,6 +932,10 @@ export function Checkout({
     [doctor, setDoctor] = useState(""),
     [doctorAddress, setDoctorAddress] = useState(""),
     [prescriptionRef, setPrescriptionRef] = useState("");
+  const setCustomer = (id: string) => {
+    setCustomerId(id);
+    onCustomer?.(id);
+  };
   let change: number | null = null;
   try {
     if (received.trim()) change = exactPaise(received) - total;

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View } from "react-native";
+import { Keyboard, View } from "react-native";
 import { useSession, uid } from "./session";
 import { Txt, Button, Field, Row, Chip, colors, styles, useWord } from "./ui";
 import {
@@ -379,6 +379,9 @@ export function CustomerPicker({
   const owes = chosen ? balance(state, chosen.id) : 0;
   async function add() {
     if (busy) return;
+    // Let go of the name/phone field before the form closes: on Android, removing a focused field
+    // hands focus (and the keyboard) to the next field on the bill, "Cash collected".
+    Keyboard.dismiss();
     setBusy(true);
     setError("");
     try {
@@ -468,7 +471,14 @@ export function CustomerPicker({
                   ? "सेव करें"
                   : "Save customer"}
             </Button>
-            <Button small secondary onPress={() => setAdding(false)}>
+            <Button
+              small
+              secondary
+              onPress={() => {
+                Keyboard.dismiss();
+                setAdding(false);
+              }}
+            >
               {hi ? "रद्द" : "Cancel"}
             </Button>
           </Row>

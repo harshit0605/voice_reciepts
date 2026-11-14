@@ -31,6 +31,8 @@ export type SaleEntry = {
   /** Only drafts saved before `checkout` existed set this; they still need the manual Orders check. */
   checkoutInterrupted: boolean;
   checkout?: CheckoutAttempt;
+  /** Customer chosen at checkout, kept so closing and reopening the payment sheet does not drop them. */
+  customerId?: string;
 };
 export function emptyVoice(id: string): VoiceWork {
   return {
