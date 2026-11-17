@@ -12,7 +12,18 @@ export * from "./schema";
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 10,
+  // Fail fast instead of queueing forever when the database is unreachable or saturated.
+  connectionTimeoutMillis: 5_000,
+  // A phone gives up after 12 s; work the server does after that only delays the retry.
+  statement_timeout: 20_000,
+  lock_timeout: 10_000,
+  idle_in_transaction_session_timeout: 30_000,
 });
+// An idle client losing its connection (a Postgres restart) emits 'error' on the pool; without a
+// listener that is an uncaught exception that takes the whole API down.
+pool.on("error", (e) =>
+  console.error(JSON.stringify({ event: "db_pool_error", error: e.message })),
+);
 export const db = drizzle(pool, { schema });
 type Db = typeof db;
 async function load(
@@ -36,6 +47,18 @@ async function load(
     );
   }
   return state;
+}
+/** One member of a shop, without loading the shop: what every authenticated request needs. */
+export async function readMember(
+  businessId: string,
+  userId: string,
+): Promise<State["members"][string] | null> {
+  const table = schema.tables.members;
+  const [row] = await db
+    .select({ payload: table.payload })
+    .from(table)
+    .where(and(eq(table.businessId, businessId), eq(table.id, userId)));
+  return (row?.payload as State["members"][string] | undefined) ?? null;
 }
 export async function readState(id: string): Promise<State | null> {
   return db.transaction(async (tx) => {
@@ -117,6 +140,15 @@ export async function changes(
   since: number,
   project: (state: State) => State,
 ) {
+  // Phones ask every few seconds and the answer is usually "nothing new": answer that from one
+  // row instead of loading the whole shop.
+  const [current] = await db
+    .select({ revision: schema.businesses.revision })
+    .from(schema.businesses)
+    .where(eq(schema.businesses.id, id));
+  if (!current) return null;
+  if (since === current.revision)
+    return { revision: current.revision, unchanged: true };
   return db.transaction(async (tx) => {
     await tx.execute(
       sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY`,

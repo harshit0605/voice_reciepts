@@ -5,7 +5,12 @@ vi.mock("@google/genai", () => ({
     models = { generateContent: generate };
   },
 }));
-import { extract, decodingSchema, speechProvider } from "./providers";
+import {
+  extract,
+  decodingSchema,
+  speechProvider,
+  structureTranscript,
+} from "./providers";
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -194,6 +199,7 @@ it("sends a PDF to the model itself rather than a paid OCR plugin", async () => 
 it("rejects an OpenRouter error or malformed draft without a second paid call", async () => {
   vi.stubEnv("GEMINI_API_KEY", "");
   vi.stubEnv("OPENROUTER_API_KEY", "test-only");
+  vi.stubEnv("OPENAI_API_KEY", "");
   const fetch = vi.fn().mockResolvedValue(openRouterReply("", 402));
   vi.stubGlobal("fetch", fetch);
   await expect(
@@ -303,4 +309,43 @@ it("treats an OpenAI error as a failed transcription without calling the structu
     extract("voice", Buffer.from("audio"), "audio/mp4"),
   ).rejects.toThrow("Speech provider returned 429");
   expect(generate).not.toHaveBeenCalled();
+});
+
+it("falls back to OpenAI when OpenRouter is out of credit, but not for its other errors", async () => {
+  vi.stubEnv("GEMINI_API_KEY", "");
+  vi.stubEnv("OPENROUTER_API_KEY", "test-only");
+  vi.stubEnv("OPENAI_API_KEY", "test-only");
+  const draft = JSON.stringify({
+    items: [
+      {
+        name: "Azithromycin",
+        strength: null,
+        form: null,
+        quantity: "5",
+        unit: "goli",
+        uncertain: false,
+      },
+    ],
+    warnings: [],
+  });
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(openRouterReply("", 402))
+    .mockResolvedValueOnce(openRouterReply(draft));
+  vi.stubGlobal("fetch", fetch);
+  const out = await structureTranscript("Azithromycin 5 goli");
+  expect(out.provider).toBe("openai");
+  expect((out.draft as { items: { unit: string }[] }).items[0].unit).toBe(
+    "goli",
+  );
+  expect(String(fetch.mock.calls[1][0])).toContain("api.openai.com");
+  const sent = JSON.parse(fetch.mock.calls[1][1].body);
+  expect(sent.response_format.json_schema.strict).toBe(true);
+  expect(sent.store).toBe(false);
+  // A server error at OpenRouter is not an account problem: no second paid call elsewhere.
+  fetch.mockReset().mockResolvedValue(openRouterReply("", 500));
+  await expect(structureTranscript("Dolo 650 2 strip")).rejects.toThrow(
+    "returned 500",
+  );
+  expect(fetch).toHaveBeenCalledTimes(1);
 });

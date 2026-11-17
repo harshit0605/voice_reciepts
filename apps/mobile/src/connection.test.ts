@@ -226,9 +226,37 @@ describe("deciding the phone is offline", () => {
     r.failure();
     r.failure();
     expect(r.online).toBe(true);
+    // Time in the background is not silence: one later failure is still not an outage.
     c.advance(4000);
-    r.failure();
-    expect(r.online).toBe(false); // long silence since the last success
+    expect(r.failure()).toBe(false);
+    expect(r.failure()).toBe(true);
+  });
+  it("judges a request by when it started: a sync begun as the app woke, failing 12 s later, is ignored", () => {
+    const c = clock();
+    const r = new Reachability({ now: c.now, resumeGraceMs: 4000 });
+    r.setActive(false);
+    c.advance(120_000);
+    r.setActive(true);
+    const started = c.now() + 800;
+    c.advance(13_000);
+    r.failure(started);
+    r.failure(started);
+    expect(r.online).toBe(true);
+  });
+  it("ignores a slow failure from before the connection came back", () => {
+    const c = clock();
+    const r = new Reachability({ now: c.now });
+    const early = c.now();
+    r.failure(early);
+    r.failure(early);
+    expect(r.online).toBe(false);
+    c.advance(2000);
+    r.success();
+    c.advance(10_000);
+    // A request that began before that success and only now timed out says nothing new.
+    expect(r.failure(early)).toBe(false);
+    expect(r.failure(early)).toBe(false);
+    expect(r.online).toBe(true);
   });
   it("can be marked offline at start-up", () => {
     const r = new Reachability();

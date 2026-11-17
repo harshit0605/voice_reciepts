@@ -56,8 +56,12 @@ export function staffInk(id: string | undefined) {
 export function initials(name: string | undefined) {
   const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return "?";
-  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : ""))
-    .toUpperCase();
+  // By character, not UTF-16 unit, and one letter each even where upper case is two ("ß" → "SS").
+  const first = (word: string) =>
+    Array.from(Array.from(word)[0].toUpperCase())[0];
+  return (
+    first(parts[0]) + (parts.length > 1 ? first(parts[parts.length - 1]) : "")
+  );
 }
 
 /** Anek Devanagari (Ek Type) carries Hindi and English with matched forms and tabular figures. */

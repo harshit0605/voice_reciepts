@@ -5,7 +5,8 @@ export function integer(v: Decimal.Value): number {
   const d = D(v);
   if (!d.isInteger() || d.abs().gt(Number.MAX_SAFE_INTEGER))
     throw new Error("Unsafe money value");
-  return d.toNumber();
+  // Never -0: it would print as "-₹0.00".
+  return d.toNumber() || 0;
 }
 export const round = (v: Decimal.Value) =>
   integer(D(v).toDecimalPlaces(0, Decimal.ROUND_HALF_UP));
@@ -54,6 +55,7 @@ export function quote(
   });
   const total = gross.reduce((n, l) => n + l.gross, 0);
   if (discountPaise > total) throw new Error("Discount exceeds sale");
+  if (discountPaise < 0) throw new Error("Discount cannot be negative");
   // Floor each line's share, then put the leftover paise on the last line, carrying whatever a
   // line cannot take (its discount may never exceed its gross) back to the lines before it.
   const shares = gross.map((x) =>

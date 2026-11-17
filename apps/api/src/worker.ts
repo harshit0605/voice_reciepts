@@ -96,6 +96,15 @@ async function run() {
   return true;
 }
 while (!stopping) {
-  if (!(await run())) await new Promise((r) => setTimeout(r, 1000));
+  let worked = false;
+  try {
+    worked = await run();
+  } catch (e) {
+    // A brief database outage must not kill the worker; try again shortly.
+    console.error(
+      JSON.stringify({ event: "worker_error", error: (e as Error).message }),
+    );
+  }
+  if (!worked) await new Promise((r) => setTimeout(r, 1000));
 }
 await pool.end();

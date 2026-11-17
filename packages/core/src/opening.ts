@@ -27,7 +27,9 @@ export function parseExpiry(input: string): string | null {
   const s = input
     .trim()
     .toLowerCase()
-    .replace(/^exp\.?\s*/, "");
+    // Packs print "EXP: 04/27" or "Expiry 04/2027"; OCR adds a trailing full stop.
+    .replace(/^exp(?:iry)?\.?\s*:?\s*/, "")
+    .replace(/\.$/, "");
   let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
   if (m) {
     const out = iso(+m[1], +m[2], +m[3]);

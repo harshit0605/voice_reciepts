@@ -55,13 +55,16 @@ export function itemCount(n: number, language: string) {
 export function useWord() {
   const { language } = useSession();
   return (word: string) =>
-    language === "hi" ? (englishToHindi[word] ?? word) : word;
+    language === "hi" && Object.hasOwn(englishToHindi, word)
+      ? englishToHindi[word]
+      : word;
 }
 function translateCopy(value: any, language: string): any {
   if (language !== "hi") return value;
   if (typeof value === "string") {
     const trim = value.trim();
-    if (englishToHindi[trim]) return value.replace(trim, englishToHindi[trim]);
+    if (Object.hasOwn(englishToHindi, trim))
+      return value.replace(trim, englishToHindi[trim]);
     // Drawer differences from core's differenceText: "₹50.00 short" / "₹20.00 over".
     const diff = /^(₹[\d,.]+) (short|over)$/.exec(trim);
     return diff

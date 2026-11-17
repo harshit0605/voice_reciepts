@@ -15,7 +15,7 @@ import {
   setAudioModeAsync,
 } from "expo-audio";
 import * as FileSystem from "expo-file-system";
-import { useSession, uid } from "./session";
+import { useSession, uid, isConnectionLost } from "./session";
 import { appendFile } from "./upload";
 import {
   Txt,
@@ -154,7 +154,8 @@ export function VoiceEntry({
         } else timer = setTimeout(poll, 1000);
       } catch (e) {
         if (live) {
-          setError((e as Error).message);
+          // A dropped poll is retried; the header says when the phone is really offline.
+          if (!isConnectionLost(e)) setError((e as Error).message);
           timer = setTimeout(poll, 5000);
         }
       }
@@ -362,7 +363,9 @@ export function VoiceEntry({
         ) : (
           <>
             {recording ? (
-              <View style={{ alignItems: "center", gap: 10, paddingVertical: 8 }}>
+              <View
+                style={{ alignItems: "center", gap: 10, paddingVertical: 8 }}
+              >
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={t(
@@ -397,7 +400,9 @@ export function VoiceEntry({
                 </Button>
               </View>
             ) : (
-              <View style={{ alignItems: "center", gap: 10, paddingVertical: 8 }}>
+              <View
+                style={{ alignItems: "center", gap: 10, paddingVertical: 8 }}
+              >
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={t(
@@ -415,7 +420,9 @@ export function VoiceEntry({
                     borderRadius: 48,
                     alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: pressed ? palette.bluePressed : palette.blue,
+                    backgroundColor: pressed
+                      ? palette.bluePressed
+                      : palette.blue,
                     borderWidth: 4,
                     borderColor: palette.blueTint,
                     opacity: busy || !!work.jobId || !!pendingAudio ? 0.4 : 1,

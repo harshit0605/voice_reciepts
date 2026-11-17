@@ -49,7 +49,11 @@ export const normalVoice = (v: string) =>
     .toLowerCase()
     .normalize("NFKC")
     .replace(/[०-९]/g, (c) => String(c.charCodeAt(0) - 0x966))
-    .replace(/[^\p{L}\p{N}.]/gu, "");
+    // Keep combining marks: Devanagari vowel signs tell काला from कली.
+    .replace(/[^\p{L}\p{M}\p{N}.]/gu, "");
+/** Own keys only: a spoken word such as "constructor" must not find Object's methods. */
+const lookup = (map: Record<string, string>, key: string) =>
+  Object.hasOwn(map, key) ? map[key] : undefined;
 const units: Record<string, string> = {
   goli: "tablet",
   goliyan: "tablet",
@@ -93,7 +97,8 @@ export function spokenUnit(value: string, product: Product): string | null {
     (u) => normalVoice(u) === valueKey,
   );
   if (direct) return direct;
-  const canonical = units[value.trim().toLowerCase()] ?? units[valueKey];
+  const canonical =
+    lookup(units, value.trim().toLowerCase()) ?? lookup(units, valueKey);
   if (!canonical) return null;
   // Product unit names may differ in case ("Strip"), so match them the same way as spoken ones.
   return (
@@ -166,14 +171,14 @@ export function readableQuantity(value: string) {
 /** Units said in Hindi or plural shown as the catalogue's word: "गोलियां" → "tablet". */
 export function readableUnit(value: string) {
   const key = value.trim().toLowerCase();
-  return units[key] ?? units[normalVoice(value)] ?? value;
+  return lookup(units, key) ?? lookup(units, normalVoice(value)) ?? value;
 }
 export function spokenQuantity(value: string): string {
   const v = value
     .trim()
     .toLowerCase()
     .replace(/[०-९]/g, (c) => String(c.charCodeAt(0) - 0x966));
-  const n = numbers[v] ?? v;
+  const n = lookup(numbers, v) ?? v;
   return /^(?:[1-9]\d{0,5}|0)(?:\.\d{1,3})?$/.test(n) && Number(n) > 0 ? n : "";
 }
 /**
@@ -236,7 +241,13 @@ export function parseExactSaleText(
   const parts = text
     .trim()
     .split(/[;\n]+/)
-    .map((s) => s.trim())
+    // Dictation adds sentence punctuation ("Azithromycin 5 goli.", "Dolo 650 mg 1, strip").
+    .map((s) =>
+      s
+        .replace(/,/g, " ")
+        .replace(/[.!?।]+$/u, "")
+        .trim(),
+    )
     .filter(Boolean);
   if (!parts.length || parts.length > 50) return null;
   const items: SpokenItem[] = [];

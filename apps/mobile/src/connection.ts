@@ -46,7 +46,15 @@ export function fromGateway(r: Pick<Response, "status" | "ok" | "headers">) {
   return !r.ok && !(r.headers.get("content-type") ?? "").includes("json");
 }
 
-export type Attempt = (signal: AbortSignal) => Promise<Response>;
+/** What a retry needs to see of an answer; a full Response qualifies. */
+export type Answer = Pick<Response, "status" | "ok" | "headers">;
+/**
+ * One try. It should also read the body before returning, so the time limit covers a reply that
+ * stalls halfway (some native fetches have no timeout of their own).
+ */
+export type Attempt<T extends Answer = Response> = (
+  signal: AbortSignal,
+) => Promise<T>;
 export type RetryOptions = {
   /** Extra attempts after the first (0 = no retry). */
   retries: number;
@@ -78,10 +86,10 @@ function timeoutSignal(ms: number) {
  * the API itself (2xx, or a JSON 4xx/500) is returned as is: the server decided, so it is not retried.
  * Throws TransientFailure when every attempt failed.
  */
-export async function withRetry(
-  attempt: Attempt,
+export async function withRetry<T extends Answer>(
+  attempt: Attempt<T>,
   options: RetryOptions,
-): Promise<Response> {
+): Promise<T> {
   const sleep = options.sleep ?? defaultSleep;
   const delays = options.delaysMs ?? [400, 1500, 3000];
   let allNeverSent = true;
@@ -157,9 +165,17 @@ export class Reachability {
     this.online = true;
     return changed;
   }
-  /** Returns true when this changed `online`. */
-  failure() {
-    if (!this.active || this.now() - this.resumedAt < this.resumeGraceMs)
+  /**
+   * A request that started at `startedAt` failed. Returns true when this changed `online`.
+   * Ignored when it started before the latest success (it says nothing newer), in the background,
+   * or within the grace period after returning (the radio was still waking when it began).
+   */
+  failure(startedAt = this.now()) {
+    if (
+      !this.active ||
+      startedAt < this.lastSuccess ||
+      startedAt < this.resumedAt + this.resumeGraceMs
+    )
       return false;
     this.failures++;
     const stale = this.now() - this.lastSuccess >= this.staleAfterMs;
@@ -171,7 +187,12 @@ export class Reachability {
   }
   /** The app went to the background (true) or came back to the front (false). */
   setActive(active: boolean) {
-    if (active && !this.active) this.resumedAt = this.now();
+    if (active && !this.active) {
+      this.resumedAt = this.now();
+      // Time spent in the background is not silence from the server.
+      this.lastSuccess = this.now();
+      this.failures = 0;
+    }
     this.active = active;
   }
   /** Seen offline at start-up (no saved session could be confirmed): show it straight away. */

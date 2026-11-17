@@ -26,6 +26,7 @@ import {
   db,
   pool,
   readState,
+  readMember,
   transact,
   changes,
   membershipsFor,
@@ -42,7 +43,7 @@ import { notify } from "./notifications";
 import { gatewayAuthorised } from "./gateway-auth";
 import { backupRoutes, newestBackupAgeHours } from "./backups";
 export const app = new Hono<{
-  Variables: { actor: Actor; state: State; userId: string };
+  Variables: { actor: Actor; userId: string };
 }>();
 app.use(
   "*",
@@ -147,10 +148,10 @@ app.use("/api/v1/*", async (c, next) => {
   }
   const businessId = c.req.header("X-Business-Id");
   if (!businessId) return c.json({ error: "Select a business" }, 400);
-  const state = await readState(businessId);
-  const member = state?.members[session.user.id];
-  if (!state || !member)
-    return c.json({ error: "Business access denied" }, 403);
+  // Only this person's membership is needed here; loading the whole shop on every request made
+  // each call slower as the shop's history grew.
+  const member = await readMember(businessId, session.user.id);
+  if (!member) return c.json({ error: "Business access denied" }, 403);
   const recoveryIngress = c.req.path === "/api/v1/sync";
   if (!member.active && !recoveryIngress)
     return c.json({ error: "Account disabled" }, 403);
@@ -165,7 +166,6 @@ app.use("/api/v1/*", async (c, next) => {
     role: member.role,
     canCollect: member.canCollect,
   });
-  c.set("state", state);
   await next();
 });
 app.get("/api/v1/me", async (c) =>
@@ -174,13 +174,20 @@ app.get("/api/v1/me", async (c) =>
     memberships: await membershipsFor(c.get("userId")),
   }),
 );
-app.get("/api/v1/state", (c) =>
-  c.json(
+/** The whole shop, loaded only by the routes that need it (not on every request). */
+async function shopState(c: { get(key: "actor"): Actor }) {
+  const state = await readState(c.get("actor").businessId);
+  if (!state) throw new DomainError("NOT_FOUND", "Shop not found");
+  return state;
+}
+app.get("/api/v1/state", async (c) => {
+  const state = await shopState(c);
+  return c.json(
     c.get("actor").role === "owner"
-      ? c.get("state")
-      : employeeView(c.get("state"), c.get("actor").id),
-  ),
-);
+      ? state
+      : employeeView(state, c.get("actor").id),
+  );
+});
 const staffHidden = [
   "suppliers",
   "purchases",
@@ -399,9 +406,7 @@ app.post("/api/v1/sync", async (c) => {
   // valid sales behind it (the phone resends the same batch until every entry has an answer).
   const data = z
     .object({
-      entries: z
-        .array(z.object({ command: z.unknown(), lease: z.unknown() }))
-        .max(100),
+      entries: z.array(z.unknown()).max(100),
     })
     .parse(await c.req.json());
   const actor = c.get("actor");
@@ -411,7 +416,10 @@ app.post("/api/v1/sync", async (c) => {
       .object({ command: commandSchema, lease: z.string() })
       .safeParse(raw);
     if (!parsed.success) {
-      const id = (raw.command as { id?: unknown } | null | undefined)?.id;
+      const id = (
+        (raw as { command?: { id?: unknown } | null } | null | undefined)
+          ?.command as { id?: unknown } | null | undefined
+      )?.id;
       results.push({
         id: typeof id === "string" ? id : null,
         status: "invalid",
@@ -626,18 +634,19 @@ app.post("/api/v1/recovery/:id", async (c) => {
   });
   return c.json(result);
 });
-app.get("/api/v1/reports", (c) => {
+app.get("/api/v1/reports", async (c) => {
   if (c.get("actor").role !== "owner")
     return c.json({ error: "Owner only" }, 403);
   const date = c.req.query("date");
+  const state = await shopState(c);
   return c.json({
-    totals: totals(c.get("state"), date),
-    ...(date ? { report: dayReport(c.get("state"), date) } : {}),
-    eods: Object.values(c.get("state").eods),
+    totals: totals(state, date),
+    ...(date ? { report: dayReport(state, date) } : {}),
+    eods: Object.values(state.eods),
   });
 });
-app.get("/api/v1/invoices/:id/receipt", (c) => {
-  const invoice = c.get("state").invoices[c.req.param("id")];
+app.get("/api/v1/invoices/:id/receipt", async (c) => {
+  const invoice = (await shopState(c)).invoices[c.req.param("id")];
   const actor = c.get("actor");
   if (
     !invoice ||
@@ -762,7 +771,9 @@ app.post("/api/v1/employees/:id/password", async (c) => {
   return c.json({ ok: true });
 });
 app.post("/api/v1/extractions", async (c) => {
-  const form = await c.req.formData();
+  // A body that is not multipart (a client bug) is a bad request, not a server fault.
+  const form = await c.req.formData().catch(() => undefined);
+  if (!form) return c.json({ error: "Expected a multipart upload" }, 400);
   const kind = z.enum(["voice", "invoice"]).parse(form.get("kind"));
   const actor = c.get("actor");
   if (kind === "invoice" && actor.role !== "owner")
@@ -963,7 +974,7 @@ app.get("/api/v1/operations", async (c) => {
             Date.now() - new Date(gateway.last_seen).getTime() < 90000,
         }
       : null,
-    devices: Object.values(c.get("state").devices)
+    devices: Object.values((await shopState(c)).devices)
       .filter((d) => !d.revoked)
       .map((d) => ({
         id: d.id,

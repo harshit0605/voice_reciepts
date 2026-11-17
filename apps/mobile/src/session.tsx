@@ -13,12 +13,7 @@ import {
   TransientFailure,
 } from "./connection";
 import * as Crypto from "expo-crypto";
-import {
-  authClient,
-  API_URL,
-  cookieHeaders,
-  forgetLocalSession,
-} from "./auth";
+import { authClient, API_URL, cookieHeaders, forgetLocalSession } from "./auth";
 import * as storage from "./storage";
 import { devicePushToken, freshPushToken } from "./push";
 import {
@@ -43,6 +38,9 @@ const NO_RESPONSE =
   "No response from the server. This may already be saved, so do not collect payment again. It will be checked when the connection returns.";
 const CONNECTION_LOST =
   "Connection unavailable. Cash billing can continue in the mobile app while your authorisation is valid.";
+/** The shop server could not be reached (the header shows offline once that lasts). */
+export const isConnectionLost = (e: unknown) =>
+  (e as Error)?.message === CONNECTION_LOST;
 /** What staff can act on, instead of the auth library's wording. */
 const signInProblem = (e: { status?: number; message?: string }) =>
   e.status === 401 || e.status === 400
@@ -148,6 +146,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const languageRef = useRef(language);
   languageRef.current = language;
   const syncing = useRef(false);
+  const syncStarted = useRef(0);
+  const refreshing = useRef(false);
   const operating = useRef(false);
   const registeringPush = useRef(false);
   // Refreshes can overlap (the quick poll, a command, a full sync); never let an older answer win.
@@ -227,19 +227,34 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     // A dropped request is retried when sending it twice is harmless (see connection.ts). A sale is
     // retried once only, so the counter is not kept waiting through a real outage.
     const repeatable = canRepeat(init.method, route);
-    let r: Response;
+    const upload = init.body instanceof FormData;
+    const startedAt = Date.now();
+    let r: { status: number; ok: boolean; headers: Headers; text: string };
     try {
       r = await withRetry(
-        (signal) =>
-          fetch(`${API_URL}/api/v1${route}`, {
+        async (signal) => {
+          const response = await fetch(`${API_URL}/api/v1${route}`, {
             ...init,
             headers,
-            credentials: "include",
+            // On the phone the cookie is sent explicitly above; letting the native layer add its
+            // own copy as well can garble the header on iOS. The browser keeps its own cookie.
+            credentials: Platform.OS === "web" ? "include" : "omit",
             signal,
-          }),
+          });
+          // Read the body inside the attempt so its time limit also covers a reply that stalls.
+          const text = await response.text();
+          return {
+            status: response.status,
+            ok: response.ok,
+            headers: response.headers,
+            text,
+          };
+        },
         {
           retries: !repeatable ? 0 : route === "/commands" ? 1 : 2,
-          timeoutMs: 12000,
+          // A bill photo on a slow uplink needs far longer than a small request; a sale should
+          // not keep the counter waiting long before its one retry.
+          timeoutMs: upload ? 120_000 : route === "/commands" ? 10_000 : 12_000,
           neverSent,
           // The OS suspends networking in the background: retrying there only burns attempts.
           shouldStop: () => AppState.currentState === "background",
@@ -247,7 +262,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       );
     } catch (e) {
       if (__DEV__) console.warn(`request ${route} failed`, e);
-      reachability.current.failure();
+      reachability.current.failure(startedAt);
       setOnline(reachability.current.online);
       throw Object.assign(new Error(CONNECTION_LOST), {
         notSent: e instanceof TransientFailure ? e.notSent : neverSent(e),
@@ -260,7 +275,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setError((current) => (current === CONNECTION_LOST ? "" : current));
     let data: any;
     try {
-      data = await r.json();
+      data = JSON.parse(r.text);
     } catch {
       throw new Error("The shop server sent an unexpected answer. Try again.");
     }
@@ -337,6 +352,24 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     // Resolve unanswered actions and queued sales now rather than at the next 30-second tick.
     void sync();
     void registerPush();
+    void renewSignIn();
+  }
+  // The saved sign-in cookie carries an expiry the auth library enforces on the phone. The server
+  // extends the session while the phone is used, but only a session read through the auth client
+  // stores the extended cookie; without this every phone was signed out a week after signing in.
+  const lastSignInRenewal = useRef(0);
+  async function renewSignIn() {
+    if (
+      demoRef.current ||
+      Date.now() - lastSignInRenewal.current < 6 * 3600_000
+    )
+      return;
+    lastSignInRenewal.current = Date.now();
+    try {
+      await authClient.getSession();
+    } catch {
+      lastSignInRenewal.current = 0; // offline: try again at the next sync
+    }
   }
   async function login(username: string, password: string) {
     setError("");
@@ -562,13 +595,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         throw new Error(NO_RESPONSE);
       }
       await markUncertain(null);
-      try {
-        await refresh();
-      } catch {
+      // Show the saved result promptly, but never keep the counter waiting on a slow refresh: if it
+      // takes longer, it finishes in the background.
+      const refreshed = refresh().then(
+        () => true,
+        () => false,
+      );
+      const outcome = await Promise.race([
+        refreshed,
+        new Promise<null>((r) => setTimeout(() => r(null), 8000)),
+      ]);
+      if (outcome === false)
         setError(
           "Saved on the server. The view will update after reconnection; do not collect payment again.",
         );
-      }
       return result.result;
     } finally {
       operating.current = false;
@@ -711,13 +751,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     await storage.set("identity", renewed);
   }
   async function sync() {
-    if (demo || syncing.current || !identityRef.current?.lease) return;
+    if (demo || !identityRef.current?.lease) return;
+    // A sync stuck on a request that never settles must not block every later one forever.
+    if (syncing.current && Date.now() - syncStarted.current < 120_000) return;
     syncing.current = true;
+    syncStarted.current = Date.now();
     try {
       let entries =
         (await storage.get<storage.Queued[]>(`outbox:${scope()}`)) ?? [];
       const unresolved = await storage.get<Command>(`online:${scope()}`);
-      if (unresolved) {
+      // While a sale is being sent, its own request is still running: resending it here would
+      // race it and show a false "confirmed after no response" notice.
+      if (unresolved && !operating.current) {
         try {
           await request("/commands", {
             method: "POST",
@@ -888,10 +933,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           );
           try {
             await establish();
-          } catch {
+          } catch (e) {
             // Opened without reaching the server: show offline now, not after a second failure.
-            reachability.current.markOffline();
-            setOnline(false);
+            // Any other answer (signed out, password change) means the server is reachable.
+            if (isConnectionLost(e)) {
+              reachability.current.markOffline();
+              setOnline(false);
+            } else if (!(e as any).httpStatus || (e as any).httpStatus >= 500)
+              setError(friendly(e as Error).message);
           }
         }
       } catch (e) {
@@ -912,12 +961,23 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const interval = setInterval(() => {
       if (AppState.currentState === "background") return;
       void sync();
+      void renewSignIn();
     }, 30000);
     // A handoff or approval from another counter should show within seconds; an
     // unchanged shop costs one small request.
     const quick = setInterval(() => {
-      if (syncing.current || AppState.currentState !== "active") return;
-      void refresh().catch(() => {});
+      if (
+        syncing.current ||
+        refreshing.current ||
+        AppState.currentState !== "active"
+      )
+        return;
+      refreshing.current = true;
+      void refresh()
+        .catch(() => {})
+        .finally(() => {
+          refreshing.current = false;
+        });
     }, 8000);
     return () => {
       sub.remove();

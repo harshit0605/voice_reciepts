@@ -3,7 +3,7 @@ import { View, Pressable, Platform, ActivityIndicator } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import { useSession, uid } from "./session";
+import { useSession, uid, isConnectionLost } from "./session";
 import * as storage from "./storage";
 import { API_URL, cookieHeaders } from "./auth";
 import { appendFile } from "./upload";
@@ -176,7 +176,8 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
         } else timer = setTimeout(poll, 2000);
       } catch (e) {
         if (live) {
-          setError((e as Error).message);
+          // A dropped poll is retried; the header says when the phone is really offline.
+          if (!isConnectionLost(e)) setError((e as Error).message);
           timer = setTimeout(poll, 10000);
         }
       }
@@ -342,7 +343,9 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
       {draft.jobId ? (
         <View style={{ gap: 12 }}>
           <ActivityIndicator color={palette.blue} />
-          <Txt weight={600}>{t("Reading your invoice…", "आपका बिल पढ़ रहे हैं…")}</Txt>
+          <Txt weight={600}>
+            {t("Reading your invoice…", "आपका बिल पढ़ रहे हैं…")}
+          </Txt>
           <Txt color={palette.ink2}>
             {t(
               "You can close this screen and return. The saved job will resume without another upload.",
@@ -578,28 +581,32 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
             <Section
               title={t("Received items", "मिला हुआ सामान")}
               action={
-                <Badge tone={confirmed !== draft.lines.length ? "waiting" : "paid"}>
+                <Badge
+                  tone={confirmed !== draft.lines.length ? "waiting" : "paid"}
+                >
                   {confirmed} / {draft.lines.length} {t("reviewed", "जाँचे गए")}
                 </Badge>
               }
             >
-            {draft.lines.map((line, i) => (
-              <ReceivingItem
-                key={line.id}
-                line={line}
-                products={Object.values(state.products)}
-                expanded={expanded === line.id}
-                toggle={() =>
-                  setExpanded(expanded === line.id ? null : line.id)
-                }
-                error={rowResults[i].error}
-                result={rowResults[i].line}
-                change={(patch) => changeLine(line.id, patch)}
-                remove={() =>
-                  change({ lines: draft.lines.filter((l) => l.id !== line.id) })
-                }
-              />
-            ))}
+              {draft.lines.map((line, i) => (
+                <ReceivingItem
+                  key={line.id}
+                  line={line}
+                  products={Object.values(state.products)}
+                  expanded={expanded === line.id}
+                  toggle={() =>
+                    setExpanded(expanded === line.id ? null : line.id)
+                  }
+                  error={rowResults[i].error}
+                  result={rowResults[i].line}
+                  change={(patch) => changeLine(line.id, patch)}
+                  remove={() =>
+                    change({
+                      lines: draft.lines.filter((l) => l.id !== line.id),
+                    })
+                  }
+                />
+              ))}
             </Section>
             <Button
               secondary
@@ -779,7 +786,9 @@ function ReceivingItem({
             )}
             <View style={{ marginTop: 2 }}>
               <Badge tone={validReview ? "paid" : "waiting"}>
-                {validReview ? t("Reviewed", "जाँचा गया") : t("Review", "जाँचें")}
+                {validReview
+                  ? t("Reviewed", "जाँचा गया")
+                  : t("Review", "जाँचें")}
               </Badge>
             </View>
           </View>
@@ -853,7 +862,11 @@ function ReceivingItem({
                 }
                 leading={
                   p.id === line.productId ? (
-                    <Icon name="checkmark-circle" size={20} color={palette.blue} />
+                    <Icon
+                      name="checkmark-circle"
+                      size={20}
+                      color={palette.blue}
+                    />
                   ) : undefined
                 }
                 title={`${p.name} ${p.strength}`}
