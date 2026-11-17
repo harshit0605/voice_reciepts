@@ -548,7 +548,10 @@ export function useAttention(): Attention[] {
   }
   const now = Date.now();
   for (const a of approvals) {
+    // Answers are for the person who asked. Someone who decided their own request (the owner)
+    // does not need to be told what they just decided.
     if (a.requestedBy !== me.id || a.kind === "stock") continue;
+    if (a.decidedBy === me.id) continue;
     const amount =
       a.kind === "refund"
         ? (() => {

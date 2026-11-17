@@ -7,3 +7,4 @@ export const authClient = createAuthClient({
   plugins: [usernameClient()],
 });
 export const cookieHeaders = async (): Promise<Record<string, string>> => ({});
+export const forgetLocalSession = async () => {};

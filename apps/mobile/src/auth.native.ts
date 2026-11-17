@@ -19,3 +19,12 @@ export const cookieHeaders = async (): Promise<Record<string, string>> => {
   const cookie = await authClient.getCookie();
   return cookie ? { Cookie: cookie } : {};
 };
+/** Drops the saved sign-in from this phone without needing the server (a sign-out while offline). */
+export const forgetLocalSession = async () => {
+  for (const key of ["cookie", "session_data"])
+    try {
+      await SecureStore.deleteItemAsync(`counterwell.auth_${key}`);
+    } catch {
+      /* nothing saved, or the keystore refused: the server session still ends by itself */
+    }
+};

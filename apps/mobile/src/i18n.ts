@@ -114,7 +114,7 @@ export const labels = {
     employee: "काउंटर कार्यक्षेत्र",
     sync: "अभी सिंक करें",
     synced: "अपडेट है",
-    offline: "ऑफलाइन",
+    offline: "ऑफ़लाइन",
     pending: "बाकी",
     noResults: "कोई दवा नहीं मिली",
     today: "आज",

@@ -7,7 +7,12 @@ import React, {
 } from "react";
 import { AppState, Platform } from "react-native";
 import * as Crypto from "expo-crypto";
-import { authClient, API_URL, cookieHeaders } from "./auth";
+import {
+  authClient,
+  API_URL,
+  cookieHeaders,
+  forgetLocalSession,
+} from "./auth";
 import * as storage from "./storage";
 import { devicePushToken, freshPushToken } from "./push";
 import {
@@ -225,12 +230,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         notSent: neverSent(e),
       });
     }
-    const data = await r.json();
+    // A tunnel or proxy that cannot reach the server answers with an HTML error page (502, 503,
+    // 504, 530), not the API's JSON: that is "unreachable", not a working connection.
+    let data: any;
+    try {
+      data = await r.json();
+    } catch {
+      if (!r.ok || r.status >= 500) {
+        setOnline(false);
+        throw Object.assign(new Error(CONNECTION_LOST), { notSent: false });
+      }
+      throw new Error("The shop server sent an unexpected answer. Try again.");
+    }
+    if (r.status === 502 || r.status === 503 || r.status === 504) {
+      setOnline(false);
+      throw Object.assign(new Error(CONNECTION_LOST), { notSent: false });
+    }
     if (!r.ok) {
       if (data.code === "PASSWORD_CHANGE_REQUIRED") setPasswordRequired(true);
       // The session ended (password changed on another phone, signed out, unused for a week):
       // say so instead of looking connected while every sync is refused.
-      if (r.status === 401) setSignInRequired(true);
+      if (r.status === 401 && identityRef.current) setSignInRequired(true);
       // A rejected form field, in words: never the bare "Invalid input" from the validator.
       const issue = Array.isArray(data.issues) ? data.issues[0] : undefined;
       const message =
@@ -394,13 +414,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       throw new Error(
         "Synchronise or recover pending actions before signing out.",
       );
-    if (!demo) await authClient.signOut();
+    // The person chose to sign out: clear this phone whether or not the server can be reached.
+    // Never show the raw network error, and never the "signed out elsewhere" screen afterwards.
+    identityRef.current = null;
+    if (!demo) {
+      try {
+        await Promise.race([
+          authClient.signOut({}),
+          new Promise((_, no) => setTimeout(() => no(new Error("slow")), 6000)),
+        ]);
+      } catch {
+        /* offline: the server session expires by itself */
+      }
+      await forgetLocalSession();
+    }
     await storage.remove("identity");
     setError("");
     setState(null);
     setUncertain(null);
     setIdentity(null);
-    identityRef.current = null;
     setDemo(false);
     setSignInRequired(false);
   }

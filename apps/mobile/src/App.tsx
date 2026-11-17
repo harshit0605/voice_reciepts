@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Keyboard,
   type TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -471,7 +472,26 @@ function Login() {
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const passwordRef = useRef<TextInput>(null),
-    replacementRef = useRef<TextInput>(null);
+    replacementRef = useRef<TextInput>(null),
+    scroller = useRef<ScrollView>(null);
+  // Edge-to-edge Android does not resize the window for the keyboard (and the form could not
+  // scroll past it), so lift the form by the keyboard's height, as the Sheet does, and scroll
+  // down so the password field and Sign in button stay in view. iOS uses KeyboardAvoidingView.
+  const [keyboard, setKeyboard] = useState(0);
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const shown = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboard(e.endCoordinates.height);
+      setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 120);
+    });
+    const hidden = Keyboard.addListener("keyboardDidHide", () =>
+      setKeyboard(0),
+    );
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, []);
   const submit = async () => {
     setBusy(true);
     setError("");
@@ -487,10 +507,11 @@ function Login() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={{ flex: 1, paddingBottom: keyboard }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
+          ref={scroller}
           contentContainerStyle={{
             flexGrow: 1,
             justifyContent: "center",
