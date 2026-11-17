@@ -72,6 +72,8 @@ app.use(
     onError: (c) => c.json({ error: "Upload exceeds 12 MB" }, 413),
   }),
 );
+// JSON, so the app can tell the API's own 404 from a proxy's text page while the API is down.
+app.notFound((c) => c.json({ error: "Not found" }, 404));
 app.onError((e, c) => {
   if (e instanceof ZodError)
     return c.json({ error: "Invalid input", issues: e.issues }, 400);

@@ -6,6 +6,12 @@ import React, {
   useState,
 } from "react";
 import { AppState, Platform } from "react-native";
+import {
+  canRepeat,
+  withRetry,
+  Reachability,
+  TransientFailure,
+} from "./connection";
 import * as Crypto from "expo-crypto";
 import {
   authClient,
@@ -127,6 +133,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [demo, setDemo] = useState(false),
     [loading, setLoading] = useState(true),
     [online, setOnline] = useState(true),
+    reachability = useRef(new Reachability()),
     [error, setError] = useState(""),
     [language, changeLanguage] = useState<"en" | "hi">("en"),
     [pending, setPending] = useState<storage.Queued[]>([]),
@@ -217,39 +224,45 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     };
     if (init.body && !(init.body instanceof FormData))
       headers["Content-Type"] = "application/json";
+    // A dropped request is retried when sending it twice is harmless (see connection.ts). A sale is
+    // retried once only, so the counter is not kept waiting through a real outage.
+    const repeatable = canRepeat(init.method, route);
     let r: Response;
     try {
-      r = await fetch(`${API_URL}/api/v1${route}`, {
-        ...init,
-        headers,
-        credentials: "include",
-        signal: AbortSignal.timeout(15000),
-      });
-      setOnline(true);
-      // The connection is back: an old "unavailable" notice would now be wrong.
-      setError((current) => (current === CONNECTION_LOST ? "" : current));
+      r = await withRetry(
+        (signal) =>
+          fetch(`${API_URL}/api/v1${route}`, {
+            ...init,
+            headers,
+            credentials: "include",
+            signal,
+          }),
+        {
+          retries: !repeatable ? 0 : route === "/commands" ? 1 : 2,
+          timeoutMs: 12000,
+          neverSent,
+          // The OS suspends networking in the background: retrying there only burns attempts.
+          shouldStop: () => AppState.currentState === "background",
+        },
+      );
     } catch (e) {
-      setOnline(false);
       if (__DEV__) console.warn(`request ${route} failed`, e);
+      reachability.current.failure();
+      setOnline(reachability.current.online);
       throw Object.assign(new Error(CONNECTION_LOST), {
-        notSent: neverSent(e),
+        notSent: e instanceof TransientFailure ? e.notSent : neverSent(e),
       });
     }
-    // A tunnel or proxy that cannot reach the server answers with an HTML error page (502, 503,
-    // 504, 530), not the API's JSON: that is "unreachable", not a working connection.
+    // The API answered, so the connection works, whatever the answer says.
+    reachability.current.success();
+    setOnline(true);
+    // An old "unavailable" notice would now be wrong.
+    setError((current) => (current === CONNECTION_LOST ? "" : current));
     let data: any;
     try {
       data = await r.json();
     } catch {
-      if (!r.ok || r.status >= 500) {
-        setOnline(false);
-        throw Object.assign(new Error(CONNECTION_LOST), { notSent: false });
-      }
       throw new Error("The shop server sent an unexpected answer. Try again.");
-    }
-    if (r.status === 502 || r.status === 503 || r.status === 504) {
-      setOnline(false);
-      throw Object.assign(new Error(CONNECTION_LOST), { notSent: false });
     }
     if (!r.ok) {
       if (data.code === "PASSWORD_CHANGE_REQUIRED") setPasswordRequired(true);
@@ -820,7 +833,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         });
       await refresh();
     } catch (e) {
-      setError(friendly(e as Error).message);
+      // One dropped background sync is not news: the next one retries. Say it once offline.
+      if (
+        (e as Error).message !== CONNECTION_LOST ||
+        !reachability.current.online
+      )
+        setError(friendly(e as Error).message);
     } finally {
       syncing.current = false;
       // Whatever happened above, show what is really still waiting, not a stale count.
@@ -871,6 +889,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           try {
             await establish();
           } catch {
+            // Opened without reaching the server: show offline now, not after a second failure.
+            reachability.current.markOffline();
             setOnline(false);
           }
         }
@@ -884,9 +904,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!identity || demo || signInRequired) return;
     const sub = AppState.addEventListener("change", (status) => {
-      if (status === "active") void sync();
+      // "inactive" (a system sheet, the app switcher) keeps the network; only background stops it.
+      reachability.current.setActive(status !== "background");
+      // Give the radio a moment after returning before syncing.
+      if (status === "active") setTimeout(() => void sync(), 800);
     });
     const interval = setInterval(() => {
+      if (AppState.currentState === "background") return;
       void sync();
     }, 30000);
     // A handoff or approval from another counter should show within seconds; an
