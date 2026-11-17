@@ -1,7 +1,7 @@
 import { createAuthClient } from "better-auth/react";
 import { usernameClient } from "better-auth/client/plugins";
 import { expoClient } from "@better-auth/expo/client";
-import * as SecureStore from "expo-secure-store";
+import { keychain } from "./keychain.native";
 export const API_URL =
   process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4100";
 export const authClient = createAuthClient({
@@ -11,7 +11,7 @@ export const authClient = createAuthClient({
     expoClient({
       scheme: "counterwell",
       storagePrefix: "counterwell.auth",
-      storage: SecureStore,
+      storage: keychain,
     }),
   ],
 });
@@ -23,7 +23,7 @@ export const cookieHeaders = async (): Promise<Record<string, string>> => {
 export const forgetLocalSession = async () => {
   for (const key of ["cookie", "session_data"])
     try {
-      await SecureStore.deleteItemAsync(`counterwell.auth_${key}`);
+      await keychain.deleteItemAsync(`counterwell.auth_${key}`);
     } catch {
       /* nothing saved, or the keystore refused: the server session still ends by itself */
     }

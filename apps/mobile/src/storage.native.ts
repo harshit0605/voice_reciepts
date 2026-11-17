@@ -1,5 +1,5 @@
 import * as SQLite from "expo-sqlite";
-import * as SecureStore from "expo-secure-store";
+import { keychain } from "./keychain.native";
 import * as Crypto from "expo-crypto";
 import type { Command, State } from "@counterwell/core";
 export type Queued = {
@@ -12,12 +12,12 @@ let connection: Promise<SQLite.SQLiteDatabase> | undefined;
 function db() {
   if (!connection) {
     connection = (async () => {
-      let key = await SecureStore.getItemAsync("counterwell.database.key");
+      let key = await keychain.getItemAsync("counterwell.database.key");
       if (!key) {
         key = Array.from(await Crypto.getRandomBytesAsync(32))
           .map((b) => b.toString(16).padStart(2, "0"))
           .join("");
-        await SecureStore.setItemAsync("counterwell.database.key", key);
+        await keychain.setItemAsync("counterwell.database.key", key);
       }
       const db = await SQLite.openDatabaseAsync("counterwell.db");
       await db.execAsync(`PRAGMA key = \"x'${key}'\";`);

@@ -592,4 +592,6 @@ export const hindiCopy: Record<string, string> = {
     "बोलकर एंट्री अभी उपलब्ध नहीं है। दवा का पूरा नाम टाइप करें, या खोज इस्तेमाल करें।",
   "Bill reading is unavailable right now. Enter the bill by hand.":
     "बिल पढ़ना अभी उपलब्ध नहीं है। बिल हाथ से भरें।",
+  "The phone was locked while the app was starting. Close and reopen the app.":
+    "ऐप खुलते समय फ़ोन लॉक था। ऐप बंद करके फिर से खोलें।",
 };

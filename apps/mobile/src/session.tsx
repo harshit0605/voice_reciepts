@@ -68,8 +68,13 @@ function friendly<E>(e: E): E {
     e.message = CLOCK_SKEW;
   else if (e.message === "Open a cash drawer before collecting cash")
     e.message = "Open the cash drawer first: More → Cash drawer.";
+  // The iPhone keychain stays shut while the phone is locked (see keychain.native.ts).
+  else if (/User interaction is not allowed|KeyChainException/i.test(e.message))
+    e.message = KEYCHAIN_LOCKED;
   return e;
 }
+const KEYCHAIN_LOCKED =
+  "The phone was locked while the app was starting. Close and reopen the app.";
 const NOT_SENT =
   "No connection, so this was not saved. Cash bills still work offline; try this again when the connection returns.";
 type Identity = {
@@ -870,7 +875,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (e) {
-        setError((e as Error).message);
+        setError(friendly(e as Error).message);
       } finally {
         setLoading(false);
       }
