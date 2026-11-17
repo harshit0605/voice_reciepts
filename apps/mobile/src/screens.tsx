@@ -29,6 +29,20 @@ import {
   useWord,
   itemCount,
   SHOWN_PRODUCTS,
+  palette,
+  space,
+  radius,
+  toneInk,
+  Entry,
+  ListRow,
+  Line,
+  TotalRule,
+  Stamp,
+  StaffMark,
+  Amount,
+  Panel,
+  Banner,
+  stampDate,
 } from "./ui";
 import { Checkout } from "./selling";
 import { ProductForm } from "./product-form";
@@ -97,23 +111,36 @@ function orderSummary(state: State, o: Order) {
   });
   return { lines, totalPaise };
 }
+/** The time column of a register entry: the clock for today, a short date for earlier days. */
+function entryTime(at: string) {
+  if (indiaDate(at) === indiaDate(new Date().toISOString())) {
+    const d = new Date(at);
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+  return new Date(at).toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+  });
+}
 function OrderLines({ order }: { order: Order }) {
   const state = useSession().state!,
     w = useWord();
   return (
     <View style={{ marginBottom: 16 }}>
       {orderSummary(state, order).lines.map((l) => (
-        <Row
+        <ListRow
           key={l.key}
-          style={[styles.listRow, { justifyContent: "space-between" }]}
-        >
-          <Txt bold style={{ flex: 1 }}>
-            {l.name}
-          </Txt>
-          <Txt muted size={12}>
-            {`${l.quantity} ${w(l.unit)}${l.batch ? ` · ${l.batch}` : ""}`}
-          </Txt>
-        </Row>
+          title={l.name}
+          detail={`${l.quantity} ${w(l.unit)}`}
+          trailing={
+            l.batch ? (
+              <Txt num weight={600} size={14} color={palette.ink2}>
+                {l.batch}
+              </Txt>
+            ) : undefined
+          }
+        />
       ))}
     </View>
   );
@@ -121,17 +148,28 @@ function OrderLines({ order }: { order: Order }) {
 export function Page({ title, subtitle, action, children }: any) {
   return (
     <ScrollView
-      contentContainerStyle={{ padding: 24, paddingBottom: 50 }}
+      style={{ backgroundColor: palette.paper }}
+      contentContainerStyle={{
+        paddingHorizontal: space.gutter,
+        paddingTop: 20,
+        paddingBottom: 56,
+      }}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
     >
-      <Row style={{ justifyContent: "space-between", marginBottom: 26 }}>
-        <View style={{ flex: 1 }}>
-          <Txt size={28} bold style={{ letterSpacing: -0.7 }}>
+      <Row
+        style={{
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          marginBottom: 24,
+        }}
+      >
+        <View style={{ flex: 1, gap: 4 }}>
+          <Txt size={28} weight={700} style={{ letterSpacing: -0.4 }}>
             {title}
           </Txt>
           {subtitle && (
-            <Txt size={12} muted style={{ marginTop: 6 }}>
+            <Txt size={14} color={palette.ink2}>
               {subtitle}
             </Txt>
           )}
@@ -355,53 +393,7 @@ export function OverviewScreen({
           : "Cash, sales and staff at a glance."
       }
     >
-      <Pressable
-        onPress={() => navigate("money")}
-        style={{
-          backgroundColor: colors.accent,
-          borderRadius: 16,
-          padding: 24,
-          marginBottom: 22,
-        }}
-      >
-        {drawer ? (
-          <>
-            <Txt style={{ color: "#BFE1CE" }} size={12}>
-              {hi ? "दराज़ में होना चाहिए" : "Should be in the drawer now"}
-            </Txt>
-            <Txt
-              size={40}
-              bold
-              style={{ color: "white", marginTop: 8, letterSpacing: -1.2 }}
-            >
-              {rupees(expectedCash(state, drawer.id))}
-            </Txt>
-            <Txt size={12} style={{ color: "#BFE1CE", marginTop: 8 }}>
-              {lastCount
-                ? hi
-                  ? `आख़िरी गिनती ${clock(lastCount.at)} · ${state.members[lastCount.by]?.name ?? ""} · ${differenceText(lastCount.differencePaise)}`
-                  : `Last counted ${clock(lastCount.at)} by ${state.members[lastCount.by]?.name ?? "someone"}: ${differenceText(lastCount.differencePaise)}`
-                : hi
-                  ? `${indiaDate(drawer.openedAt) !== today ? `${dayLabel(indiaDate(drawer.openedAt), hi)} ` : ""}${clock(drawer.openedAt)} पर खुली · अभी गिनी नहीं`
-                  : `Opened ${indiaDate(drawer.openedAt) !== today ? `${dayLabel(indiaDate(drawer.openedAt))} ` : ""}${clock(drawer.openedAt)} · not counted since`}
-            </Txt>
-          </>
-        ) : (
-          <>
-            <Txt style={{ color: "#BFE1CE" }} size={12}>
-              {hi ? "दराज़ बंद है" : "The drawer is closed"}
-            </Txt>
-            <Txt size={20} bold style={{ color: "white", marginTop: 8 }}>
-              {lastClose
-                ? `${hi ? "आख़िरी बार" : "Last close"}: ${differenceText(lastClose.discrepancyPaise)}`
-                : hi
-                  ? "पहली बिक्री से पहले खोलें"
-                  : "Open it before the first cash sale"}
-            </Txt>
-          </>
-        )}
-      </Pressable>
-      <Row style={{ marginBottom: 16 }}>
+      <Row style={{ marginBottom: 20 }}>
         <Chip active={day === "today"} onPress={() => setDay("today")}>
           {t("today")}
         </Chip>
@@ -409,14 +401,23 @@ export function OverviewScreen({
           {hi ? "कल" : "Yesterday"}
         </Chip>
       </Row>
-      <View style={[styles.panel, { marginBottom: 22 }]}>
-        <Txt muted size={12}>
-          {hi ? "शुद्ध बिक्री" : "Net sales"}
+      <View style={{ marginBottom: 32 }}>
+        <Txt size={14} weight={500} color={palette.ink2}>
+          {day === "today"
+            ? hi
+              ? "आज की बिक्री"
+              : "Sales today"
+            : hi
+              ? "कल की बिक्री"
+              : "Sales yesterday"}
         </Txt>
-        <Txt size={32} bold style={{ marginTop: 6 }}>
-          {rupees(r.sales.netPaise)}
-        </Txt>
-        <Txt muted size={12} style={{ marginTop: 6 }}>
+        <Amount
+          value={rupees(r.sales.netPaise)}
+          size={40}
+          weight={700}
+          style={{ marginTop: 4 }}
+        />
+        <Txt size={13} color={palette.ink3} style={{ marginTop: 4, marginBottom: 12 }}>
           {r.sales.bills} {hi ? "बिल" : r.sales.bills === 1 ? "bill" : "bills"}
           {r.sales.returnsPaise
             ? ` · ${hi ? "वापसी" : "returns"} ${rupees(r.sales.returnsPaise)}`
@@ -425,116 +426,172 @@ export function OverviewScreen({
             ? ` · ${hi ? "छूट" : "discounts"} ${rupees(r.sales.discountsPaise)}`
             : ""}
         </Txt>
-        <Row
-          style={{ justifyContent: "space-between", marginTop: 16, gap: 12 }}
+        <Line label={hi ? "नकद" : "Cash"} value={rupees(r.sales.cashPaise)} />
+        <Line label="UPI" value={rupees(r.sales.upiPaise)} />
+        <Line
+          label={hi ? "उधार" : "Credit"}
+          value={rupees(r.sales.creditPaise)}
+        />
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => navigate("money")}
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? palette.desk : "transparent",
+          })}
         >
-          {[
-            [hi ? "नकद" : "Cash", r.sales.cashPaise],
-            ["UPI", r.sales.upiPaise],
-            [hi ? "उधार" : "Credit", r.sales.creditPaise],
-          ].map(([label, value]) => (
-            <View key={String(label)}>
-              <Txt size={11} muted>
-                {label}
-              </Txt>
-              <Txt size={18} bold style={{ marginTop: 4 }}>
-                {rupees(Number(value))}
-              </Txt>
-            </View>
-          ))}
-        </Row>
+          {drawer ? (
+            <Line
+              strong
+              label={
+                hi ? "दराज़ में होना चाहिए" : "Cash expected in the drawer"
+              }
+              value={rupees(expectedCash(state, drawer.id))}
+              note={
+                <Txt size={13} color={palette.ink3}>
+                  {lastCount
+                    ? hi
+                      ? `आख़िरी गिनती ${clock(lastCount.at)} · ${state.members[lastCount.by]?.name ?? ""} · ${differenceText(lastCount.differencePaise)}`
+                      : `Last counted ${clock(lastCount.at)} by ${state.members[lastCount.by]?.name ?? "someone"}: ${differenceText(lastCount.differencePaise)}`
+                    : hi
+                      ? `${indiaDate(drawer.openedAt) !== today ? `${dayLabel(indiaDate(drawer.openedAt), hi)} ` : ""}${clock(drawer.openedAt)} पर खुली · अभी गिनी नहीं`
+                      : `Opened ${indiaDate(drawer.openedAt) !== today ? `${dayLabel(indiaDate(drawer.openedAt))} ` : ""}${clock(drawer.openedAt)} · not counted since`}
+                </Txt>
+              }
+            />
+          ) : (
+            <Line
+              strong
+              label={hi ? "दराज़ बंद है" : "The drawer is closed"}
+              value={
+                lastClose ? differenceText(lastClose.discrepancyPaise) : "—"
+              }
+              color={
+                lastClose
+                  ? differenceColour(lastClose.discrepancyPaise)
+                  : undefined
+              }
+              note={
+                <Txt size={13} color={palette.ink3}>
+                  {lastClose
+                    ? hi
+                      ? "आख़िरी बार बंद करते समय"
+                      : "At the last close"
+                    : hi
+                      ? "पहली बिक्री से पहले खोलें"
+                      : "Open it before the first cash sale"}
+                </Txt>
+              }
+            />
+          )}
+        </Pressable>
       </View>
       {attention.length > 0 && (
         <Section title={hi ? "ध्यान दें" : "Needs attention"}>
           {attention.map((a) => (
-            <Pressable
+            <ListRow
               key={a.text}
               onPress={() => navigate(a.page)}
-              style={styles.listRow}
-            >
-              <Row>
+              leading={
                 <Icon
                   name={a.icon}
-                  color={a.alert ? colors.amber : colors.muted}
+                  size={22}
+                  color={a.alert ? palette.waiting : palette.ink3}
                 />
+              }
+              title={
                 <Txt
-                  bold={a.alert}
-                  style={{
-                    flex: 1,
-                    color: a.alert ? colors.amber : colors.ink,
-                  }}
+                  size={15}
+                  weight={a.alert ? 600 : 400}
+                  color={a.alert ? palette.waiting : palette.ink}
                 >
                   {a.text}
                 </Txt>
-                <Icon name="chevron-forward" />
-              </Row>
-            </Pressable>
+              }
+            />
           ))}
         </Section>
       )}
       <Section title={hi ? "स्टाफ़" : "Staff"}>
         {r.staff.map((p) => (
-          <View key={p.id} style={styles.listRow}>
-            <Row style={{ justifyContent: "space-between" }}>
-              <Txt bold>{p.name}</Txt>
-              <Txt bold>{rupees(p.salesPaise)}</Txt>
-            </Row>
-            <Txt muted size={12} style={{ marginTop: 5 }}>
-              {[
-                `${p.bills} ${hi ? "बिल" : p.bills === 1 ? "bill" : "bills"}`,
-                `${hi ? "नकद" : "cash"} ${rupees(p.cashInPaise)}`,
-                `UPI ${rupees(p.upiInPaise)}`,
-                p.creditGivenPaise
-                  ? `${hi ? "उधार" : "credit"} ${rupees(p.creditGivenPaise)}`
-                  : "",
-                p.discountsPaise
-                  ? `${hi ? "छूट" : "discount"} ${rupees(p.discountsPaise)}`
-                  : "",
-                p.refundsPaise
-                  ? `${hi ? "वापसी दी" : "refunded"} ${rupees(p.refundsPaise)}`
-                  : "",
-                p.cancelled
-                  ? `${p.cancelled} ${hi ? "रद्द" : "cancelled"}`
-                  : "",
-                p.cashOutPaise
-                  ? `${hi ? "दराज़ से निकाले" : "paid out"} ${rupees(p.cashOutPaise)}`
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </Txt>
-          </View>
+          <ListRow
+            key={p.id}
+            leading={<StaffMark id={p.id} name={p.name} size={34} />}
+            title={p.name}
+            detail={
+              <Txt size={13} color={palette.ink2}>
+                {[
+                  `${p.bills} ${hi ? "बिल" : p.bills === 1 ? "bill" : "bills"}`,
+                  `${hi ? "नकद" : "cash"} ${rupees(p.cashInPaise)}`,
+                  `UPI ${rupees(p.upiInPaise)}`,
+                  p.creditGivenPaise
+                    ? `${hi ? "उधार" : "credit"} ${rupees(p.creditGivenPaise)}`
+                    : "",
+                  p.discountsPaise
+                    ? `${hi ? "छूट" : "discount"} ${rupees(p.discountsPaise)}`
+                    : "",
+                  p.refundsPaise
+                    ? `${hi ? "वापसी दी" : "refunded"} ${rupees(p.refundsPaise)}`
+                    : "",
+                  p.cancelled
+                    ? `${p.cancelled} ${hi ? "रद्द" : "cancelled"}`
+                    : "",
+                  p.cashOutPaise
+                    ? `${hi ? "दराज़ से निकाले" : "paid out"} ${rupees(p.cashOutPaise)}`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Txt>
+            }
+            trailing={<Amount value={rupees(p.salesPaise)} size={16} />}
+          />
         ))}
         {!r.staff.length && (
-          <Txt muted>{hi ? "अभी कोई गतिविधि नहीं" : "No activity yet"}</Txt>
+          <Empty
+            icon="people-outline"
+            title={hi ? "अभी कोई गतिविधि नहीं" : "No activity yet"}
+          />
         )}
       </Section>
       {closes.length > 0 && (
         <Section title={hi ? "पिछली दराज़ गिनतियाँ" : "Recent drawer closes"}>
           {closes.map((d) => (
-            <Row
+            <Entry
               key={d.id}
-              style={[styles.listRow, { justifyContent: "space-between" }]}
-            >
-              <Txt>
-                {dayLabel(indiaDate(d.closedAt!), hi)} ·{" "}
-                {state.members[d.closedBy ?? ""]?.name ?? ""}
-              </Txt>
-              <Txt bold style={{ color: differenceColour(d.discrepancyPaise) }}>
-                {differenceText(d.discrepancyPaise)}
-              </Txt>
-            </Row>
+              time={new Date(`${indiaDate(d.closedAt!)}T00:00:00Z`).toLocaleDateString(
+                hi ? "hi-IN" : "en-IN",
+                { day: "numeric", month: "short", timeZone: "UTC" },
+              )}
+              title={state.members[d.closedBy ?? ""]?.name ?? ""}
+              who={{ id: d.closedBy, name: state.members[d.closedBy ?? ""]?.name }}
+              trailing={
+                <Badge
+                  tone={
+                    (d.discrepancyPaise ?? 0) < 0
+                      ? "declined"
+                      : (d.discrepancyPaise ?? 0) > 0
+                        ? "waiting"
+                        : "paid"
+                  }
+                >
+                  {differenceText(d.discrepancyPaise)}
+                </Badge>
+              }
+            />
           ))}
         </Section>
       )}
       {operations && (
         <Section title="Shop infrastructure">
-          <Txt>
-            {operations.gateway?.reachableRecently
-              ? "Gateway reachable"
-              : "Gateway unavailable or not paired"}
-          </Txt>
-          <Txt muted>
+          <Line
+            label={
+              operations.gateway?.reachableRecently
+                ? "Gateway reachable"
+                : "Gateway unavailable or not paired"
+            }
+            value=""
+          />
+          <Txt size={13} color={palette.ink3} style={{ marginTop: 8 }}>
             {hi ? "प्रिंटर:" : "Printer:"}{" "}
             {operations.gateway?.details.printerConfigured
               ? "Configured"
@@ -546,19 +603,21 @@ export function OverviewScreen({
       )}
       <Section title={hi ? "हाल के बिल" : "Recent sales"}>
         {invoices.slice(0, 8).map((i) => (
-          <Row
+          <Entry
             key={i.id}
-            style={[styles.listRow, { justifyContent: "space-between" }]}
-          >
-            <View>
-              <Txt bold>{i.number}</Txt>
-              <Txt muted size={12} style={{ marginTop: 4 }}>
-                {itemCount(i.lines.length, s.language)} · {clock(i.occurredAt)}{" "}
-                · {state.members[i.collectorId]?.name ?? ""}
-              </Txt>
-            </View>
-            <Txt bold>{rupees(i.totalPaise)}</Txt>
-          </Row>
+            time={new Date(i.occurredAt).toLocaleTimeString("en-GB", {
+              timeZone: "Asia/Kolkata",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+            title={<Txt num size={16} weight={600}>{i.number}</Txt>}
+            detail={itemCount(i.lines.length, s.language)}
+            who={{
+              id: i.collectorId,
+              name: state.members[i.collectorId]?.name,
+            }}
+            amount={rupees(i.totalPaise)}
+          />
         ))}
         {!invoices.length && (
           <Empty
@@ -629,17 +688,33 @@ export function OrdersScreen({
     type: "order.accept" | "order.decline" | "order.recall",
     o: Order,
   ) => void run(() => s.command({ type, orderId: o.id, version: o.version }));
+  /** "Order 1a2b3c4d" with the number set as an identifier, then who it is for. */
+  const orderTitle = (id: string, customer?: string) => (
+    <Txt size={16} weight={600}>
+      {"Order "}
+      <Txt size={16} weight={600} num>
+        {id.slice(0, 8)}
+      </Txt>
+      {customer ? (
+        <Txt size={16} weight={400}>{` · ${customer}`}</Txt>
+      ) : null}
+    </Txt>
+  );
+  const markOf = (id: string | undefined) => {
+    const m = state.members[id ?? ""];
+    return m ? { id: m.id, name: m.name } : undefined;
+  };
   return (
     <Page
       title={t("orders")}
       subtitle="Held orders, handoffs, and completed bills."
     >
-      <Row style={{ marginBottom: 20 }}>
+      <Row style={{ marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
         <Chip active={filter === "open"} onPress={() => setFilter("open")}>
           {hi ? "खुले" : "Open"} · {open.length}
         </Chip>
         <Chip active={filter === "bills"} onPress={() => setFilter("bills")}>
-          {hi ? "पूरे हुए" : "Completed"}
+          {hi ? "पूरे हुए" : "Completed"} · {Object.keys(state.invoices).length}
         </Chip>
         {cancelled.length > 0 && (
           <Chip
@@ -652,158 +727,179 @@ export function OrdersScreen({
       </Row>
       {filter === "cancelled" &&
         cancelled.map((o) => (
-          <View key={o.id} style={styles.listRow}>
-            <Row style={{ justifyContent: "space-between" }}>
-              <Txt bold>Order {o.id.slice(0, 8)}</Txt>
-              <Txt muted size={12}>
-                {o.cancelledAt
-                  ? new Date(o.cancelledAt).toLocaleString("en-IN", {
-                      timeZone: "Asia/Kolkata",
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })
-                  : ""}
-              </Txt>
-            </Row>
-            <Txt muted size={12} style={{ marginTop: 5 }}>
-              {orderSummary(state, o)
-                .lines.map((l) => l.name)
-                .join(", ")}{" "}
-              · {state.members[o.collectorId]?.name}
-            </Txt>
-            <Txt size={12} style={{ marginTop: 5 }}>
-              {o.cancelReason}
-            </Txt>
-          </View>
+          <Entry
+            key={o.id}
+            time={o.cancelledAt ? entryTime(o.cancelledAt) : ""}
+            title={orderTitle(o.id)}
+            who={markOf(o.collectorId)}
+            detail={
+              <View style={{ gap: 6 }}>
+                <Badge tone="neutral">{hi ? "रद्द" : "Cancelled"}</Badge>
+                <Txt size={14} color={palette.ink2}>
+                  {orderSummary(state, o)
+                    .lines.map((l) => l.name)
+                    .join(", ")}
+                </Txt>
+                <Txt size={14}>{o.cancelReason}</Txt>
+              </View>
+            }
+          />
         ))}
       {filter === "open"
-        ? open.map((o) => (
-            <View key={o.id} style={styles.listRow}>
-              <Row style={{ justifyContent: "space-between" }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Txt bold>
-                    Order {o.id.slice(0, 8)}
-                    {o.customerId && state.customers[o.customerId]
-                      ? ` · ${state.customers[o.customerId].name}`
-                      : ""}
-                  </Txt>
-                  <Txt size={13} style={{ marginTop: 5 }}>
-                    {orderSummary(state, o)
-                      .lines.map((l) => l.name)
-                      .join(", ")}
-                  </Txt>
-                  <Txt muted size={12} style={{ marginTop: 4 }}>
-                    {rupees(orderSummary(state, o).totalPaise)} ·{" "}
-                    {state.members[o.dispenserId]?.name}
-                  </Txt>
+        ? open.map((o) => {
+            const a = orderRequest(o);
+            const summary = orderSummary(state, o);
+            const customer = o.customerId
+              ? state.customers[o.customerId]
+              : undefined;
+            const what = a
+              ? a.kind === "credit"
+                ? hi
+                  ? "उधार"
+                  : "Credit"
+                : hi
+                  ? "छूट"
+                  : "Discount"
+              : "";
+            const amount = a ? rupees(Number(a.payload.amountPaise)) : "";
+            const requestInk = !a
+              ? palette.ink
+              : a.status === "pending"
+                ? palette.waiting
+                : a.status === "approved"
+                  ? palette.approved
+                  : palette.declined;
+            return (
+              <Entry
+                key={o.id}
+                time={entryTime(o.createdAt)}
+                title={orderTitle(o.id, customer?.name)}
+                who={markOf(o.dispenserId)}
+                amount={rupees(summary.totalPaise)}
+                detail={
+                  <View style={{ gap: 6 }}>
+                    <Row style={{ flexWrap: "wrap", gap: 8 }}>
+                      {o.status === "handoff" && (
+                        <Badge tone="waiting">Handoff pending</Badge>
+                      )}
+                      {!a && o.status === "held" && (
+                        <Badge tone="neutral">{hi ? "रोका गया" : "Held"}</Badge>
+                      )}
+                      {a && a.status === "pending" && (
+                        <Badge tone="waiting">
+                          {hi ? "इंतज़ार" : "Waiting"}
+                        </Badge>
+                      )}
+                      {a && a.status !== "pending" && (
+                        <Badge
+                          tone={a.status === "approved" ? "approved" : "declined"}
+                        >
+                          {a.status === "approved"
+                            ? hi
+                              ? "मंज़ूर"
+                              : "Approved"
+                            : hi
+                              ? "मना"
+                              : "Declined"}
+                        </Badge>
+                      )}
+                    </Row>
+                    <Txt size={14} color={palette.ink2}>
+                      {summary.lines.map((l) => l.name).join(", ")}
+                    </Txt>
+                    {o.status === "handoff" && (
+                      <Txt size={13} color={palette.ink3}>
+                        Offered to{" "}
+                        {state.members[o.offeredTo ?? ""]?.name ?? "a cashier"}
+                      </Txt>
+                    )}
+                    {a && (
+                      <Txt size={14} weight={600} color={requestInk}>
+                        {a.status === "pending"
+                          ? hi
+                            ? `${what} ${amount} · मालिक की मंज़ूरी बाकी`
+                            : `${what} ${amount} · waiting for the owner`
+                          : a.status === "approved"
+                            ? hi
+                              ? `${what} ${amount} मंज़ूर · पैसे लेते समय लागू होगा`
+                              : `${what} ${amount} approved · applied when you collect`
+                            : hi
+                              ? `${what} ${amount} मना किया गया`
+                              : `${what} ${amount} declined by the owner`}
+                      </Txt>
+                    )}
+                  </View>
+                }
+              >
+                <View style={{ marginTop: 8 }}>
+                  {o.status === "handoff" && o.offeredTo === me.id ? (
+                    <Row style={{ flexWrap: "wrap", gap: 8 }}>
+                      <Button small onPress={() => act("order.accept", o)}>
+                        Accept handoff
+                      </Button>
+                      <Button
+                        secondary
+                        small
+                        onPress={() => act("order.decline", o)}
+                      >
+                        Decline
+                      </Button>
+                    </Row>
+                  ) : o.status === "handoff" && o.collectorId === me.id ? (
+                    <Row style={{ flexWrap: "wrap", gap: 8 }}>
+                      <Button
+                        secondary
+                        small
+                        onPress={() => act("order.recall", o)}
+                      >
+                        Take back
+                      </Button>
+                    </Row>
+                  ) : o.status === "held" && o.collectorId === me.id ? (
+                    <>
+                      <Row style={{ flexWrap: "wrap", gap: 8 }}>
+                        <Button small onPress={() => setSelected(o)}>
+                          Collect payment
+                        </Button>
+                        <Button secondary small onPress={() => setHandoff(o)}>
+                          Hand to cashier
+                        </Button>
+                      </Row>
+                      <View style={{ alignSelf: "flex-end", marginTop: 4 }}>
+                        <Pressable
+                          accessibilityRole="button"
+                          hitSlop={8}
+                          style={{ minHeight: 48, justifyContent: "center" }}
+                          onPress={() => {
+                            setCancelReason("");
+                            setCancelling(o);
+                          }}
+                        >
+                          <Txt size={14} weight={600} color={palette.declined}>
+                            Cancel order
+                          </Txt>
+                        </Pressable>
+                      </View>
+                    </>
+                  ) : me.role === "owner" ? (
+                    <Row style={{ flexWrap: "wrap", gap: 8 }}>
+                      <Button
+                        secondary
+                        small
+                        onPress={() => act("order.recall", o)}
+                      >
+                        Take over
+                      </Button>
+                    </Row>
+                  ) : (
+                    <Txt size={13} color={palette.ink3}>
+                      Awaiting the assigned collector.
+                    </Txt>
+                  )}
                 </View>
-                <Badge warning={o.status === "handoff"}>
-                  {o.status === "handoff" ? "Handoff pending" : "Held"}
-                </Badge>
-              </Row>
-              {o.status === "handoff" && (
-                <Txt muted size={12} style={{ marginTop: 8 }}>
-                  Offered to{" "}
-                  {state.members[o.offeredTo ?? ""]?.name ?? "a cashier"}
-                </Txt>
-              )}
-              {(() => {
-                const a = orderRequest(o);
-                if (!a) return null;
-                const what =
-                  a.kind === "credit"
-                    ? hi
-                      ? "उधार"
-                      : "Credit"
-                    : hi
-                      ? "छूट"
-                      : "Discount";
-                const amount = rupees(Number(a.payload.amountPaise));
-                return (
-                  <Txt
-                    size={12}
-                    bold
-                    style={{
-                      marginTop: 8,
-                      color:
-                        a.status === "approved"
-                          ? colors.accent
-                          : a.status === "rejected"
-                            ? colors.red
-                            : colors.amber,
-                    }}
-                  >
-                    {a.status === "pending"
-                      ? hi
-                        ? `${what} ${amount} · मालिक की मंज़ूरी बाकी`
-                        : `${what} ${amount} · waiting for the owner`
-                      : a.status === "approved"
-                        ? hi
-                          ? `${what} ${amount} मंज़ूर · पैसे लेते समय लागू होगा`
-                          : `${what} ${amount} approved · applied when you collect`
-                        : hi
-                          ? `${what} ${amount} मना किया गया`
-                          : `${what} ${amount} declined by the owner`}
-                  </Txt>
-                );
-              })()}
-              <Row style={{ marginTop: 14, flexWrap: "wrap" }}>
-                {o.status === "handoff" && o.offeredTo === me.id ? (
-                  <>
-                    <Button small onPress={() => act("order.accept", o)}>
-                      Accept handoff
-                    </Button>
-                    <Button
-                      secondary
-                      small
-                      onPress={() => act("order.decline", o)}
-                    >
-                      Decline
-                    </Button>
-                  </>
-                ) : o.status === "handoff" && o.collectorId === me.id ? (
-                  <Button
-                    secondary
-                    small
-                    onPress={() => act("order.recall", o)}
-                  >
-                    Take back
-                  </Button>
-                ) : o.status === "held" && o.collectorId === me.id ? (
-                  <>
-                    <Button small onPress={() => setSelected(o)}>
-                      Collect payment
-                    </Button>
-                    <Button secondary small onPress={() => setHandoff(o)}>
-                      Hand to cashier
-                    </Button>
-                    <Button
-                      secondary
-                      small
-                      onPress={() => {
-                        setCancelReason("");
-                        setCancelling(o);
-                      }}
-                    >
-                      Cancel order
-                    </Button>
-                  </>
-                ) : me.role === "owner" ? (
-                  <Button
-                    secondary
-                    small
-                    onPress={() => act("order.recall", o)}
-                  >
-                    Take over
-                  </Button>
-                ) : (
-                  <Txt muted size={12}>
-                    Awaiting the assigned collector.
-                  </Txt>
-                )}
-              </Row>
-            </View>
-          ))
+              </Entry>
+            );
+          })
         : filter === "bills" && (
             <>
               <Field
@@ -821,54 +917,89 @@ export function OrdersScreen({
                 );
                 const mine =
                   request?.requestedBy === me.id || me.role === "owner";
+                const customer = i.customerId
+                  ? state.customers[i.customerId]
+                  : undefined;
                 return (
-                  <View key={i.id} style={styles.listRow}>
-                    <Row style={{ justifyContent: "space-between" }}>
-                      <Pressable
-                        onPress={() => onInvoice(i)}
-                        style={{ flex: 1, marginRight: 12 }}
-                      >
-                        <Txt bold>{i.number}</Txt>
-                        <Txt size={12} muted style={{ marginTop: 5 }}>
-                          {i.lines.map((l) => l.name).join(", ")}
-                          {i.customerId && state.customers[i.customerId]
-                            ? ` · ${state.customers[i.customerId].name}`
-                            : ""}
+                  <Entry
+                    key={i.id}
+                    time={entryTime(i.occurredAt)}
+                    onPress={() => onInvoice(i)}
+                    title={
+                      <Txt size={16} weight={600}>
+                        <Txt size={16} weight={600} num>
+                          {i.number}
                         </Txt>
-                      </Pressable>
-                      <Txt bold>{rupees(i.totalPaise)}</Txt>
-                    </Row>
-                    {refunded > 0 && (
-                      <Txt size={12} style={{ marginTop: 6 }}>
-                        {hi
-                          ? `वापसी ${rupees(refunded)}`
-                          : `Returned ${rupees(refunded)}`}
+                        {customer ? (
+                          <Txt size={16} weight={400}>{` · ${customer.name}`}</Txt>
+                        ) : null}
                       </Txt>
-                    )}
-                    {request?.status === "pending" ? (
-                      <Txt
-                        size={12}
-                        bold
-                        style={{ marginTop: 8, color: colors.amber }}
-                      >
-                        {hi
-                          ? "वापसी मालिक की मंज़ूरी का इंतज़ार कर रही है"
-                          : "Return waiting for the owner"}
-                      </Txt>
-                    ) : request?.status === "approved" && mine ? (
-                      <View style={{ marginTop: 10 }}>
-                        <Button small onPress={() => setRefunding(request)}>
-                          {hi
-                            ? "मंज़ूर वापसी · पैसे लौटाएँ"
-                            : "Return approved · Give refund"}
-                        </Button>
+                    }
+                    who={markOf(i.collectorId)}
+                    amount={rupees(i.totalPaise)}
+                    detail={
+                      <View style={{ gap: 6 }}>
+                        <Row style={{ flexWrap: "wrap", gap: 8 }}>
+                          <Badge tone="paid">
+                            {hi ? "पूरा हुआ" : "Completed"}
+                          </Badge>
+                          {request?.status === "pending" && (
+                            <Badge tone="waiting">
+                              {hi ? "इंतज़ार" : "Waiting"}
+                            </Badge>
+                          )}
+                          {request?.status === "rejected" && (
+                            <Badge tone="declined">
+                              {hi ? "मना" : "Declined"}
+                            </Badge>
+                          )}
+                        </Row>
+                        <Txt size={14} color={palette.ink2}>
+                          {i.lines.map((l) => l.name).join(", ")}
+                        </Txt>
+                        {refunded > 0 && (
+                          <Txt size={14} color={palette.ink2}>
+                            {hi
+                              ? `वापसी ${rupees(refunded)}`
+                              : `Returned ${rupees(refunded)}`}
+                          </Txt>
+                        )}
+                        {request?.status === "pending" && (
+                          <Txt size={14} weight={600} color={palette.waiting}>
+                            {hi
+                              ? "वापसी मालिक की मंज़ूरी का इंतज़ार कर रही है"
+                              : "Return waiting for the owner"}
+                          </Txt>
+                        )}
+                      </View>
+                    }
+                  >
+                    {request?.status === "pending" ? null : request?.status ===
+                        "approved" && mine ? (
+                      <View style={{ marginTop: 8 }}>
+                        <Row style={{ flexWrap: "wrap", gap: 8 }}>
+                          <Button small onPress={() => setRefunding(request)}>
+                            {hi
+                              ? "मंज़ूर वापसी · पैसे लौटाएँ"
+                              : "Return approved · Give refund"}
+                          </Button>
+                        </Row>
                       </View>
                     ) : fully ? null : (
                       <Pressable
+                        accessibilityRole="button"
                         onPress={() => setReturnInvoice(i)}
-                        style={{ paddingTop: 12 }}
+                        style={{ minHeight: 44, justifyContent: "center" }}
                       >
-                        <Txt size={12} style={{ color: colors.accent }}>
+                        <Txt
+                          size={14}
+                          weight={600}
+                          color={
+                            request?.status === "rejected"
+                              ? palette.declined
+                              : palette.blue
+                          }
+                        >
                           {request?.status === "rejected"
                             ? hi
                               ? "पिछली वापसी मना हुई · फिर माँगें"
@@ -879,11 +1010,17 @@ export function OrdersScreen({
                         </Txt>
                       </Pressable>
                     )}
-                  </View>
+                  </Entry>
                 );
               })}
+              {bills.length === 0 && (
+                <Empty
+                  icon="receipt-outline"
+                  title={hi ? "कोई बिल नहीं मिला" : "No bills found"}
+                />
+              )}
               {bills.length > 30 && (
-                <Txt size={11} muted>
+                <Txt size={13} muted style={{ marginTop: 12 }}>
                   {hi
                     ? `${bills.length} में से 30 दिख रहे हैं · खोजें`
                     : `Showing 30 of ${bills.length} · search to find others`}
@@ -972,8 +1109,10 @@ export function OrdersScreen({
               !m.id.startsWith("service:"),
           )
           .map((m) => (
-            <Pressable
+            <ListRow
               key={m.id}
+              leading={<StaffMark id={m.id} name={m.name} size={32} />}
+              title={m.name}
               onPress={() =>
                 void run(async () => {
                   await s.command({
@@ -985,10 +1124,7 @@ export function OrdersScreen({
                   setHandoff(null);
                 })
               }
-              style={styles.listRow}
-            >
-              <Txt bold>{m.name}</Txt>
-            </Pressable>
+            />
           ))}
       </Sheet>
       <Sheet
@@ -996,7 +1132,7 @@ export function OrdersScreen({
         title="Cancel order"
         onClose={() => setCancelling(null)}
       >
-        <Txt muted size={12} style={{ marginBottom: 12 }}>
+        <Txt size={14} color={palette.ink2} style={{ marginBottom: 16 }}>
           Only for an unbilled order the customer did not take. The cancellation
           and reason are recorded.
         </Txt>
@@ -1006,6 +1142,7 @@ export function OrdersScreen({
           onChange={setCancelReason}
         />
         <Button
+          variant="danger"
           disabled={cancelReason.trim().length < 3}
           onPress={() =>
             void run(async () => {
@@ -1059,7 +1196,10 @@ export function CustomersScreen() {
     [amount, setAmount] = useState(""),
     [method, setMethod] = useState<"cash" | "upi">("cash"),
     [ref, setRef] = useState(""),
-    [verified, setVerified] = useState(false);
+    [verified, setVerified] = useState(false),
+    [query, setQuery] = useState("");
+  const hi = s.language === "hi";
+  const needle = query.trim().toLowerCase();
   // A closed form starts empty next time, so nothing is added twice by accident.
   const closeAdd = () => {
     setAdd(false);
@@ -1077,57 +1217,57 @@ export function CustomersScreen() {
         </Button>
       }
     >
+      <Field
+        value={query}
+        onChange={setQuery}
+        placeholder="Search by name or phone"
+      />
       {Object.values(state.customers)
+        .filter(
+          (c) =>
+            !needle ||
+            c.name.toLowerCase().includes(needle) ||
+            c.phone.toLowerCase().includes(needle),
+        )
         // Customers who owe come first, largest balance first.
         .map((c) => ({ c, owes: balance(state, c.id) }))
         .sort((a, b) => b.owes - a.owes || a.c.name.localeCompare(b.c.name))
-        .map(({ c }) => c)
-        .map((c) => (
-          <Pressable
+        .map(({ c, owes }) => (
+          <ListRow
             key={c.id}
             onPress={() => setSelected(c.id)}
-            style={styles.listRow}
-          >
-            <Row style={{ justifyContent: "space-between" }}>
-              <Row>
-                <View
-                  style={{
-                    backgroundColor: colors.tint,
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}
-                >
-                  <Txt bold>{c.name[0]}</Txt>
-                </View>
-                <View>
-                  <Txt bold>{c.name}</Txt>
-                  <Txt size={12} muted style={{ marginTop: 4 }}>
-                    {c.phone || "No phone recorded"}
+            title={c.name}
+            detail={
+              <Txt size={14} color={palette.ink2} num>
+                {c.phone || "No phone recorded"}
+              </Txt>
+            }
+            trailing={
+              owes > 0 ? (
+                <View style={{ alignItems: "flex-end" }}>
+                  <Amount
+                    value={rupees(owes)}
+                    size={16}
+                    color={palette.waiting}
+                  />
+                  <Txt size={13} color={palette.waiting}>
+                    {hi ? "बाकी" : "owes"}
                   </Txt>
                 </View>
-              </Row>
-              <View style={{ alignItems: "flex-end" }}>
-                {balance(state, c.id) > 0 ? (
-                  <>
-                    <Txt bold style={{ color: colors.amber }}>
-                      {rupees(balance(state, c.id))}
-                    </Txt>
-                    <Txt size={10} muted>
-                      {s.language === "hi" ? "बाकी" : "owes"}
-                    </Txt>
-                  </>
-                ) : (
-                  <Txt size={12} muted>
-                    {s.language === "hi" ? "कुछ बाकी नहीं" : "Nothing owed"}
-                  </Txt>
-                )}
-              </View>
-            </Row>
-          </Pressable>
+              ) : (
+                <Txt size={13} color={palette.ink3}>
+                  {hi ? "कुछ बाकी नहीं" : "Nothing owed"}
+                </Txt>
+              )
+            }
+          />
         ))}
+      {Object.keys(state.customers).length === 0 && (
+        <Empty
+          icon="people-outline"
+          title={hi ? "अभी कोई ग्राहक नहीं" : "No customers yet"}
+        />
+      )}
       <Sheet visible={add} title="Add customer" onClose={() => closeAdd()}>
         <Field label={t("name")} value={name} onChange={setName} />
         <Field label={t("phone")} value={phone} onChange={setPhone} number />
@@ -1159,12 +1299,19 @@ export function CustomersScreen() {
       >
         {selected && (
           <>
-            <Txt muted size={12}>
-              {s.language === "hi" ? "बाकी" : "Owes"}
+            <Txt size={14} color={palette.ink2}>
+              {hi ? "बाकी" : "Owes"}
             </Txt>
-            <Txt size={30} bold style={{ marginBottom: 20 }}>
-              {rupees(balance(state, selected))}
-            </Txt>
+            <View style={{ marginBottom: 20 }}>
+              <Amount
+                value={rupees(balance(state, selected))}
+                size={40}
+                weight={700}
+                color={
+                  balance(state, selected) > 0 ? palette.waiting : palette.ink
+                }
+              />
+            </View>
             <Field
               label="Repayment amount (₹)"
               value={amount}
@@ -1181,7 +1328,7 @@ export function CustomersScreen() {
                     setAmount((balance(state, selected) / 100).toString())
                   }
                 >
-                  {s.language === "hi" ? "पूरा बाकी" : "Full amount"}{" "}
+                  {hi ? "पूरा बाकी" : "Full amount"}{" "}
                   {rupees(balance(state, selected))}
                 </Chip>
               </Row>
@@ -1206,10 +1353,14 @@ export function CustomersScreen() {
                 />
                 <Pressable
                   onPress={() => setVerified(!verified)}
-                  style={{ marginBottom: 20 }}
+                  style={{ marginBottom: 20, minHeight: 48, justifyContent: "center" }}
                 >
                   <Row>
-                    <Icon name={verified ? "checkbox" : "square-outline"} />
+                    <Icon
+                      name={verified ? "checkbox" : "square-outline"}
+                      size={24}
+                      color={verified ? palette.blue : palette.ink3}
+                    />
                     <Txt>Verified in merchant app</Txt>
                   </Row>
                 </Pressable>
@@ -1232,57 +1383,43 @@ export function CustomersScreen() {
             >
               Record repayment
             </Button>
-            <View style={{ height: 25 }} />
-            <Txt bold>Account history</Txt>
-            {Object.values(state.ledger)
-              .filter((l) => l.customerId === selected)
-              .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
-              .map((l) => {
-                const hi = s.language === "hi";
-                const bill = state.invoices[l.invoiceId ?? ""]?.number;
-                const what =
-                  l.kind === "credit_sale"
-                    ? hi
-                      ? "उधार बिक्री"
-                      : "Credit sale"
-                    : l.kind === "repayment"
+            <View style={{ height: 32 }} />
+            <Section title="Account history">
+              {Object.values(state.ledger)
+                .filter((l) => l.customerId === selected)
+                .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
+                .map((l) => {
+                  const bill = state.invoices[l.invoiceId ?? ""]?.number;
+                  const what =
+                    l.kind === "credit_sale"
                       ? hi
-                        ? "भुगतान मिला"
-                        : "Paid back"
-                      : hi
-                        ? "वापसी से कम"
-                        : "Reduced by a return";
-                return (
-                  <Row
-                    key={l.id}
-                    style={[
-                      styles.listRow,
-                      { justifyContent: "space-between" },
-                    ]}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Txt size={13}>{what}</Txt>
-                      <Txt size={11} muted style={{ marginTop: 3 }}>
-                        {new Date(l.occurredAt).toLocaleDateString("en-IN", {
-                          timeZone: "Asia/Kolkata",
-                          day: "numeric",
-                          month: "short",
-                        })}
-                        {bill ? ` · ${bill}` : ""}
-                      </Txt>
-                    </View>
-                    <Txt
-                      bold
-                      style={{
-                        color: l.amountPaise < 0 ? colors.accent : colors.ink,
-                      }}
-                    >
-                      {l.amountPaise < 0 ? "−" : "+"}
-                      {rupees(Math.abs(l.amountPaise))}
-                    </Txt>
-                  </Row>
-                );
-              })}
+                        ? "उधार बिक्री"
+                        : "Credit sale"
+                      : l.kind === "repayment"
+                        ? hi
+                          ? "भुगतान मिला"
+                          : "Paid back"
+                        : hi
+                          ? "वापसी से कम"
+                          : "Reduced by a return";
+                  return (
+                    <Entry
+                      key={l.id}
+                      time={entryTime(l.occurredAt)}
+                      title={what}
+                      detail={
+                        bill ? (
+                          <Txt size={14} weight={600} num color={palette.ink2}>
+                            {bill}
+                          </Txt>
+                        ) : undefined
+                      }
+                      amount={`${l.amountPaise < 0 ? "−" : "+"}${rupees(Math.abs(l.amountPaise))}`}
+                      amountColor={l.amountPaise < 0 ? palette.paid : palette.ink}
+                    />
+                  );
+                })}
+            </Section>
           </>
         )}
       </Sheet>
@@ -1327,6 +1464,34 @@ export function StockScreen({
       .filter((p) => matchesSearch(p, search))
       .sort(bySearch(search));
   }, [state.products, search]);
+  const today = indiaDate(new Date().toISOString()),
+    hi = s.language === "hi";
+  /** An owner tool: a ruled row, an icon in ink, the name. Two sit side by side. */
+  const tool = (
+    icon: React.ComponentProps<typeof Icon>["name"],
+    label: string,
+    onPress: () => void,
+  ) => (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flex: 1,
+        minHeight: 52,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        borderBottomWidth: 1,
+        borderColor: palette.rule,
+        backgroundColor: pressed ? palette.desk : "transparent",
+      })}
+    >
+      <Icon name={icon} size={22} color={palette.blue} />
+      <Txt size={15} weight={600} color={palette.blue} style={{ flex: 1 }}>
+        {label}
+      </Txt>
+    </Pressable>
+  );
   return (
     <Page
       title={manage ? t("inventory") : t("stock")}
@@ -1345,99 +1510,177 @@ export function StockScreen({
     >
       <Field value={search} onChange={setSearch} placeholder={t("search")} />
       {manage && (
-        <Row style={{ marginBottom: 18, flexWrap: "wrap" }}>
-          <Button small secondary onPress={() => setEditing(null)} icon="add">
-            Add medicine
-          </Button>
-          <Button
-            small
-            secondary
-            onPress={() => setImporting(true)}
-            icon="cloud-upload-outline"
-          >
-            Import catalogue
-          </Button>
-          <Button
-            small
-            secondary
-            onPress={() => setCounting(true)}
-            icon="clipboard-outline"
-          >
-            Count stock
-          </Button>
-          {navigate && (
-            <Button
-              small
-              secondary
-              onPress={() => navigate("expiry")}
-              icon="hourglass-outline"
-            >
-              {t("expiry")}
-            </Button>
-          )}
-        </Row>
+        <View style={{ marginBottom: 20 }}>
+          <Row style={{ gap: 20, alignItems: "stretch" }}>
+            {tool("add-circle-outline", "Add medicine", () => setEditing(null))}
+            {tool("clipboard-outline", "Count stock", () => setCounting(true))}
+          </Row>
+          <Row style={{ gap: 20, alignItems: "stretch" }}>
+            {tool("cloud-upload-outline", "Import catalogue", () =>
+              setImporting(true),
+            )}
+            {navigate ? (
+              tool("hourglass-outline", t("expiry"), () => navigate("expiry"))
+            ) : (
+              <View style={{ flex: 1 }} />
+            )}
+          </Row>
+        </View>
       )}
       {matching.length > SHOWN_PRODUCTS && (
-        <Txt size={11} muted style={{ marginBottom: 12 }}>
+        <Txt size={13} muted style={{ marginBottom: 12 }}>
           {s.language === "hi"
             ? `${matching.length.toLocaleString("en-IN")} में से ${SHOWN_PRODUCTS} दिख रहे हैं · खोजकर ढूँढें`
             : `Showing ${SHOWN_PRODUCTS} of ${matching.length.toLocaleString("en-IN")} · search to find others`}
         </Txt>
       )}
-      {matching.slice(0, SHOWN_PRODUCTS).map((p) => (
-        <View key={p.id} style={{ marginBottom: 24 }}>
-          <Row style={{ justifyContent: "space-between", marginBottom: 8 }}>
-            <Txt bold size={17}>
-              {p.name} <Txt muted>{p.strength}</Txt>
-            </Txt>
+      {matching.slice(0, SHOWN_PRODUCTS).map((p) => {
+        const batches = batchesByProduct.get(p.id) ?? [];
+        const total = batches.reduce((n, b) => n + Number(b.quantity), 0);
+        const low = total <= Number(p.reorderAt);
+        const expired = batches.some(
+          (b) => b.expiry < today && Number(b.quantity) > 0,
+        );
+        const first = batches[0];
+        return (
+          <ListRow
+            key={p.id}
+            title={
+              <Txt size={16} weight={600}>
+                {p.name} <Txt color={palette.ink2}>{p.strength}</Txt>
+              </Txt>
+            }
+            detail={
+              <View style={{ gap: 6 }}>
+                {!!p.generic && (
+                  <Txt size={14} color={palette.ink2}>
+                    {p.generic}
+                  </Txt>
+                )}
+                <Row style={{ flexWrap: "wrap", gap: 8 }}>
+                  <Txt size={14} weight={600} num>
+                    {hi
+                      ? `${Number(total.toFixed(3))} ${p.baseUnit} बचे`
+                      : `${Number(total.toFixed(3))} ${p.baseUnit}${Number(total.toFixed(3)) === 1 ? "" : "s"} left`}
+                  </Txt>
+                  {low && <Badge tone="waiting">{hi ? "कम" : "Low"}</Badge>}
+                  {expired && (
+                    <Badge tone="declined">{hi ? "एक्सपायर" : "Expired"}</Badge>
+                  )}
+                </Row>
+              </View>
+            }
+            trailing={
+              <Row style={{ gap: 4 }}>
+                {first && (
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Amount value={rupees(first.pricePaise)} size={16} />
+                    {first.mrpPaise > 0 && (
+                      <Txt size={13} color={palette.ink3} num>
+                        {`MRP ${rupees(first.mrpPaise)}`}
+                      </Txt>
+                    )}
+                  </View>
+                )}
+                {manage && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit medicine"
+                    onPress={() => setEditing(p)}
+                    hitSlop={8}
+                    style={{
+                      width: 40,
+                      height: 48,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Icon name="create-outline" size={22} color={palette.ink2} />
+                  </Pressable>
+                )}
+              </Row>
+            }
+          >
+            {batches.map((b) => {
+              const batchExpired = b.expiry < today;
+              const batchLow = Number(b.quantity) <= Number(p.reorderAt);
+              return (
+                <Pressable
+                  key={b.id}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setAdjust(b);
+                    setDelta("");
+                  }}
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    minHeight: 48,
+                    paddingVertical: 8,
+                    borderTopWidth: 1,
+                    borderColor: palette.rule,
+                    backgroundColor: pressed ? palette.desk : "transparent",
+                  })}
+                >
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Txt size={14} weight={600} num>
+                      {b.code}
+                      <Txt size={14} weight={400} color={palette.ink2}>
+                        {` · ${hi ? "समाप्ति" : "Exp"} ${b.expiry}`}
+                      </Txt>
+                    </Txt>
+                    <Txt size={13} color={palette.ink3} num>
+                      {`${rupees(b.pricePaise)} / ${p.baseUnit}`}
+                      {Number(b.quarantined) > 0
+                        ? ` · ${b.quarantined} quarantined`
+                        : ""}
+                    </Txt>
+                  </View>
+                  <Txt
+                    size={15}
+                    weight={600}
+                    num
+                    color={
+                      batchExpired
+                        ? palette.declined
+                        : batchLow
+                          ? palette.waiting
+                          : palette.ink
+                    }
+                  >
+                    {`${b.quantity} ${p.baseUnit}${hi || Number(b.quantity) === 1 ? "" : "s"}`}
+                  </Txt>
+                </Pressable>
+              );
+            })}
             {manage && (
-              <Pressable onPress={() => setEditing(p)}>
-                <Icon name="create-outline" />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setBatchProduct(p)}
+                style={{
+                  minHeight: 48,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon name="add" size={18} color={palette.blue} />
+                <Txt size={14} weight={600} color={palette.blue}>
+                  Record opening batch count
+                </Txt>
               </Pressable>
             )}
-          </Row>
-          {(batchesByProduct.get(p.id) ?? []).map((b) => (
-            <Pressable
-              key={b.id}
-              onPress={() => {
-                setAdjust(b);
-                setDelta("");
-              }}
-              style={styles.listRow}
-            >
-              <Row style={{ justifyContent: "space-between" }}>
-                <View>
-                  <Txt size={12} bold>
-                    {b.code} · {b.expiry}
-                  </Txt>
-                  <Txt size={11} muted style={{ marginTop: 5 }}>
-                    {rupees(b.pricePaise)} / {p.baseUnit} · {b.quarantined}{" "}
-                    quarantined
-                  </Txt>
-                </View>
-                <Badge
-                  warning={
-                    Number(b.quantity) <= Number(p.reorderAt) ||
-                    b.expiry < indiaDate(new Date().toISOString())
-                  }
-                >
-                  {b.quantity} {p.baseUnit}
-                </Badge>
-              </Row>
-            </Pressable>
-          ))}
-          {manage && (
-            <Pressable
-              onPress={() => setBatchProduct(p)}
-              style={{ paddingVertical: 12 }}
-            >
-              <Txt size={11} style={{ color: colors.accent }}>
-                + Record opening batch count
-              </Txt>
-            </Pressable>
-          )}
-        </View>
-      ))}
+          </ListRow>
+        );
+      })}
+      {matching.length === 0 && (
+        <Empty
+          icon="cube-outline"
+          title={hi ? "कोई दवा नहीं मिली" : "No medicines found"}
+        />
+      )}
       <Sheet
         visible={editing !== undefined}
         title={editing ? "Edit medicine" : "Add medicine"}
@@ -1557,8 +1800,17 @@ function PriceForm({ batch }: { batch: Batch }) {
   const [price, P] = useState(String(batch.pricePaise / 100)),
     [reason, R] = useState("");
   return (
-    <View style={{ marginBottom: 24 }}>
-      <Txt bold>Owner price update</Txt>
+    <View
+      style={{
+        marginBottom: 24,
+        paddingBottom: 8,
+        borderBottomWidth: 1,
+        borderColor: palette.ruleStrong,
+      }}
+    >
+      <Txt size={19} weight={600} style={{ marginBottom: 12 }}>
+        Owner price update
+      </Txt>
       <Field
         label="Selling price per base unit (₹)"
         value={price}
@@ -1566,22 +1818,24 @@ function PriceForm({ batch }: { batch: Batch }) {
         number
       />
       <Field label="Reason" value={reason} onChange={R} />
-      <Button
-        secondary
-        disabled={reason.length < 3}
-        onPress={() =>
-          void run(() =>
-            s.command({
-              type: "batch.price",
-              batchId: batch.id,
-              pricePaise: money(price),
-              reason,
-            }),
-          )
-        }
-      >
-        Update selling price
-      </Button>
+      <View style={{ marginBottom: 16 }}>
+        <Button
+          secondary
+          disabled={reason.length < 3}
+          onPress={() =>
+            void run(() =>
+              s.command({
+                type: "batch.price",
+                batchId: batch.id,
+                pricePaise: money(price),
+                reason,
+              }),
+            )
+          }
+        >
+          Update selling price
+        </Button>
+      </View>
     </View>
   );
 }
@@ -1613,6 +1867,14 @@ export function MoneyScreen() {
     .filter((d) => d.closedAt)
     .sort((a, b) => b.closedAt!.localeCompare(a.closedAt!))
     .slice(0, 14);
+  const shortDate = (d: string) =>
+    new Date(`${d}T00:00:00Z`).toLocaleDateString(hi ? "hi-IN" : "en-IN", {
+      day: "numeric",
+      month: "short",
+      timeZone: "UTC",
+    });
+  const diffTone = (p: number = 0) =>
+    p < 0 ? ("declined" as const) : p > 0 ? ("waiting" as const) : ("paid" as const);
   return (
     <Page
       title={t("money")}
@@ -1638,31 +1900,36 @@ export function MoneyScreen() {
             (d) => d.differencePaise !== undefined,
           )?.differencePaise;
           return (
-            <Pressable
+            <Entry
               key={e.id}
+              time={shortDate(e.date)}
               onPress={() => setOpen(e.id)}
-              style={styles.listRow}
+              title={new Date(`${e.date}T00:00:00Z`).toLocaleDateString(
+                hi ? "hi-IN" : "en-IN",
+                { weekday: "long", timeZone: "UTC" },
+              )}
+              detail={`${hi ? "संस्करण" : "Revision"} ${e.revision} · ${
+                e.provisional
+                  ? hi
+                    ? "फ़ोन सिंक बाकी"
+                    : "waiting for phones"
+                  : hi
+                    ? "सिंक पूरा"
+                    : "synced"
+              }`}
+              amount={rupees(e.totals.netSalesPaise)}
             >
-              <Row style={{ justifyContent: "space-between" }}>
-                <View style={{ flex: 1 }}>
-                  <Txt bold>{dayLabel(e.date, hi)}</Txt>
-                  <Txt muted size={12} style={{ marginTop: 4 }}>
-                    {hi ? "संस्करण" : "Revision"} {e.revision} ·{" "}
-                    {e.provisional
-                      ? hi
-                        ? "फ़ोन सिंक बाकी"
-                        : "waiting for phones"
-                      : hi
-                        ? "सिंक पूरा"
-                        : "synced"}
-                    {drawerDiff !== undefined
-                      ? ` · ${hi ? "दराज़" : "drawer"} ${differenceText(drawerDiff)}`
-                      : ""}
+              {drawerDiff !== undefined && (
+                <Row style={{ gap: 8 }}>
+                  <Txt size={13} color={palette.ink3}>
+                    {hi ? "दराज़" : "Drawer"}
                   </Txt>
-                </View>
-                <Txt bold>{rupees(e.totals.netSalesPaise)}</Txt>
-              </Row>
-            </Pressable>
+                  <Badge tone={diffTone(drawerDiff)}>
+                    {differenceText(drawerDiff)}
+                  </Badge>
+                </Row>
+              )}
+            </Entry>
           );
         })}
         {!days.length && (
@@ -1675,41 +1942,44 @@ export function MoneyScreen() {
             }
           />
         )}
-        <Button
-          small
-          secondary
-          onPress={() =>
-            void run(() => s.command({ type: "eod.close", date: today }))
-          }
-        >
-          {hi ? "आज की रिपोर्ट अभी बनाएँ" : "Make today's report now"}
-        </Button>
+        <View style={{ marginTop: 16, alignItems: "flex-start" }}>
+          <Button
+            small
+            secondary
+            onPress={() =>
+              void run(() => s.command({ type: "eod.close", date: today }))
+            }
+          >
+            {hi ? "आज की रिपोर्ट अभी बनाएँ" : "Make today's report now"}
+          </Button>
+        </View>
       </Section>
       <Section title={hi ? "दराज़ का इतिहास" : "Drawer history"}>
         {closes.map((d) => (
-          <View key={d.id} style={styles.listRow}>
-            <Row style={{ justifyContent: "space-between" }}>
-              <Txt bold>
-                {dayLabel(indiaDate(d.closedAt!), hi)} · {clock(d.closedAt)}
-              </Txt>
-              <Txt bold style={{ color: differenceColour(d.discrepancyPaise) }}>
-                {differenceText(d.discrepancyPaise)}
-              </Txt>
-            </Row>
-            <Txt muted size={12} style={{ marginTop: 5 }}>
-              {hi ? "गिना" : "Counted"} {rupees(d.countedPaise ?? 0)} ·{" "}
-              {hi ? "होना था" : "expected"} {rupees(d.expectedAtClose ?? 0)} ·{" "}
-              {state.members[d.closedBy ?? ""]?.name ?? ""}
-              {expectedCash(state, d.id) !== d.expectedAtClose
+          <Entry
+            key={d.id}
+            time={shortDate(indiaDate(d.closedAt!))}
+            title={`${hi ? "बंद" : "Closed"} ${clock(d.closedAt)}`}
+            who={{
+              id: d.closedBy,
+              name: state.members[d.closedBy ?? ""]?.name,
+            }}
+            detail={`${hi ? "गिना" : "Counted"} ${rupees(d.countedPaise ?? 0)} · ${hi ? "होना था" : "expected"} ${rupees(d.expectedAtClose ?? 0)} · ${state.members[d.closedBy ?? ""]?.name ?? ""}${
+              expectedCash(state, d.id) !== d.expectedAtClose
                 ? ` · ${hi ? "बाद में बदला" : "changed later by"} ${rupees(expectedCash(state, d.id) - (d.expectedAtClose ?? 0))}`
-                : ""}
-            </Txt>
-          </View>
+                : ""
+            }`}
+          >
+            <Badge tone={diffTone(d.discrepancyPaise)}>
+              {differenceText(d.discrepancyPaise)}
+            </Badge>
+          </Entry>
         ))}
         {!closes.length && (
-          <Txt muted>
-            {hi ? "अभी कोई बंद दराज़ नहीं" : "No closed drawers yet"}
-          </Txt>
+          <Empty
+            icon="lock-closed-outline"
+            title={hi ? "अभी कोई बंद दराज़ नहीं" : "No closed drawers yet"}
+          />
         )}
       </Section>
       <Sheet
@@ -1749,7 +2019,8 @@ function approvalTitle(state: State, a: Approval, hi: boolean) {
   return approvalSummary(state, a, hi);
 }
 function ApprovalDetails({ approval }: { approval: Approval }) {
-  const { state } = useSession();
+  const { state, language } = useSession();
+  const hi = language === "hi";
   const p = approval.payload,
     s = state!,
     o = s.orders[String(p.orderId)],
@@ -1758,16 +2029,191 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
   const customerId = String(
     p.customerId ?? o?.customerId ?? i?.customerId ?? "",
   );
+  const requester = s.members[approval.requestedBy];
+  const decider = approval.decidedBy ? s.members[approval.decidedBy] : undefined;
+  // A statement line whose right side can be a mark, an identifier or plain text.
+  const fact = (label: string, node: React.ReactNode) => (
+    <View
+      key={label}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingVertical: 9,
+        minHeight: 44,
+        gap: 12,
+        borderBottomWidth: 1,
+        borderColor: palette.rule,
+      }}
+    >
+      <Txt size={15} color={palette.ink2}>
+        {label}
+      </Txt>
+      <View style={{ flexShrink: 1, alignItems: "flex-end" }}>{node}</View>
+    </View>
+  );
+  let refund: ReturnType<typeof refundQuote> | null = null;
+  let refundError = "";
+  if (i) {
+    try {
+      refund = refundQuote(s, i, p.lines as ReturnLine[]);
+    } catch (e) {
+      refundError = (e as Error).message;
+    }
+  }
+  const bigAmount =
+    typeof p.amountPaise === "number"
+      ? rupees(p.amountPaise)
+      : refund
+        ? rupees(refund.payablePaise)
+        : undefined;
+  const kindWord =
+    approval.kind === "credit"
+      ? hi
+        ? "उधार"
+        : "Credit"
+      : approval.kind === "discount"
+        ? hi
+          ? "छूट"
+          : "Discount"
+        : approval.kind === "refund"
+          ? hi
+            ? "वापसी"
+            : "Return"
+          : hi
+            ? "स्टॉक बदलाव"
+            : "Stock change";
+  const heading = customerId
+    ? `${kindWord} · ${s.customers[customerId]?.name ?? ""}`
+    : i
+      ? `${kindWord} · ${i.number}`
+      : kindWord;
   return (
-    <View style={{ gap: 10 }}>
-      <Txt muted>Requested by: {s.members[approval.requestedBy]?.name}</Txt>
-      {customerId && (
-        <Txt bold>
-          {s.customers[customerId]?.name} · {s.customers[customerId]?.phone}
+    <View>
+      <Row style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          {bigAmount !== undefined && (
+            <Amount value={bigAmount} size={40} weight={700} />
+          )}
+          <Txt size={16} weight={600} color={palette.ink2}>
+            {heading}
+          </Txt>
+        </View>
+        {approval.status === "approved" || approval.status === "used" ? (
+          <Stamp
+            tone="approved"
+            land
+            date={
+              approval.decidedAt ? stampDate(approval.decidedAt, language) : undefined
+            }
+          >
+            {hi ? "मंज़ूर" : "Approved"}
+          </Stamp>
+        ) : approval.status === "rejected" ? (
+          <Stamp
+            tone="declined"
+            land
+            date={
+              approval.decidedAt ? stampDate(approval.decidedAt, language) : undefined
+            }
+          >
+            {hi ? "अस्वीकृत" : "Declined"}
+          </Stamp>
+        ) : null}
+      </Row>
+      {!!approval.reason && (
+        <Txt size={14} color={palette.ink2} style={{ marginTop: 8 }}>
+          {approval.reason}
         </Txt>
       )}
+      <View style={{ marginTop: 20 }}>
+        {fact(
+          hi ? "माँगने वाले" : "Requested by",
+          <Row style={{ gap: 8 }}>
+            <StaffMark
+              id={approval.requestedBy}
+              name={requester?.name}
+              size={26}
+            />
+            <Txt size={15} weight={600}>
+              {requester?.name}
+            </Txt>
+          </Row>,
+        )}
+        {decider &&
+          fact(
+            hi ? "फ़ैसला किया" : "Decided by",
+            <Row style={{ gap: 8 }}>
+              <StaffMark id={approval.decidedBy} name={decider.name} size={26} />
+              <Txt size={15} weight={600}>
+                {decider.name}
+              </Txt>
+            </Row>,
+          )}
+        {customerId &&
+          fact(
+            hi ? "ग्राहक" : "Customer",
+            <Txt size={15} weight={600}>
+              {s.customers[customerId]?.name}
+            </Txt>,
+          )}
+        {customerId &&
+          !!s.customers[customerId]?.phone &&
+          fact(
+            hi ? "फ़ोन" : "Phone",
+            <Txt size={15} num>
+              {s.customers[customerId]?.phone}
+            </Txt>,
+          )}
+        {o &&
+          fact(
+            hi ? "समय" : "Time",
+            <Txt size={15} num>
+              {new Date(o.createdAt).toLocaleString()}
+            </Txt>,
+          )}
+        {o &&
+          fact(
+            hi ? "काउंटर" : "Counter",
+            <Txt size={15} num weight={600}>
+              {o.counterId}
+            </Txt>,
+          )}
+        {i &&
+          fact(
+            hi ? "बिल" : "Bill",
+            <Txt size={15} num weight={600}>
+              {i.number}
+            </Txt>,
+          )}
+        {i &&
+          fact(
+            hi ? "समय" : "Time",
+            <Txt size={15} num>
+              {new Date(i.occurredAt).toLocaleString("en-IN", {
+                timeZone: "Asia/Kolkata",
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </Txt>,
+          )}
+        {i &&
+          fact(
+            hi ? "बिल बनाया" : "Billed by",
+            <Row style={{ gap: 8 }}>
+              <StaffMark
+                id={i.collectorId}
+                name={s.members[i.collectorId]?.name}
+                size={26}
+              />
+              <Txt size={15} weight={600}>
+                {s.members[i.collectorId]?.name}
+              </Txt>
+            </Row>,
+          )}
+      </View>
       {customerId && approval.kind === "credit" && (
-        <Txt style={{ color: colors.amber }}>
+        <Txt size={14} weight={600} color={palette.waiting} style={{ marginTop: 12 }}>
           {(() => {
             const bills = Object.values(s.invoices).filter(
               (inv) => inv.customerId === customerId && billDue(s, inv.id) > 0,
@@ -1779,93 +2225,89 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
           })()}
         </Txt>
       )}
-      {typeof p.amountPaise === "number" && (
-        <Txt bold size={26}>
-          {rupees(p.amountPaise)}
-        </Txt>
-      )}
-      {o && (
-        <>
-          <Txt muted>
-            {new Date(o.createdAt).toLocaleString()} · {o.counterId}
+      {o && o.lines.length > 0 && (
+        <View style={{ marginTop: 20 }}>
+          <Txt size={14} weight={600} color={palette.ink2} style={{ marginBottom: 4 }}>
+            {hi ? "दवाएँ" : "Items"}
           </Txt>
           {o.lines.map((l, n) => {
             const batch = s.batches[l.batchId],
               product = s.products[batch.productId];
             return (
-              <Txt key={n}>
-                {product.name} {product.strength} · {l.quantity} {l.unit} ·{" "}
-                {batch.code}
-              </Txt>
+              <Line
+                key={n}
+                label={`${product.name} ${product.strength}`.trim()}
+                value={`${l.quantity} ${l.unit}`}
+                note={
+                  <Txt size={13} num weight={600} color={palette.ink3}>
+                    {batch.code}
+                  </Txt>
+                }
+              />
             );
           })}
-        </>
+        </View>
       )}
       {i && (
-        <>
-          <Txt bold>
-            {i.number} ·{" "}
-            {new Date(i.occurredAt).toLocaleString("en-IN", {
-              timeZone: "Asia/Kolkata",
-              dateStyle: "medium",
-              timeStyle: "short",
-            })}
+        <View style={{ marginTop: 20 }}>
+          <Txt size={14} weight={600} color={palette.ink2} style={{ marginBottom: 4 }}>
+            {hi ? "लौटाई जा रही दवाएँ" : "Items returned"}
           </Txt>
-          <Txt muted>Billed by {s.members[i.collectorId]?.name}</Txt>
           {(p.lines as ReturnLine[]).map((l, n) => {
             const item = i.lines[l.index];
             const unit = s.products[item?.productId ?? ""]?.baseUnit ?? "";
             return (
-              <Txt key={n}>
-                {item?.name} {item?.strength} · {item?.batchCode} ·{" "}
-                {amountOf(l.quantity, unit, (x) => x)} returned of{" "}
-                {item?.baseQuantity} sold
-              </Txt>
+              <Line
+                key={n}
+                label={`${item?.name ?? ""} ${item?.strength ?? ""}`.trim()}
+                value={`${amountOf(l.quantity, unit, (x) => x)} of ${item?.baseQuantity}`}
+                note={
+                  <Txt size={13} num weight={600} color={palette.ink3}>
+                    {item?.batchCode}
+                  </Txt>
+                }
+              />
             );
           })}
-          {(() => {
-            try {
-              const q = refundQuote(s, i, p.lines as ReturnLine[]);
-              return (
-                <View style={styles.panel}>
-                  <Txt muted size={12}>
-                    Refund to the customer
-                  </Txt>
-                  <Txt size={26} bold style={{ marginTop: 6 }}>
-                    {rupees(q.payablePaise)}
-                  </Txt>
-                  {q.creditReductionPaise > 0 && (
-                    <Txt
-                      size={12}
-                      style={{ marginTop: 6, color: colors.amber }}
-                    >
-                      {rupees(q.creditReductionPaise)} comes off what the
+          {refund && (
+            <>
+              <TotalRule />
+              <Line
+                strong
+                label={hi ? "ग्राहक को वापसी" : "Refund to the customer"}
+                value={rupees(refund.payablePaise)}
+                note={
+                  refund.creditReductionPaise > 0 ? (
+                    <Txt size={13} color={palette.waiting}>
+                      {rupees(refund.creditReductionPaise)} comes off what the
                       customer owes
                     </Txt>
-                  )}
-                </View>
-              );
-            } catch (e) {
-              return (
-                <Txt style={{ color: colors.red }}>{(e as Error).message}</Txt>
-              );
-            }
-          })()}
-        </>
+                  ) : undefined
+                }
+              />
+            </>
+          )}
+          {!!refundError && (
+            <Txt size={14} color={palette.declined} style={{ marginTop: 8 }}>
+              {refundError}
+            </Txt>
+          )}
+        </View>
       )}
       {b && (
-        <>
-          <Txt bold>
-            {s.products[b.productId]?.name} · {b.code}
-          </Txt>
-          <Txt>
-            {String(p.kind).replaceAll("_", " ")} · {String(p.quantity)}{" "}
-            {s.products[b.productId]?.baseUnit}
-          </Txt>
-          <Txt muted>
-            Available: {b.quantity} · Quarantined: {b.quarantined}
-          </Txt>
-        </>
+        <View style={{ marginTop: 20 }}>
+          <Line
+            strong
+            label={s.products[b.productId]?.name ?? ""}
+            value={b.code}
+          />
+          <Line
+            label={String(p.kind).replaceAll("_", " ")}
+            value={`${String(p.quantity)} ${s.products[b.productId]?.baseUnit ?? ""}`}
+          />
+          <Line label="Available" value={String(b.quantity)} />
+          <Line label="Quarantined" value={String(b.quarantined)} />
+        </View>
       )}
     </View>
   );
@@ -1880,48 +2322,67 @@ function ExceptionDetails({ reviewId }: { reviewId: string }) {
   const op = command?.operation;
   const observation = s.observations[r.referenceId];
   return (
-    <View style={{ gap: 10, marginBottom: 20 }}>
+    <View style={{ marginBottom: 20 }}>
       {q && op?.type === "offline.checkout" && (
         <>
           {s.devices[op.deviceId] && (
-            <Txt bold>
-              Bill{" "}
-              {invoiceNumber(
+            <Line
+              strong
+              label="Bill"
+              value={invoiceNumber(
                 command.occurredAt,
                 s.devices[op.deviceId].series,
                 op.sequence,
               )}
-            </Txt>
+            />
           )}
-          <Txt bold>
-            {s.members[q.actorId]?.name} · {rupees(op.cashPaise)}
-          </Txt>
-          <Txt muted>
-            {new Date(command.occurredAt).toLocaleString("en-IN", {
+          <Line
+            label={
+              <Row style={{ gap: 8 }}>
+                <StaffMark
+                  id={q.actorId}
+                  name={s.members[q.actorId]?.name}
+                  size={26}
+                />
+                <Txt size={15} weight={600}>
+                  {s.members[q.actorId]?.name}
+                </Txt>
+              </Row>
+            }
+            value={rupees(op.cashPaise)}
+          />
+          <Line
+            label={new Date(command.occurredAt).toLocaleString("en-IN", {
               timeZone: "Asia/Kolkata",
-            })}{" "}
-            · {op.counterId}
-          </Txt>
+            })}
+            value={op.counterId}
+          />
           {op.lines.map((l: any, index: number) => {
             const b = s.batches[l.batchId],
               p = b ? s.products[b.productId] : undefined;
             return (
-              <Txt key={index}>
-                {p?.name ?? "Unknown product"} {p?.strength} · {l.quantity}{" "}
-                {l.unit} · {b?.code ?? l.batchId}
-              </Txt>
+              <Line
+                key={index}
+                label={`${p?.name ?? "Unknown product"} ${p?.strength ?? ""}`.trim()}
+                value={`${l.quantity} ${l.unit}`}
+                note={
+                  <Txt size={13} num weight={600} color={palette.ink3}>
+                    {b?.code ?? l.batchId}
+                  </Txt>
+                }
+              />
             );
           })}
         </>
       )}
       {observation && (
         <>
-          <Txt bold>{observation.counterId}</Txt>
-          <Txt muted>
-            {new Date(observation.startedAt).toLocaleString()} –{" "}
-            {new Date(observation.endedAt).toLocaleTimeString()}
-          </Txt>
-          <Txt>
+          <Line strong label="Counter" value={observation.counterId} />
+          <Line
+            label={`${new Date(observation.startedAt).toLocaleString()} – ${new Date(observation.endedAt).toLocaleTimeString()}`}
+            value=""
+          />
+          <Txt size={14} color={palette.ink2} style={{ marginTop: 8 }}>
             Possible matching bills:{" "}
             {observation.candidateInvoiceIds
               .map((id) => s.invoices[id]?.number ?? id)
@@ -1947,6 +2408,71 @@ export function ReviewsScreen() {
       (a.status === "pending" || a.status === "approved") &&
       approvalLive(state, a),
   );
+  const entryTime = (at: string) =>
+    indiaDate(at) === indiaDate(new Date().toISOString())
+      ? new Date(at).toLocaleTimeString("en-GB", {
+          timeZone: "Asia/Kolkata",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : new Date(at).toLocaleDateString(hi ? "hi-IN" : "en-IN", {
+          day: "numeric",
+          month: "short",
+          timeZone: "Asia/Kolkata",
+        });
+  // Kind and customer for the row title, the amount asked for, and the items on the order.
+  const approvalParts = (a: Approval) => {
+    const p = a.payload,
+      o = state.orders[String(p.orderId)],
+      inv = state.invoices[String(p.invoiceId)],
+      customer =
+        state.customers[
+          String(p.customerId ?? o?.customerId ?? inv?.customerId ?? "")
+        ]?.name;
+    const kind =
+      a.kind === "credit"
+        ? hi
+          ? "उधार"
+          : "Credit"
+        : a.kind === "discount"
+          ? hi
+            ? "छूट"
+            : "Discount"
+          : a.kind === "refund"
+            ? hi
+              ? "वापसी"
+              : "Return"
+            : hi
+              ? "स्टॉक बदलाव"
+              : "Stock change";
+    let amount: string | undefined;
+    if (typeof p.amountPaise === "number") amount = rupees(p.amountPaise);
+    else if (a.kind === "refund" && inv) {
+      try {
+        amount = rupees(
+          refundQuote(state, inv, p.lines as ReturnLine[]).payablePaise,
+        );
+      } catch {}
+    }
+    const names = o
+      ? o.lines
+          .map((l) => state.products[state.batches[l.batchId]?.productId]?.name)
+          .filter(Boolean)
+      : inv
+        ? (p.lines as ReturnLine[])
+            .map((l) => inv.lines[l.index]?.name)
+            .filter(Boolean)
+        : [];
+    return {
+      heading: customer
+        ? `${kind} · ${customer}`
+        : inv
+          ? `${kind} · ${inv.number}`
+          : kind,
+      amount,
+      items: names.join(", "),
+    };
+  };
   async function clip(preserve = false) {
     const observation =
       state.observations[state.reviews[reviewId]?.referenceId];
@@ -1996,9 +2522,112 @@ export function ReviewsScreen() {
       title={t("reviews")}
       subtitle="Approvals and evidence that need a human decision."
     >
-      <View style={{ marginBottom: 24 }}>
+      <Section title="Approval requests">
+        {pending
+          .filter((a) => a.status === "pending")
+          .map((a) => {
+            const x = approvalParts(a);
+            return (
+              <Entry
+                key={a.id}
+                time={entryTime(a.requestedAt)}
+                title={x.heading}
+                detail={
+                  <Txt size={14} color={palette.ink2} numberOfLines={2}>
+                    {[a.reason, x.items].filter(Boolean).join(" · ")}
+                  </Txt>
+                }
+                who={{
+                  id: a.requestedBy,
+                  name: state.members[a.requestedBy]?.name,
+                }}
+                amount={x.amount}
+                onPress={() => {
+                  setSelected(a);
+                  setConfirmCancel(false);
+                }}
+              >
+                <Badge tone="waiting">{hi ? "इंतज़ार" : "Waiting"}</Badge>
+              </Entry>
+            );
+          })}
+        {!pending.some((a) => a.status === "pending") && (
+          <Empty icon="checkmark-done-outline" title="No approvals waiting" />
+        )}
+      </Section>
+      {pending.some((a) => a.status === "approved") && (
+        <Section title={hi ? "मंज़ूर, इस्तेमाल बाकी" : "Approved, not yet used"}>
+          {pending
+            .filter((a) => a.status === "approved")
+            .map((a) => {
+              const x = approvalParts(a);
+              return (
+                <Entry
+                  key={a.id}
+                  time={entryTime(a.decidedAt ?? a.requestedAt)}
+                  title={
+                    <Txt size={16} weight={600} color={palette.ink2}>
+                      {x.heading}
+                    </Txt>
+                  }
+                  detail={
+                    <Txt size={14} color={palette.ink3} numberOfLines={2}>
+                      {[a.reason, x.items].filter(Boolean).join(" · ")}
+                    </Txt>
+                  }
+                  who={{
+                    id: a.requestedBy,
+                    name: state.members[a.requestedBy]?.name,
+                  }}
+                  amount={x.amount}
+                  amountColor={palette.ink2}
+                  onPress={() => {
+                    setSelected(a);
+                    setConfirmCancel(false);
+                  }}
+                >
+                  <Badge tone="approved">{hi ? "मंज़ूर" : "Approved"}</Badge>
+                </Entry>
+              );
+            })}
+        </Section>
+      )}
+      <Section title="Exceptions and camera pilot">
+        {Object.values(state.reviews)
+          .filter((r) => r.status === "open")
+          .map((r) => (
+            <ListRow
+              key={r.id}
+              onPress={() => V(r.id)}
+              leading={
+                <Icon
+                  name={
+                    r.kind === "camera"
+                      ? "videocam-outline"
+                      : "alert-circle-outline"
+                  }
+                  size={22}
+                  color={palette.waiting}
+                />
+              }
+              title={r.title}
+              detail={r.detail}
+            />
+          ))}
+        <Txt size={13} color={palette.ink3} style={{ marginTop: 12 }}>
+          Camera observations are review candidates. Employee alerts and
+          automatic theft conclusions are disabled.
+        </Txt>
+      </Section>
+      <Section title="Shop backups">
+        <Txt size={14} color={palette.ink2} style={{ marginTop: 8, marginBottom: 4 }}>
+          Bring back sales that only reached the shop PC.
+        </Txt>
+        <View style={{ alignItems: "flex-start" }}>
         <Button
-          secondary
+          variant="secondary"
+          small
+          icon="cloud-download-outline"
           onPress={() =>
             void run(async () => {
               if (s.demo)
@@ -2024,66 +2653,7 @@ export function ReviewsScreen() {
         >
           Recover from shop backups
         </Button>
-      </View>
-      <Section title="Approval requests">
-        {pending.map((a) => (
-          <Pressable
-            key={a.id}
-            onPress={() => {
-              setSelected(a);
-              setConfirmCancel(false);
-            }}
-            style={styles.listRow}
-          >
-            <Row style={{ justifyContent: "space-between" }}>
-              <View>
-                <Txt bold>{approvalTitle(state, a, s.language === "hi")}</Txt>
-                <Txt muted size={12} style={{ marginTop: 6 }}>
-                  {a.reason}
-                </Txt>
-                <Txt size={11} muted style={{ marginTop: 5 }}>
-                  {state.members[a.requestedBy]?.name} ·{" "}
-                  {new Date(a.requestedAt).toLocaleString("en-IN")}
-                </Txt>
-              </View>
-              <Badge warning={a.status === "pending"}>{a.status}</Badge>
-            </Row>
-          </Pressable>
-        ))}
-        {!pending.length && (
-          <Empty icon="checkmark-done-outline" title="No approvals waiting" />
-        )}
-      </Section>
-      <Section title="Exceptions and camera pilot">
-        {Object.values(state.reviews)
-          .filter((r) => r.status === "open")
-          .map((r) => (
-            <Pressable
-              key={r.id}
-              onPress={() => V(r.id)}
-              style={styles.listRow}
-            >
-              <Row>
-                <Icon
-                  name={
-                    r.kind === "camera"
-                      ? "videocam-outline"
-                      : "alert-circle-outline"
-                  }
-                />
-                <View style={{ flex: 1 }}>
-                  <Txt bold>{r.title}</Txt>
-                  <Txt size={12} muted style={{ lineHeight: 19, marginTop: 6 }}>
-                    {r.detail}
-                  </Txt>
-                </View>
-              </Row>
-            </Pressable>
-          ))}
-        <Txt size={11} muted>
-          Camera observations are review candidates. Employee alerts and
-          automatic theft conclusions are disabled.
-        </Txt>
+        </View>
       </Section>
       <Sheet
         visible={!!selected}
@@ -2095,16 +2665,10 @@ export function ReviewsScreen() {
       >
         {selected && (
           <>
-            <Txt bold size={18} style={{ marginBottom: 12 }}>
-              {approvalTitle(state, selected, s.language === "hi")}
-            </Txt>
-            <Txt muted style={{ marginBottom: 15 }}>
-              {selected.reason}
-            </Txt>
             <ApprovalDetails approval={selected} />
-            <View style={{ height: 20 }} />
+            <View style={{ height: 24 }} />
             {selected.status === "pending" ? (
-              <Row>
+              <>
                 <Button
                   onPress={() =>
                     void run(async () => {
@@ -2119,8 +2683,10 @@ export function ReviewsScreen() {
                 >
                   {t("approve")}
                 </Button>
-                <Button
-                  secondary
+                <View style={{ height: 32 }} />
+                <View style={{ alignItems: "flex-end" }}>
+                  <Button
+                    variant="danger"
                   onPress={() =>
                     void run(async () => {
                       await s.command({
@@ -2131,10 +2697,11 @@ export function ReviewsScreen() {
                       setSelected(null);
                     })
                   }
-                >
-                  {t("reject")}
-                </Button>
-              </Row>
+                  >
+                    {t("reject")}
+                  </Button>
+                </View>
+              </>
             ) : selected.kind === "stock" ? (
               <Button
                 onPress={() =>
@@ -2155,16 +2722,21 @@ export function ReviewsScreen() {
                   approval={selected}
                   onDone={() => setSelected(null)}
                 />
-                <View style={{ height: 16 }} />
+                <View style={{ height: 32 }} />
                 {confirmCancel ? (
-                  <View style={{ gap: 10 }}>
-                    <Txt muted>
+                  <View style={{ gap: 12 }}>
+                    <Txt color={palette.ink2}>
                       {hi
                         ? "यह वापसी मंज़ूरी रद्द हो जाएगी और पैसा नहीं लौटाया जा सकेगा। पक्का?"
                         : "This cancels the approved return. No money can be given back on it. Sure?"}
                     </Txt>
-                    <Row>
+                    <Button variant="quiet" onPress={() => setConfirmCancel(false)}>
+                      {hi ? "नहीं" : "Keep it"}
+                    </Button>
+                    <View style={{ height: 12 }} />
+                    <View style={{ alignItems: "flex-end" }}>
                       <Button
+                        variant="danger"
                         onPress={() =>
                           void run(async () => {
                             await s.command({
@@ -2181,19 +2753,21 @@ export function ReviewsScreen() {
                       >
                         {hi ? "हाँ, रद्द करें" : "Yes, cancel approval"}
                       </Button>
-                      <Button secondary onPress={() => setConfirmCancel(false)}>
-                        {hi ? "नहीं" : "Keep it"}
-                      </Button>
-                    </Row>
+                    </View>
                   </View>
                 ) : (
-                  <Button secondary onPress={() => setConfirmCancel(true)}>
-                    {hi ? "मंज़ूरी रद्द करें" : "Cancel approval"}
-                  </Button>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Button
+                      variant="danger"
+                      onPress={() => setConfirmCancel(true)}
+                    >
+                      {hi ? "मंज़ूरी रद्द करें" : "Cancel approval"}
+                    </Button>
+                  </View>
                 )}
               </>
             ) : (
-              <Txt muted>
+              <Txt color={palette.ink2}>
                 Return to the held order to use this approval. It is valid only
                 for the approved order version and amount.
               </Txt>
@@ -2208,7 +2782,7 @@ export function ReviewsScreen() {
       >
         {reviewId && (
           <>
-            <Txt muted style={{ marginBottom: 20 }}>
+            <Txt color={palette.ink2} style={{ marginBottom: 20 }}>
               {state.reviews[reviewId]?.detail}
             </Txt>
             <ExceptionDetails reviewId={reviewId} />
@@ -2235,7 +2809,7 @@ export function ReviewsScreen() {
                 </View>
               )}
             {state.reviews[reviewId]?.kind === "quarantined_command" ? (
-              <Row>
+              <>
                 <Button
                   onPress={() =>
                     void run(async () => {
@@ -2257,8 +2831,10 @@ export function ReviewsScreen() {
                 >
                   Recover sale
                 </Button>
-                <Button
-                  secondary
+                <View style={{ height: 32 }} />
+                <View style={{ alignItems: "flex-end" }}>
+                  <Button
+                    variant="danger"
                   onPress={() =>
                     void run(async () => {
                       await s.request(
@@ -2275,7 +2851,8 @@ export function ReviewsScreen() {
                 >
                   Reject with reason
                 </Button>
-              </Row>
+                </View>
+              </>
             ) : (
               <Button
                 onPress={() =>
@@ -2306,9 +2883,47 @@ export function MoreScreen({ navigate }: { navigate: (p: string) => void }) {
   const [counter, C] = useState(
     s.state!.devices[s.identity!.deviceId]?.counterId ?? "counter-1",
   );
+  const hi = s.language === "hi";
+  const actor = s.identity!.actor;
+  const actorName = s.state!.members[actor.id]?.name ?? "";
+  const assigned = s.state!.devices[s.identity!.deviceId]?.counterId ?? counter;
+  const pendingReviews = Object.values(s.state!.approvals).filter(
+    (a) => a.status === "pending",
+  ).length;
+  const lead = (name: React.ComponentProps<typeof Icon>["name"]) => (
+    <Icon name={name} size={22} color={palette.ink2} />
+  );
+  const ownerIcons = {
+    overview: "grid-outline",
+    inventory: "cube-outline",
+    money: "cash-outline",
+    reviews: "checkmark-done-outline",
+    administration: "settings-outline",
+  } as const;
   return (
-    <Page title={t("more")} subtitle={s.state!.settings.name}>
-      {s.identity!.actor.role === "owner" && (
+    <Page title={t("more")}>
+      <Row style={{ gap: 14, marginBottom: 28 }}>
+        <StaffMark id={actor.id} name={actorName} size={44} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Txt size={19} weight={600}>
+            {actorName}
+          </Txt>
+          <Txt size={14} color={palette.ink2}>
+            {actor.role === "owner"
+              ? hi
+                ? "मालिक"
+                : "Owner"
+              : hi
+                ? "स्टाफ"
+                : "Staff"}
+            {` · ${s.state!.settings.name}`}
+          </Txt>
+          <Txt size={13} color={palette.ink3} num>
+            {assigned}
+          </Txt>
+        </View>
+      </Row>
+      {actor.role === "owner" && (
         <Section title={t("owner")}>
           {(
             [
@@ -2319,17 +2934,25 @@ export function MoreScreen({ navigate }: { navigate: (p: string) => void }) {
               "administration",
             ] as const
           ).map((p) => (
-            <Pressable
+            <ListRow
               key={p}
+              leading={lead(ownerIcons[p])}
+              title={t(p)}
               onPress={() => navigate(p)}
-              style={styles.listRow}
-            >
-              <Row style={{ justifyContent: "space-between" }}>
-                <Txt bold>{t(p)}</Txt>
-                <Icon name="chevron-forward" />
-              </Row>
-            </Pressable>
+              trailing={
+                p === "reviews" && pendingReviews > 0 ? (
+                  <Badge tone="waiting">
+                    {`${pendingReviews} ${t("pending")}`}
+                  </Badge>
+                ) : undefined
+              }
+            />
           ))}
+        </Section>
+      )}
+      {actor.role !== "owner" && (
+        <Section title={hi ? "नकद दराज़" : "Cash drawer"}>
+          <DrawerPanel />
         </Section>
       )}
       <Section title="Counter assignment">
@@ -2341,14 +2964,11 @@ export function MoreScreen({ navigate }: { navigate: (p: string) => void }) {
           Assign this counter
         </Button>
       </Section>
-      {s.identity!.actor.role !== "owner" && (
-        <Section title={s.language === "hi" ? "नकद दराज़" : "Cash drawer"}>
-          <DrawerPanel />
-        </Section>
-      )}
       <Section title="My cash collections">
-        <Txt size={24} bold>
-          {rupees(
+        <Amount
+          size={28}
+          weight={700}
+          value={rupees(
             Object.values(s.state!.payments)
               .filter(
                 (p) =>
@@ -2363,56 +2983,83 @@ export function MoreScreen({ navigate }: { navigate: (p: string) => void }) {
                 0,
               ),
           )}
-        </Txt>
+        />
       </Section>
+      <View style={{ marginBottom: 32 }}>
+        <ListRow
+          leading={lead("language-outline")}
+          title={t("language")}
+          chevron={false}
+        >
+          <Row style={{ flexWrap: "wrap", gap: 8 }}>
+            <Chip
+              active={s.language === "en"}
+              onPress={() => s.setLanguage("en")}
+            >
+              English
+            </Chip>
+            <Chip
+              active={s.language === "hi"}
+              onPress={() => s.setLanguage("hi")}
+            >
+              हिंदी
+            </Chip>
+          </Row>
+        </ListRow>
+      </View>
       <Section title="Device and synchronisation">
-        <Txt muted size={12}>
-          {s.demo ? "Preview device" : s.identity!.deviceId}
-        </Txt>
-        <Txt muted size={12}>
-          Offline authorisation expires{" "}
-          {new Date(s.identity!.expiresAt).toLocaleString("en-IN")}
-        </Txt>
-        <Txt muted size={12}>
-          {appVersion()}
-        </Txt>
-        <Button secondary onPress={() => void s.sync()} icon="sync-outline">
-          {t("sync")}
-        </Button>
-        {s.pending.map((p) => (
-          <View key={p.command.id} style={styles.listRow}>
-            <Badge warning={p.status === "review"}>
-              {p.status === "local"
-                ? "Saved on this phone"
-                : p.status === "gateway"
-                  ? "Backed up at shop"
-                  : "Owner recovery required"}
-            </Badge>
-            <Txt muted size={11} style={{ marginTop: 7 }}>
-              {p.command.id.slice(0, 12)} {p.error}
+        <ListRow
+          leading={lead("phone-portrait-outline")}
+          title={
+            <Txt size={16} weight={600} num>
+              {s.demo ? "Preview device" : s.identity!.deviceId}
             </Txt>
-          </View>
+          }
+          detail={
+            <Txt size={14} color={palette.ink2}>
+              Offline authorisation expires{" "}
+              {new Date(s.identity!.expiresAt).toLocaleString("en-IN")}
+            </Txt>
+          }
+        />
+        <ListRow
+          leading={lead("information-circle-outline")}
+          title={
+            <Txt size={16} weight={600} num>
+              {appVersion()}
+            </Txt>
+          }
+        />
+        {s.pending.map((p) => (
+          <ListRow
+            key={p.command.id}
+            title={
+              <Badge warning={p.status === "review"}>
+                {p.status === "local"
+                  ? "Saved on this phone"
+                  : p.status === "gateway"
+                    ? "Backed up at shop"
+                    : "Owner recovery required"}
+              </Badge>
+            }
+            detail={
+              <Txt size={13} color={palette.ink3} num>
+                {p.command.id.slice(0, 12)} {p.error}
+              </Txt>
+            }
+          />
         ))}
+        <View style={{ marginTop: 16 }}>
+          <Button secondary onPress={() => void s.sync()} icon="sync-outline">
+            {t("sync")}
+          </Button>
+        </View>
       </Section>
-      <Section title={t("language")}>
-        <Row>
-          <Chip
-            active={s.language === "en"}
-            onPress={() => s.setLanguage("en")}
-          >
-            English
-          </Chip>
-          <Chip
-            active={s.language === "hi"}
-            onPress={() => s.setLanguage("hi")}
-          >
-            हिंदी
-          </Chip>
-        </Row>
-      </Section>
-      <Button secondary onPress={() => void run(s.logout)}>
-        {t("logout")}
-      </Button>
+      <View style={{ marginTop: 32 }}>
+        <Button variant="danger" onPress={() => void run(s.logout)}>
+          {t("logout")}
+        </Button>
+      </View>
     </Page>
   );
 }
@@ -2460,15 +3107,20 @@ export function AdministrationScreen() {
           />
         ))}
         <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: !!settings.readinessConfirmed }}
           onPress={() =>
             S({ ...settings, readinessConfirmed: !settings.readinessConfirmed })
           }
+          style={{ minHeight: 48, justifyContent: "center", marginBottom: 16 }}
         >
-          <Row>
+          <Row style={{ alignItems: "flex-start" }}>
             <Icon
               name={settings.readinessConfirmed ? "checkbox" : "square-outline"}
+              size={24}
+              color={settings.readinessConfirmed ? palette.blue : palette.ink3}
             />
-            <Txt style={{ flex: 1 }} size={12}>
+            <Txt style={{ flex: 1 }} size={14} color={palette.ink2}>
               Opening counts, tax configuration and pharmacy record requirements
               have been verified for this shop.
             </Txt>
@@ -2507,10 +3159,19 @@ export function AdministrationScreen() {
           inputRef={passwordRef}
           returnKeyType="done"
         />
-        <Pressable onPress={() => C(!collect)}>
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: collect }}
+          onPress={() => C(!collect)}
+          style={{ minHeight: 48, justifyContent: "center", marginBottom: 16 }}
+        >
           <Row>
-            <Icon name={collect ? "checkbox" : "square-outline"} />
-            <Txt>May collect payments</Txt>
+            <Icon
+              name={collect ? "checkbox" : "square-outline"}
+              size={24}
+              color={collect ? palette.blue : palette.ink3}
+            />
+            <Txt size={15}>May collect payments</Txt>
           </Row>
         </Pressable>
         <Button
@@ -2543,60 +3204,60 @@ export function AdministrationScreen() {
         {Object.values(state.members)
           .filter((m) => m.role === "owner")
           .map((m) => (
-            <Pressable
+            <ListRow
               key={m.id}
               onPress={() => setEmployee(m.id)}
-              style={[styles.listRow, { gap: 4 }]}
-            >
-              <Row style={{ justifyContent: "space-between" }}>
-                <Txt bold>{m.name}</Txt>
-                <Icon name="chevron-forward" size={16} />
-              </Row>
-              <Txt muted size={11}>
-                Owner{m.username ? ` · ${m.username}` : ""}
-              </Txt>
-            </Pressable>
+              leading={<StaffMark id={m.id} name={m.name} size={36} />}
+              title={m.name}
+              detail={`Owner${m.username ? ` · ${m.username}` : ""}`}
+            />
           ))}
         {Object.values(state.members)
           .filter((m) => m.role === "employee")
           .map((m) => (
-            <Pressable
+            <ListRow
               key={m.id}
               onPress={() => setEmployee(m.id)}
-              style={[styles.listRow, { gap: 4 }]}
-            >
-              <Row style={{ justifyContent: "space-between" }}>
-                <Txt bold>{m.name}</Txt>
-                <Icon name="chevron-forward" size={16} />
-              </Row>
-              <Txt muted size={11}>
-                {m.username ? `${m.username} · ` : ""}
-                {m.active ? "Active" : "Disabled"} ·{" "}
-                {m.canCollect ? "Can collect" : "Cannot collect"}
-                {m.mustChangePassword ? " · Temporary password" : ""}
-              </Txt>
-            </Pressable>
+              leading={<StaffMark id={m.id} name={m.name} size={36} />}
+              title={m.name}
+              detail={`${m.username ? `${m.username} · ` : ""}${
+                m.canCollect ? "Can collect" : "Cannot collect"
+              }${m.mustChangePassword ? " · Temporary password" : ""}`}
+              trailing={
+                <Badge tone={m.active ? "paid" : "neutral"}>
+                  {m.active ? "Active" : "Disabled"}
+                </Badge>
+              }
+            />
           ))}
       </Section>
       <Section title="Registered devices">
         {Object.values(state.devices).map((d) => (
-          <View key={d.id} style={styles.listRow}>
-            <Row style={{ justifyContent: "space-between" }}>
-              <View style={{ flex: 1 }}>
-                <Txt bold>{deviceLabel(state, d)}</Txt>
-                <Txt size={11} muted style={{ marginTop: 6 }}>
-                  Series {d.series} · {d.pendingCount} pending · {d.counterId}
+          <ListRow
+            key={d.id}
+            title={
+              <Row style={{ gap: 8 }}>
+                <Txt size={16} weight={600} style={{ flexShrink: 1 }}>
+                  {deviceLabel(state, d)}
                 </Txt>
-                <Txt size={11} muted>
-                  Last seen {new Date(d.lastSeen).toLocaleString("en-IN")}
+                <Txt size={14} num weight={600} color={palette.ink2}>
+                  {d.counterId}
                 </Txt>
-              </View>
-              {d.revoked ? (
-                <Badge warning>Revoked</Badge>
-              ) : (
+              </Row>
+            }
+            detail={
+              <Txt size={13} color={palette.ink3} num>
+                Series {d.series} · {d.pendingCount} pending · Last seen{" "}
+                {new Date(d.lastSeen).toLocaleString("en-IN")}
+              </Txt>
+            }
+            trailing={d.revoked ? <Badge tone="declined">Revoked</Badge> : undefined}
+          >
+            {!d.revoked && (
+              <View style={{ alignItems: "flex-end", marginTop: 4 }}>
                 <Button
                   small
-                  secondary
+                  variant="danger"
                   onPress={() =>
                     void run(() =>
                       s.command({ type: "device.revoke", deviceId: d.id }),
@@ -2605,9 +3266,9 @@ export function AdministrationScreen() {
                 >
                   Revoke
                 </Button>
-              )}
-            </Row>
-          </View>
+              </View>
+            )}
+          </ListRow>
         ))}
       </Section>
       <EmployeeSheet id={employee} close={() => setEmployee(null)} />
@@ -2650,7 +3311,17 @@ function EmployeeSheet({
     <Sheet visible={!!m} title={m?.name ?? ""} onClose={close}>
       {m && (
         <View style={{ gap: 16 }}>
-          {!!m.username && <Txt muted>Username: {m.username}</Txt>}
+          {!!m.username && (
+            <Row style={{ gap: 8 }}>
+              <StaffMark id={m.id} name={m.name} size={36} />
+              <Txt color={palette.ink2}>
+                Username:{" "}
+                <Txt num weight={600}>
+                  {m.username}
+                </Txt>
+              </Txt>
+            </Row>
+          )}
           <View>
             <Field
               label="Name shown on bills and reports"
@@ -2669,19 +3340,26 @@ function EmployeeSheet({
           {m.role === "employee" && (
             <>
               <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: m.canCollect }}
                 onPress={() =>
                   void update({ active: m.active, canCollect: !m.canCollect })
                 }
+                style={{ minHeight: 48, justifyContent: "center" }}
               >
                 <Row>
-                  <Icon name={m.canCollect ? "checkbox" : "square-outline"} />
+                  <Icon
+                    name={m.canCollect ? "checkbox" : "square-outline"}
+                    size={24}
+                    color={m.canCollect ? palette.blue : palette.ink3}
+                  />
                   <Txt style={{ flex: 1 }}>
                     May collect payments and handle the drawer
                   </Txt>
                 </Row>
               </Pressable>
               <Section title="Forgot password">
-                <Txt muted size={12}>
+                <Txt size={14} color={palette.ink2} style={{ marginBottom: 12 }}>
                   Set a temporary password. They are signed out on every phone
                   and choose their own password when they next sign in.
                 </Txt>
@@ -2714,16 +3392,23 @@ function EmployeeSheet({
                 >
                   Set temporary password
                 </Button>
-                {!!done && <Txt style={{ color: colors.accent }}>{done}</Txt>}
+                {!!done && (
+                  <Txt color={palette.blue} style={{ marginTop: 12 }}>
+                    {done}
+                  </Txt>
+                )}
               </Section>
-              <Button
-                secondary
-                onPress={() =>
-                  void update({ active: !m.active, canCollect: m.canCollect })
-                }
-              >
-                {m.active ? "Disable and sign out" : "Enable"}
-              </Button>
+              <View style={{ height: 16 }} />
+              <View style={{ alignItems: "flex-end" }}>
+                <Button
+                  variant={m.active ? "danger" : "secondary"}
+                  onPress={() =>
+                    void update({ active: !m.active, canCollect: m.canCollect })
+                  }
+                >
+                  {m.active ? "Disable and sign out" : "Enable"}
+                </Button>
+              </View>
             </>
           )}
         </View>

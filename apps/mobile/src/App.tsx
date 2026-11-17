@@ -10,10 +10,31 @@ import {
   Keyboard,
   type TextInput,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import { useSession, signInFailure } from "./session";
-import { colors, Txt, Icon, Button, Field, Row, Badge, useText } from "./ui";
+import {
+  colors,
+  palette,
+  radius,
+  space,
+  toneInk,
+  Txt,
+  Icon,
+  Button,
+  Field,
+  Row,
+  Banner,
+  StaffMark,
+  BrandMark,
+  Wordmark,
+  RuledPaper,
+  useText,
+} from "./ui";
+import { shadow } from "./theme";
 import { SellScreen, ReceiptSheet } from "./selling";
 import { useAttention } from "./payments";
 import { ShopSetup } from "./setup";
@@ -50,8 +71,9 @@ const DEMO =
 export default function App() {
   const session = useSession(),
     t = useText(),
-    { width } = useWindowDimensions();
-  const wide = width >= 1000;
+    { width } = useWindowDimensions(),
+    insets = useSafeAreaInsets();
+  const wide = width >= 768;
   const [page, setPage] = useState("sell"),
     [invoice, setInvoice] = useState<Invoice | null>(null);
   const params = useLocalSearchParams();
@@ -129,47 +151,60 @@ export default function App() {
   const badge = (key: string) =>
     count(key) + (key === "more" && !wide ? count("reviews") : 0);
   const nav = (items: typeof tabs | typeof ownerTabs) =>
-    items.map(([key, icon]) => (
-      <Pressable
-        key={key}
-        onPress={() => setPage(key)}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          paddingVertical: 13,
-          paddingHorizontal: 16,
-          borderRadius: 9,
-          backgroundColor: page === key ? colors.tint : "transparent",
-        }}
-      >
-        <Icon
-          name={icon}
-          size={20}
-          color={page === key ? colors.accent : colors.muted}
-        />
-        <Txt
-          bold={page === key}
-          style={{ color: page === key ? colors.accent : colors.muted }}
-        >
-          {t(key)}
-        </Txt>
-        {((key === "reviews" &&
+    items.map(([key, icon]) => {
+      const active = page === key;
+      const dot =
+        (key === "reviews" &&
           Object.values(session.state!.reviews).some(
             (r) => r.status === "open",
           )) ||
-          badge(key) > 0) && (
-          <View
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: 3,
-              backgroundColor: colors.amber,
-            }}
+        badge(key) > 0;
+      return (
+        <Pressable
+          key={key}
+          onPress={() => setPage(key)}
+          accessibilityRole="button"
+          accessibilityState={{ selected: active }}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            minHeight: 46,
+            paddingHorizontal: 14,
+            borderRadius: radius.md,
+            backgroundColor: active
+              ? palette.blueTint
+              : pressed
+                ? palette.desk
+                : "transparent",
+          })}
+        >
+          <Icon
+            name={(active ? icon.replace("-outline", "") : icon) as any}
+            size={20}
+            color={active ? palette.blue : palette.ink2}
           />
-        )}
-      </Pressable>
-    ));
+          <Txt
+            size={15}
+            weight={active ? 600 : 500}
+            color={active ? palette.blue : palette.ink2}
+            style={{ flex: 1 }}
+          >
+            {t(key)}
+          </Txt>
+          {dot && (
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: palette.waiting,
+              }}
+            />
+          )}
+        </Pressable>
+      );
+    });
   const content =
     page === "sell" ? (
       <SellScreen onInvoice={setInvoice} />
@@ -192,44 +227,59 @@ export default function App() {
     ) : (
       <MoreScreen navigate={setPage} />
     );
+  const me = session.state.members[session.identity.actor.id];
+  const counter =
+    session.state.devices[session.identity.deviceId]?.counterId;
+  const syncTone = session.pending.length
+    ? "waiting"
+    : session.online
+      ? "paid"
+      : "declined";
+  const syncText = session.pending.length
+    ? `${session.pending.length} ${t("pending")}`
+    : session.online
+      ? t("synced")
+      : t("offline");
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: palette.paper }}
+      edges={wide ? undefined : ["top", "left", "right"]}
+    >
       <View style={{ flex: 1, flexDirection: "row" }}>
         {wide && (
           <View
             style={{
-              width: 224,
-              backgroundColor: "white",
+              width: 248,
+              backgroundColor: palette.paper,
               borderRightWidth: 1,
-              borderColor: colors.line,
-              padding: 20,
+              borderColor: palette.rule,
+              paddingHorizontal: 16,
+              paddingVertical: 20,
             }}
           >
-            <Brand />
-            <View style={{ height: 42 }} />
+            <View style={{ paddingHorizontal: 6 }}>
+              <Wordmark size={19} />
+            </View>
+            <View style={{ height: 32 }} />
             <Txt
-              muted
-              size={10}
-              bold
-              style={{ letterSpacing: 1.5, marginLeft: 16, marginBottom: 13 }}
+              size={13}
+              weight={600}
+              color={palette.ink3}
+              style={{ marginLeft: 14, marginBottom: 6 }}
             >
-              COUNTER
+              Counter
             </Txt>
             {nav(tabs)}
             {owner && (
               <>
-                <View style={{ height: 34 }} />
+                <View style={{ height: 24 }} />
                 <Txt
-                  muted
-                  size={10}
-                  bold
-                  style={{
-                    letterSpacing: 1.5,
-                    marginLeft: 16,
-                    marginBottom: 13,
-                  }}
+                  size={13}
+                  weight={600}
+                  color={palette.ink3}
+                  style={{ marginLeft: 14, marginBottom: 6 }}
                 >
-                  MANAGEMENT
+                  Management
                 </Txt>
                 {nav(ownerTabs)}
               </>
@@ -238,28 +288,22 @@ export default function App() {
             <View
               style={{
                 borderTopWidth: 1,
-                borderColor: colors.line,
-                paddingTop: 20,
+                borderColor: palette.rule,
+                paddingTop: 16,
+                paddingHorizontal: 6,
               }}
             >
               <Row>
-                <View
-                  style={{
-                    width: 35,
-                    height: 35,
-                    borderRadius: 18,
-                    backgroundColor: colors.tint,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Txt bold>{owner ? "O" : "A"}</Txt>
-                </View>
-                <View>
-                  <Txt size={12} bold>
-                    {session.state.members[session.identity.actor.id]?.name}
+                <StaffMark
+                  id={session.identity.actor.id}
+                  name={me?.name}
+                  size={36}
+                />
+                <View style={{ flex: 1 }}>
+                  <Txt size={14} weight={600} numberOfLines={1}>
+                    {me?.name}
                   </Txt>
-                  <Txt size={11} muted>
+                  <Txt size={13} color={palette.ink3}>
                     {owner ? "Owner" : "Employee"}
                   </Txt>
                 </View>
@@ -270,58 +314,98 @@ export default function App() {
         <View style={{ flex: 1, minWidth: 0 }}>
           <View
             style={{
-              paddingHorizontal: wide ? 32 : 20,
-              paddingVertical: 17,
+              paddingHorizontal: wide ? 32 : space.gutter,
+              paddingTop: wide ? 18 : 8,
+              paddingBottom: 12,
               borderBottomWidth: 1,
-              borderColor: colors.line,
-              backgroundColor: "white",
+              borderColor: palette.rule,
+              backgroundColor: palette.paper,
             }}
           >
             <Row style={{ justifyContent: "space-between" }}>
-              {wide ? (
-                <View>
-                  <Txt bold size={15}>
+              <Row style={{ flex: 1, gap: 10 }}>
+                {!wide && <BrandMark size={30} />}
+                <View style={{ flex: 1 }}>
+                  <Txt size={16} weight={700} numberOfLines={2}>
                     {session.state.settings.name}
                   </Txt>
-                  <Txt size={11} muted style={{ marginTop: 4 }}>
+                  <Txt size={12} weight={500} color={palette.ink3} num>
                     {new Date().toLocaleDateString(
                       session.language === "hi" ? "hi-IN" : "en-IN",
-                      { weekday: "long", day: "numeric", month: "long" },
-                    )}{" "}
-                    ·{" "}
-                    {
-                      session.state.devices[session.identity.deviceId]
-                        ?.counterId
-                    }
+                      wide
+                        ? { weekday: "long", day: "numeric", month: "long" }
+                        : { weekday: "short", day: "numeric", month: "short" },
+                    )}
+                    {counter ? ` · ${counter}` : ""}
                   </Txt>
                 </View>
-              ) : (
-                <Brand small />
-              )}
-              <Row>
+              </Row>
+              <Row style={{ gap: 8 }}>
                 <Pressable
                   onPress={() =>
                     session.setLanguage(session.language === "en" ? "hi" : "en")
                   }
-                  style={{ padding: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    session.language === "en"
+                      ? "हिंदी में बदलें"
+                      : "Switch to English"
+                  }
+                  hitSlop={6}
+                  style={({ pressed }) => ({
+                    height: 34,
+                    minWidth: 48,
+                    paddingHorizontal: 10,
+                    borderRadius: radius.pill,
+                    borderWidth: 1,
+                    borderColor: palette.ruleStrong,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: pressed ? palette.desk : palette.paper,
+                  })}
                 >
-                  <Txt bold size={12}>
+                  <Txt size={14} weight={600} color={palette.ink2}>
                     {session.language === "en" ? "हिंदी" : "EN"}
                   </Txt>
                 </Pressable>
                 <Pressable
-                  accessibilityLabel="Synchronise"
+                  accessibilityRole="button"
+                  accessibilityLabel={`${syncText}. Synchronise`}
                   onPress={() => void session.sync()}
+                  hitSlop={6}
+                  style={({ pressed }) => ({
+                    height: 34,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    minWidth: 34,
+                    justifyContent: "center",
+                    paddingHorizontal: 10,
+                    borderRadius: radius.pill,
+                    backgroundColor: toneInk[syncTone][1],
+                    opacity: pressed ? 0.75 : 1,
+                  })}
                 >
-                  <Badge
-                    warning={!session.online || session.pending.length > 0}
-                  >
-                    {session.pending.length
-                      ? `${session.pending.length} ${t("pending")}`
-                      : session.online
-                        ? t("synced")
-                        : t("offline")}
-                  </Badge>
+                  {/* An icon as well as the colour: a tick when up to date, a clock when bills
+                      are waiting, a cloud with a slash when offline. */}
+                  <Icon
+                    name={
+                      syncTone === "paid"
+                        ? "checkmark-circle"
+                        : syncTone === "waiting"
+                          ? "time"
+                          : "cloud-offline"
+                    }
+                    size={16}
+                    color={toneInk[syncTone][0]}
+                  />
+                  {/* On a phone a green dot says "up to date"; words appear when something
+                      is waiting or the phone is offline. */}
+                  {(wide || syncTone !== "paid") && (
+                    <Txt size={13} weight={600} color={toneInk[syncTone][0]}>
+                      {syncText}
+                    </Txt>
+                  )}
                 </Pressable>
               </Row>
             </Row>
@@ -329,27 +413,22 @@ export default function App() {
           {session.demo && (
             <View
               style={{
-                paddingVertical: 7,
-                paddingHorizontal: wide ? 32 : 20,
-                backgroundColor: "#ECEEE6",
+                paddingVertical: 6,
+                paddingHorizontal: wide ? 32 : space.gutter,
+                backgroundColor: palette.desk,
               }}
             >
-              <Txt size={11} muted>
+              <Txt size={12} weight={500} color={palette.ink2}>
                 {session.language === "hi"
                   ? "डेमो दुकान · नमूना डेटा · कोई वास्तविक भुगतान नहीं"
-                  : "DEMO SHOP · Sample inventory and tax rates · No real payments"}
+                  : "Demo shop · Sample stock and tax rates · No real payments"}
               </Txt>
             </View>
           )}
           {!!session.error && (
-            <Pressable
-              onPress={() => session.setError("")}
-              style={{ padding: 12, backgroundColor: colors.amberBg }}
-            >
-              <Txt size={12} style={{ color: colors.amber }}>
-                {session.error} ×
-              </Txt>
-            </Pressable>
+            <Banner tone="declined" onClose={() => session.setError("")}>
+              {session.error}
+            </Banner>
           )}
           {attention
             .filter(
@@ -358,22 +437,9 @@ export default function App() {
             )
             .slice(0, 2)
             .map((a) => (
-              <Pressable
-                key={a.key}
-                accessibilityRole="button"
-                onPress={() => setPage(a.page)}
-                style={{
-                  paddingVertical: 12,
-                  paddingHorizontal: wide ? 32 : 20,
-                  backgroundColor: colors.amberBg,
-                  borderBottomWidth: 1,
-                  borderColor: colors.line,
-                }}
-              >
-                <Txt size={13} bold style={{ color: colors.amber }}>
-                  {a.text}
-                </Txt>
-              </Pressable>
+              <Banner key={a.key} tone="waiting" onPress={() => setPage(a.page)}>
+                {a.text}
+              </Banner>
             ))}
           {(page === "sell" || page === "overview") && (
             <ShopSetup navigate={setPage} wide={wide} />
@@ -383,84 +449,106 @@ export default function App() {
             <View
               style={{
                 flexDirection: "row",
-                backgroundColor: "white",
+                backgroundColor: palette.paper,
                 borderTopWidth: 1,
-                borderColor: colors.line,
-                paddingBottom: 4,
-                paddingTop: 8,
+                borderColor: palette.rule,
+                paddingTop: 6,
+                paddingBottom: Math.max(insets.bottom, 8),
               }}
             >
-              {tabs.map(([key, icon]) => (
-                <Pressable
-                  key={key}
-                  onPress={() => setPage(key)}
-                  style={{ flex: 1, alignItems: "center", padding: 8, gap: 4 }}
-                >
-                  <View>
-                    <Icon
-                      name={icon}
-                      size={22}
-                      color={page === key ? colors.accent : colors.muted}
-                    />
-                    {badge(key) > 0 && (
+              {tabs.map(([key, icon]) => {
+                // On a phone the owner screens (and Expiry) open from More, so More stays lit.
+                const active =
+                  page === key ||
+                  (key === "more" && !tabs.some(([k]) => k === page));
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => setPage(key)}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={t(key)}
+                    style={{
+                      flex: 1,
+                      alignItems: "center",
+                      paddingVertical: 4,
+                      gap: 3,
+                      minHeight: 52,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 56,
+                        height: 30,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {/* The pill is always drawn and only its opacity changes: switching the
+                          background on after mount lost the corner radius on Android. */}
                       <View
                         style={{
                           position: "absolute",
-                          top: -4,
-                          right: -10,
-                          minWidth: 16,
-                          height: 16,
-                          borderRadius: 8,
-                          paddingHorizontal: 4,
-                          backgroundColor: colors.amber,
-                          alignItems: "center",
-                          justifyContent: "center",
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          borderRadius: 15,
+                          backgroundColor: palette.blueTint,
+                          opacity: active ? 1 : 0,
                         }}
-                      >
-                        <Txt size={10} bold style={{ color: "white" }}>
-                          {badge(key)}
-                        </Txt>
-                      </View>
-                    )}
-                  </View>
-                  <Txt
-                    size={10}
-                    bold={page === key}
-                    style={{
-                      color: page === key ? colors.accent : colors.muted,
-                    }}
-                  >
-                    {t(key)}
-                  </Txt>
-                </Pressable>
-              ))}
+                      />
+                      <Icon
+                        name={(active ? icon.replace("-outline", "") : icon) as any}
+                        size={22}
+                        color={active ? palette.blue : palette.ink2}
+                      />
+                      {badge(key) > 0 && (
+                        <View
+                          style={{
+                            position: "absolute",
+                            top: -2,
+                            right: 6,
+                            minWidth: 18,
+                            height: 18,
+                            borderRadius: 9,
+                            paddingHorizontal: 4,
+                            backgroundColor: palette.waiting,
+                            borderWidth: 2,
+                            borderColor: palette.paper,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Txt
+                            size={12}
+                            weight={700}
+                            color="#FFFFFF"
+                            num
+                            style={{ fontSize: 10, lineHeight: 12 }}
+                          >
+                            {badge(key)}
+                          </Txt>
+                        </View>
+                      )}
+                    </View>
+                    <Txt
+                      size={12}
+                      weight={active ? 600 : 500}
+                      color={active ? palette.blue : palette.ink2}
+                      numberOfLines={1}
+                    >
+                      {t(key)}
+                    </Txt>
+                  </Pressable>
+                );
+              })}
             </View>
           )}
         </View>
       </View>
       <ReceiptSheet invoice={invoice} onClose={() => setInvoice(null)} />
     </SafeAreaView>
-  );
-}
-function Brand({ small = false }: { small?: boolean }) {
-  return (
-    <Row style={{ gap: 9 }}>
-      <View
-        style={{
-          width: small ? 30 : 35,
-          height: small ? 30 : 35,
-          borderRadius: 10,
-          backgroundColor: colors.accent,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Icon name="layers" color="white" size={small ? 18 : 22} />
-      </View>
-      <Txt bold size={small ? 19 : 22} style={{ letterSpacing: -0.8 }}>
-        counterwell<Txt style={{ color: colors.accent }}>.</Txt>
-      </Txt>
-    </Row>
   );
 }
 function Login() {
@@ -504,8 +592,10 @@ function Login() {
       setBusy(false);
     }
   };
+  const hi = s.language === "hi";
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: palette.paper }}>
+      <RuledPaper />
       <KeyboardAvoidingView
         style={{ flex: 1, paddingBottom: keyboard }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -514,37 +604,51 @@ function Login() {
           ref={scroller}
           contentContainerStyle={{
             flexGrow: 1,
-            justifyContent: "center",
             alignItems: "center",
-            padding: 28,
+            paddingHorizontal: 24,
+            paddingTop: 16,
+            paddingBottom: 28,
           }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets
         >
-          <View style={{ width: "100%", maxWidth: 390 }}>
+          <View style={{ width: "100%", maxWidth: 400, flex: 1 }}>
             <Row style={{ justifyContent: "space-between" }}>
-              <Brand />
+              <Wordmark size={20} />
               <Pressable
-                onPress={() => s.setLanguage(s.language === "en" ? "hi" : "en")}
-                style={{ padding: 10 }}
+                onPress={() => s.setLanguage(hi ? "en" : "hi")}
+                accessibilityRole="button"
+                hitSlop={6}
+                style={({ pressed }) => ({
+                  height: 36,
+                  paddingHorizontal: 14,
+                  borderRadius: radius.pill,
+                  borderWidth: 1,
+                  borderColor: palette.ruleStrong,
+                  justifyContent: "center",
+                  backgroundColor: pressed ? palette.desk : palette.paper,
+                })}
               >
-                <Txt bold>{s.language === "en" ? "हिंदी" : "EN"}</Txt>
+                <Txt size={14} weight={600} color={palette.ink2}>
+                  {hi ? "English" : "हिंदी"}
+                </Txt>
               </Pressable>
             </Row>
-            <View style={{ height: 54 }} />
-            <Txt size={32} bold style={{ letterSpacing: -1 }}>
+            <View style={{ flex: 1, minHeight: 40, maxHeight: 120 }} />
+            <Txt size={34} weight={700} style={{ letterSpacing: -0.6 }}>
               {s.passwordRequired
                 ? "Set your password"
                 : s.signInRequired
                   ? "Sign in again"
-                  : s.language === "hi"
-                    ? "दुकान का काम, एक जगह।"
-                    : "Ready for the next customer."}
+                  : hi
+                    ? "दुकान का हर हिसाब, नाम के साथ।"
+                    : "Every rupee, with a name beside it."}
             </Txt>
             <Txt
-              muted
-              style={{ lineHeight: 22, marginTop: 12, marginBottom: 30 }}
+              size={16}
+              color={palette.ink2}
+              style={{ marginTop: 12, marginBottom: 32 }}
             >
               {s.passwordRequired
                 ? "Replace the temporary password your owner gave you."
@@ -552,81 +656,92 @@ function Login() {
                   ? "This phone was signed out, for example after a password change on another phone. Sales not yet sent stay on this phone and are sent after you sign in."
                   : "Sign in to your shop to start billing and keep the day’s work in order."}
             </Txt>
-            {!s.passwordRequired && (
+            <View
+              style={{
+                backgroundColor: palette.paper,
+                borderRadius: radius.lg,
+                borderWidth: 1,
+                borderColor: palette.rule,
+                padding: 20,
+                paddingBottom: 8,
+                ...shadow,
+              }}
+            >
+              {!s.passwordRequired && (
+                <Field
+                  identifier
+                  label={t("username")}
+                  value={username}
+                  onChange={setUsername}
+                  placeholder="Your shop username"
+                  returnKeyType="next"
+                  onSubmit={() => passwordRef.current?.focus()}
+                />
+              )}
               <Field
-                identifier
-                label={t("username")}
-                value={username}
-                onChange={setUsername}
-                placeholder="Your shop username"
-                returnKeyType="next"
-                onSubmit={() => passwordRef.current?.focus()}
-              />
-            )}
-            <Field
-              label={s.passwordRequired ? "Temporary password" : t("password")}
-              value={password}
-              onChange={setPassword}
-              secret
-              inputRef={passwordRef}
-              returnKeyType={s.passwordRequired ? "next" : "go"}
-              onSubmit={() =>
-                s.passwordRequired
-                  ? replacementRef.current?.focus()
-                  : void submit()
-              }
-            />
-            {s.passwordRequired && (
-              <Field
-                label="New password · at least 12 characters"
-                value={replacement}
-                onChange={setReplacement}
+                label={s.passwordRequired ? "Temporary password" : t("password")}
+                value={password}
+                onChange={setPassword}
                 secret
-                inputRef={replacementRef}
-                returnKeyType="go"
-                onSubmit={() => void submit()}
+                inputRef={passwordRef}
+                returnKeyType={s.passwordRequired ? "next" : "go"}
+                onSubmit={() =>
+                  s.passwordRequired
+                    ? replacementRef.current?.focus()
+                    : void submit()
+                }
               />
-            )}
-            {!!error && (
-              <Txt style={{ color: colors.red, marginBottom: 15 }}>{error}</Txt>
-            )}
-            <Button onPress={() => void submit()} disabled={busy}>
-              {busy
-                ? "Signing in…"
-                : s.passwordRequired
-                  ? "Update password"
-                  : t("signIn")}
-            </Button>
-            <View style={{ height: 30 }} />
+              {s.passwordRequired && (
+                <Field
+                  label="New password · at least 12 characters"
+                  value={replacement}
+                  onChange={setReplacement}
+                  secret
+                  inputRef={replacementRef}
+                  returnKeyType="go"
+                  onSubmit={() => void submit()}
+                />
+              )}
+              {!!error && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    gap: 8,
+                    alignItems: "flex-start",
+                    backgroundColor: palette.declinedTint,
+                    borderRadius: radius.md,
+                    padding: 12,
+                    marginBottom: 14,
+                  }}
+                >
+                  <Icon name="alert-circle" size={18} color={palette.declined} />
+                  <Txt size={14} color={palette.declined} style={{ flex: 1 }}>
+                    {error}
+                  </Txt>
+                </View>
+              )}
+              <Button onPress={() => void submit()} disabled={busy}>
+                {busy
+                  ? "Signing in…"
+                  : s.passwordRequired
+                    ? "Update password"
+                    : t("signIn")}
+              </Button>
+              <View style={{ height: 12 }} />
+            </View>
             {DEMO && (
-              <View
-                style={{
-                  borderTopWidth: 1,
-                  borderColor: colors.line,
-                  paddingTop: 22,
-                  gap: 12,
-                }}
-              >
+              <View style={{ paddingTop: 28, gap: 8 }}>
                 <Button
-                  secondary
+                  variant="secondary"
                   onPress={() => s.startDemo("owner")}
-                  icon="play-outline"
+                  icon="play"
                 >
                   {t("demo")} · Owner
                 </Button>
-                <Pressable
-                  onPress={() => s.startDemo("employee")}
-                  style={{ padding: 12, alignItems: "center" }}
-                >
-                  <Txt muted size={12}>
-                    Explore employee workspace
-                  </Txt>
-                </Pressable>
-                <Txt
-                  size={11}
-                  muted
-                  style={{ textAlign: "center", lineHeight: 18 }}
-                >
+                <Button variant="quiet" onPress={() => s.startDemo("employee")}>
+                  Explore employee workspace
+                </Button>
+                <Txt size={13} color={palette.ink3} center>
                   Demo data stays separate from your real shop.
                 </Txt>
               </View>

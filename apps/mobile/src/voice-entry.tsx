@@ -17,7 +17,19 @@ import {
 import * as FileSystem from "expo-file-system";
 import { useSession, uid } from "./session";
 import { appendFile } from "./upload";
-import { Txt, Button, Field, Row, Badge, Sheet, colors, styles } from "./ui";
+import {
+  Txt,
+  Button,
+  Field,
+  Row,
+  Badge,
+  Sheet,
+  Icon,
+  palette,
+  toneInk,
+  type Tone,
+  Notice,
+} from "./ui";
 import {
   readableQuantity,
   readableUnit,
@@ -30,6 +42,14 @@ import {
   type VoiceWork,
   type SpokenItem,
 } from "@counterwell/core";
+/** A notice band inside the selling sheets: waiting by default, with space below. */
+export function Strip({
+  tone = "waiting",
+  alert = false,
+  ...rest
+}: React.ComponentProps<typeof Notice>) {
+  return <Notice tone={tone} alert={alert} spaced {...rest} />;
+}
 type Change = (fn: (v: VoiceWork) => VoiceWork) => Promise<boolean>;
 export function VoiceEntry({
   work,
@@ -315,27 +335,20 @@ export function VoiceEntry({
     >
       <View style={{ gap: 16 }}>
         <Row style={{ justifyContent: "space-between" }}>
-          <Badge>
+          <Badge tone="waiting">
             {t(
               "Draft only · confirm before billing",
               "केवल ड्राफ्ट · बिल से पहले पुष्टि करें",
             )}
           </Badge>
-          <Txt muted size={11}>
+          <Txt muted size={13} num>
             {work.items.length} {t("to review", "जाँच बाकी")}
           </Txt>
         </Row>
         {(!!error || !!work.error) && (
-          <View
-            accessibilityRole="alert"
-            style={{
-              backgroundColor: colors.amberBg,
-              padding: 12,
-              borderRadius: 8,
-            }}
-          >
-            <Txt style={{ color: colors.red }}>{error || work.error}</Txt>
-          </View>
+          <Strip tone="declined" alert>
+            {error || work.error}
+          </Strip>
         )}
         {work.items.length > 0 &&
         !addingMore &&
@@ -349,35 +362,80 @@ export function VoiceEntry({
         ) : (
           <>
             {recording ? (
-              <View style={{ gap: 10 }}>
-                <Txt bold>
-                  {t("Recording", "रिकॉर्ड हो रहा है")} ·{" "}
+              <View style={{ alignItems: "center", gap: 10, paddingVertical: 8 }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t(
+                    "Stop & prepare items",
+                    "रोकें और सामान तैयार करें",
+                  )}
+                  onPress={() => void stop(true)}
+                  style={({ pressed }) => ({
+                    width: 96,
+                    height: 96,
+                    borderRadius: 48,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: pressed ? "#9E2A20" : palette.declined,
+                    borderWidth: 4,
+                    borderColor: palette.declinedTint,
+                  })}
+                >
+                  <Icon name="stop" size={40} color="#FFFFFF" />
+                </Pressable>
+                <Txt size={16} weight={600} color={palette.declined} center>
+                  {t(
+                    "Recording… tap to stop",
+                    "रिकॉर्ड हो रहा है… रोकने के लिए दबाएँ",
+                  )}
+                </Txt>
+                <Txt size={19} weight={600} num>
                   {Math.floor(audio.durationMillis / 1000)} / 28 s
                 </Txt>
-                <Button onPress={() => void stop(true)}>
-                  {t("Stop & prepare items", "रोकें और सामान तैयार करें")}
-                </Button>
-                <Button secondary onPress={() => void stop(false)}>
+                <Button variant="quiet" onPress={() => void stop(false)}>
                   {t("Cancel recording", "रिकॉर्डिंग रद्द करें")}
                 </Button>
               </View>
             ) : (
-              <Button
-                icon="mic-outline"
-                disabled={busy || !!work.jobId || !!pendingAudio}
-                onPress={() => void start()}
-              >
-                {t("Record sale items", "बिक्री का सामान बोलें")}
-              </Button>
+              <View style={{ alignItems: "center", gap: 10, paddingVertical: 8 }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t(
+                    "Record sale items",
+                    "बिक्री का सामान बोलें",
+                  )}
+                  accessibilityState={{
+                    disabled: busy || !!work.jobId || !!pendingAudio,
+                  }}
+                  disabled={busy || !!work.jobId || !!pendingAudio}
+                  onPress={() => void start()}
+                  style={({ pressed }) => ({
+                    width: 96,
+                    height: 96,
+                    borderRadius: 48,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: pressed ? palette.bluePressed : palette.blue,
+                    borderWidth: 4,
+                    borderColor: palette.blueTint,
+                    opacity: busy || !!work.jobId || !!pendingAudio ? 0.4 : 1,
+                  })}
+                >
+                  <Icon name="mic" size={42} color="#FFFFFF" />
+                </Pressable>
+                <Txt size={16} weight={600} center>
+                  {t("Record sale items", "बिक्री का सामान बोलें")}
+                </Txt>
+              </View>
             )}
             {pendingAudio && !recording && (
               <View style={{ gap: 10 }}>
-                <Txt muted>
+                <Strip tone="waiting" icon="cloud-upload-outline">
                   {t(
                     "Upload did not finish. Retry before leaving this screen, or type the items below.",
                     "अपलोड पूरा नहीं हुआ। स्क्रीन छोड़ने से पहले फिर प्रयास करें या नीचे लिखें।",
                   )}
-                </Txt>
+                </Strip>
                 <Button
                   disabled={busy}
                   secondary
@@ -400,15 +458,15 @@ export function VoiceEntry({
                 >
                   {t("Retry audio upload", "आवाज़ फिर अपलोड करें")}
                 </Button>
-                <Button secondary onPress={() => void clearAudio()}>
+                <Button variant="quiet" onPress={() => void clearAudio()}>
                   {t("Discard recording", "रिकॉर्डिंग हटाएँ")}
                 </Button>
               </View>
             )}
             {!!work.jobId ? (
-              <View style={{ gap: 8 }}>
-                <ActivityIndicator color={colors.accent} />
-                <Txt>
+              <View style={{ gap: 8, alignItems: "center" }}>
+                <ActivityIndicator color={palette.blue} />
+                <Txt center color={palette.ink2}>
                   {t(
                     "Preparing items. You can close this screen and resume later.",
                     "सामान तैयार हो रहा है। स्क्रीन बंद करके बाद में वापस आ सकते हैं।",
@@ -429,7 +487,7 @@ export function VoiceEntry({
                   }
                   placeholder="Dolo 650 mg 6 goli; ORS 21 g 1 sachet"
                 />
-                <Txt muted size={11}>
+                <Txt muted size={13}>
                   {t(
                     "Separate items with a semicolon. Exact catalogue names, strengths, quantities and units work offline. Other text needs internet. Use Edit details to correct an existing item.",
                     "सामान को सेमीकोलन से अलग करें। सही कैटलॉग नाम, ताकत, मात्रा और इकाई ऑफलाइन काम करते हैं। अन्य पाठ के लिए इंटरनेट चाहिए। सुधार के लिए विवरण बदलें।",
@@ -492,14 +550,14 @@ export function VoiceEntry({
           </>
         )}
         {!!work.transcript && (
-          <View style={{ gap: 6 }}>
-            <Txt bold size={12}>
+          <View style={{ gap: 4 }}>
+            <Txt weight={600} size={14}>
               {t("Original text", "मूल पाठ")}
             </Txt>
-            <Txt muted size={12}>
+            <Txt color={palette.ink2} size={14}>
               {work.transcript}
             </Txt>
-            <Txt muted size={11}>
+            <Txt muted size={13}>
               {work.source === "local"
                 ? t(
                     "Processed locally · no API call",
@@ -515,140 +573,172 @@ export function VoiceEntry({
           </View>
         )}
         {work.warnings.map((w, i) => (
-          <Txt key={i} size={12} style={{ color: colors.amber }}>
+          <Strip key={i} tone="waiting">
             {w === NO_MEDICINES_WARNING
               ? t(
                   NO_MEDICINES_WARNING,
                   "रिकॉर्डिंग में कोई दवा नहीं सुनाई दी। फ़ोन के पास बोलकर फिर कोशिश करें, या दवाएँ टाइप करें।",
                 )
               : w}
-          </Txt>
+          </Strip>
         ))}
-        {work.items.map((item) => (
-          <View key={item.id} style={styles.listRow}>
-            <Row style={{ justifyContent: "space-between", marginBottom: 14 }}>
-              <Txt bold size={17} style={{ flex: 1 }}>
-                {spokenItemTitle(item)}
-              </Txt>
-              {item.uncertain && (
-                <Badge warning>{t("Check carefully", "ध्यान से जाँचें")}</Badge>
-              )}
-            </Row>
-            <Txt muted>
-              {readableQuantity(item.quantity)} {readableUnit(item.unit)} ·{" "}
-              {item.form || t("Check form", "रूप जाँचें")}
-            </Txt>
-            <Button
-              secondary
-              small
-              onPress={() =>
-                setEditingItemId(editingItemId === item.id ? null : item.id)
-              }
+        <View>
+          {work.items.map((item) => (
+            <View
+              key={item.id}
+              style={{
+                paddingVertical: 14,
+                gap: 8,
+                borderBottomWidth: 1,
+                borderColor: palette.rule,
+              }}
             >
-              {editingItemId === item.id
-                ? t("Done editing", "बदलाव हो गए")
-                : t("Edit details", "विवरण बदलें")}
-            </Button>
-            {editingItemId === item.id && (
-              <>
-                <Field
-                  label={t("Medicine or brand", "दवा या ब्रांड")}
-                  value={item.name}
-                  onChange={(name) => patchItem(item.id, { name })}
-                />
-                <Row style={{ alignItems: "flex-start" }}>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t("Strength", "ताकत")}
-                      value={item.strength ?? ""}
-                      onChange={(strength) =>
-                        patchItem(item.id, { strength: strength || null })
-                      }
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t("Form", "रूप")}
-                      value={item.form ?? ""}
-                      onChange={(form) =>
-                        patchItem(item.id, { form: form || null })
-                      }
-                    />
-                  </View>
-                </Row>
-                <Row style={{ alignItems: "flex-start" }}>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t("Quantity", "मात्रा")}
-                      value={item.quantity}
-                      onChange={(quantity) => patchItem(item.id, { quantity })}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t("Spoken unit", "बोली गई इकाई")}
-                      value={item.unit}
-                      onChange={(unit) => patchItem(item.id, { unit })}
-                    />
-                  </View>
-                </Row>
-              </>
-            )}
-            <Txt muted size={12}>
-              {t(
-                "Choose the actual supplied product",
-                "वास्तव में दी गई दवा चुनें",
-              )}
-            </Txt>
-            {voiceCandidates(Object.values(s.state!.products), item).map(
-              ({ product, strengthConflict, formConflict }) => (
-                <Pressable
-                  key={product.id}
-                  accessibilityRole="button"
-                  onPress={() => onPick(item.id, product.id)}
-                  style={{
-                    paddingVertical: 14,
-                    borderBottomWidth: 1,
-                    borderColor: colors.line,
-                  }}
+              <Row style={{ justifyContent: "space-between" }}>
+                <Txt weight={600} size={17} style={{ flex: 1 }}>
+                  {spokenItemTitle(item)}
+                </Txt>
+                {item.uncertain && (
+                  <Badge warning>
+                    {t("Check carefully", "ध्यान से जाँचें")}
+                  </Badge>
+                )}
+              </Row>
+              <Txt color={palette.ink2} size={14} num>
+                {readableQuantity(item.quantity)} {readableUnit(item.unit)} ·{" "}
+                {item.form || t("Check form", "रूप जाँचें")}
+              </Txt>
+              <Row style={{ justifyContent: "flex-start" }}>
+                <Button
+                  secondary
+                  small
+                  onPress={() =>
+                    setEditingItemId(editingItemId === item.id ? null : item.id)
+                  }
                 >
-                  <Txt bold>
-                    {product.name} {product.strength} · {product.form}
-                  </Txt>
-                  {(strengthConflict || formConflict) && (
-                    <Txt size={11} style={{ color: colors.red }}>
-                      {t(
-                        "Strength or form differs — verify before selecting",
-                        "ताकत या रूप अलग है — चुनने से पहले जाँचें",
-                      )}
-                    </Txt>
-                  )}
-                </Pressable>
-              ),
-            )}
-            {!voiceCandidates(Object.values(s.state!.products), item)
-              .length && (
-              <Txt style={{ marginVertical: 10, color: colors.amber }}>
+                  {editingItemId === item.id
+                    ? t("Done editing", "बदलाव हो गए")
+                    : t("Edit details", "विवरण बदलें")}
+                </Button>
+              </Row>
+              {editingItemId === item.id && (
+                <View style={{ marginTop: 4 }}>
+                  <Field
+                    label={t("Medicine or brand", "दवा या ब्रांड")}
+                    value={item.name}
+                    onChange={(name) => patchItem(item.id, { name })}
+                  />
+                  <Row style={{ alignItems: "flex-start" }}>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label={t("Strength", "ताकत")}
+                        value={item.strength ?? ""}
+                        onChange={(strength) =>
+                          patchItem(item.id, { strength: strength || null })
+                        }
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label={t("Form", "रूप")}
+                        value={item.form ?? ""}
+                        onChange={(form) =>
+                          patchItem(item.id, { form: form || null })
+                        }
+                      />
+                    </View>
+                  </Row>
+                  <Row style={{ alignItems: "flex-start" }}>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label={t("Quantity", "मात्रा")}
+                        value={item.quantity}
+                        onChange={(quantity) =>
+                          patchItem(item.id, { quantity })
+                        }
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label={t("Spoken unit", "बोली गई इकाई")}
+                        value={item.unit}
+                        onChange={(unit) => patchItem(item.id, { unit })}
+                      />
+                    </View>
+                  </Row>
+                </View>
+              )}
+              <Txt color={palette.ink2} size={14} weight={500}>
                 {t(
-                  "No catalogue match. Correct the name or use product search; no substitute was selected.",
-                  "कैटलॉग में मिलान नहीं। नाम सुधारें या सामान खोजें; दूसरी दवा नहीं चुनी गई।",
+                  "Choose the actual supplied product",
+                  "वास्तव में दी गई दवा चुनें",
                 )}
               </Txt>
-            )}
-            <Button
-              secondary
-              small
-              onPress={() =>
-                void change((v) => ({
-                  ...v,
-                  items: v.items.filter((i) => i.id !== item.id),
-                }))
-              }
-            >
-              {t("Remove spoken item", "बोला सामान हटाएँ")}
-            </Button>
-          </View>
-        ))}
+              <View>
+                {voiceCandidates(Object.values(s.state!.products), item).map(
+                  ({ product, strengthConflict, formConflict }) => (
+                    <Pressable
+                      key={product.id}
+                      accessibilityRole="button"
+                      onPress={() => onPick(item.id, product.id)}
+                      style={({ pressed }) => ({
+                        minHeight: 52,
+                        paddingVertical: 10,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        borderTopWidth: 1,
+                        borderColor: palette.rule,
+                        backgroundColor: pressed ? palette.desk : "transparent",
+                      })}
+                    >
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Txt weight={600}>
+                          {product.name} {product.strength} · {product.form}
+                        </Txt>
+                        {(strengthConflict || formConflict) && (
+                          <Txt size={13} weight={600} color={palette.declined}>
+                            {t(
+                              "Strength or form differs — verify before selecting",
+                              "ताकत या रूप अलग है — चुनने से पहले जाँचें",
+                            )}
+                          </Txt>
+                        )}
+                      </View>
+                      <Icon
+                        name="chevron-forward"
+                        size={18}
+                        color={palette.ink3}
+                      />
+                    </Pressable>
+                  ),
+                )}
+              </View>
+              {!voiceCandidates(Object.values(s.state!.products), item)
+                .length && (
+                <Strip tone="waiting">
+                  {t(
+                    "No catalogue match. Correct the name or use product search; no substitute was selected.",
+                    "कैटलॉग में मिलान नहीं। नाम सुधारें या सामान खोजें; दूसरी दवा नहीं चुनी गई।",
+                  )}
+                </Strip>
+              )}
+              <Row style={{ justifyContent: "flex-end", marginTop: 8 }}>
+                <Button
+                  variant="danger"
+                  small
+                  onPress={() =>
+                    void change((v) => ({
+                      ...v,
+                      items: v.items.filter((i) => i.id !== item.id),
+                    }))
+                  }
+                >
+                  {t("Remove spoken item", "बोला सामान हटाएँ")}
+                </Button>
+              </Row>
+            </View>
+          ))}
+        </View>
         {!work.items.length &&
           !work.jobId &&
           jobs
@@ -667,29 +757,32 @@ export function VoiceEntry({
                 {j.status} · {new Date(j.created_at).toLocaleTimeString()}
               </Button>
             ))}
-        <Button
-          secondary
-          small
-          disabled={recording || busy || !!work.jobId}
-          onPress={() => setDiscard(!discard)}
-        >
-          {t("Clear voice draft", "आवाज़ ड्राफ्ट साफ़ करें")}
-        </Button>
-        {discard && (
+        <View style={{ marginTop: 16, alignItems: "flex-end", gap: 12 }}>
           <Button
-            onPress={() => {
-              void change((v) => ({
-                ...emptyVoice(uid()),
-                appliedJobIds: v.appliedJobIds,
-              }));
-              setDiscard(false);
-              setAddingMore(false);
-              setError("");
-            }}
+            variant="quiet"
+            small
+            disabled={recording || busy || !!work.jobId}
+            onPress={() => setDiscard(!discard)}
           >
-            {t("Confirm clearing draft", "ड्राफ्ट साफ़ करने की पुष्टि करें")}
+            {t("Clear voice draft", "आवाज़ ड्राफ्ट साफ़ करें")}
           </Button>
-        )}
+          {discard && (
+            <Button
+              variant="danger"
+              onPress={() => {
+                void change((v) => ({
+                  ...emptyVoice(uid()),
+                  appliedJobIds: v.appliedJobIds,
+                }));
+                setDiscard(false);
+                setAddingMore(false);
+                setError("");
+              }}
+            >
+              {t("Confirm clearing draft", "ड्राफ्ट साफ़ करने की पुष्टि करें")}
+            </Button>
+          )}
+        </View>
       </View>
     </Sheet>
   );

@@ -8,11 +8,14 @@ import {
   Row,
   Chip,
   Badge,
-  colors,
-  styles,
+  ListRow,
+  Section,
+  Icon,
+  palette,
   useSheet,
   useWord,
 } from "./ui";
+import { Notice } from "./product-form";
 import { useBarcodeScanner, CAMERA_OFF } from "./scanner";
 import { amountOf } from "./payments";
 import {
@@ -37,6 +40,34 @@ const shortDate = (iso: string) =>
 /** "2027-04-30" → "04/27", the way packs print it. */
 const printed = (iso?: string) =>
   iso ? `${iso.slice(5, 7)}/${iso.slice(2, 4)}` : "";
+function Stepper({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: "add" | "remove";
+  label: string;
+  onPress: () => void;
+}) {
+  const w = useWord();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={w(label)}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        width: 52,
+        height: 52,
+        borderRadius: 10,
+        backgroundColor: pressed ? palette.rule : palette.blueTint,
+        alignItems: "center",
+        justifyContent: "center",
+      })}
+    >
+      <Icon name={icon} size={22} color={palette.blue} />
+    </Pressable>
+  );
+}
 /** One batch on the shelf: batch number, expiry, count and prices, saved as a verified opening count. */
 export function CountForm({
   product,
@@ -97,12 +128,14 @@ export function CountForm({
     }
   }
   const units = Object.keys(product.units);
+  const step = (delta: number) =>
+    setQuantity(String(Math.max(0, (Number(quantity) || 0) + delta)));
   return (
     <View>
-      <Txt size={18} bold>
+      <Txt size={22} weight={700}>
         {product.name} {product.strength}
       </Txt>
-      <Txt muted size={12} style={{ marginTop: 4, marginBottom: 12 }}>
+      <Txt size={14} color={palette.ink2} style={{ marginTop: 4, marginBottom: 16 }}>
         {w(product.form)} ·{" "}
         {Object.entries(product.units)
           .map(([u, n]) => (n === "1" ? w(u) : `${w(u)} = ${n}`))
@@ -110,31 +143,61 @@ export function CountForm({
         · GST {product.taxBps / 100}%
       </Txt>
       {existing.length > 0 && (
-        <View style={{ marginBottom: 12, gap: 4 }}>
-          <Txt size={12} bold>
-            {hi ? "पहले से स्टॉक में" : "Already in stock"}
-          </Txt>
-          {existing.map((b) => (
-            <Txt key={b.id} size={12} muted>
-              {b.code} · {b.expiry} ·{" "}
-              {amountOf(b.quantity, product.baseUnit, w)}
-            </Txt>
-          ))}
+        <View style={{ marginBottom: -8 }}>
+          <Section title={hi ? "पहले से स्टॉक में" : "Already in stock"}>
+            {existing.map((b) => (
+              <Row
+                key={b.id}
+                style={{
+                  justifyContent: "space-between",
+                  minHeight: 48,
+                  borderBottomWidth: 1,
+                  borderColor: palette.rule,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Txt size={14} num weight={600}>
+                    {b.code}
+                  </Txt>
+                  <Txt size={13} num color={palette.ink3}>
+                    {b.expiry}
+                  </Txt>
+                </View>
+                <Txt size={14} num weight={500}>
+                  {amountOf(b.quantity, product.baseUnit, w)}
+                </Txt>
+              </Row>
+            ))}
+          </Section>
         </View>
       )}
-      <Field label="Batch number on the pack" value={code} onChange={setCode} />
+      <Field
+        label="Batch number on the pack"
+        value={code}
+        onChange={setCode}
+        identifier
+      />
       <Field
         label="Expiry as printed (for example 04/27)"
         value={expiry}
         onChange={setExpiry}
       />
-      <Field
-        label="Counted quantity"
-        value={quantity}
-        onChange={setQuantity}
-        number
-      />
-      <Row style={{ flexWrap: "wrap", marginBottom: 12 }}>
+      <Txt size={14} weight={500} color={palette.ink2} style={{ marginBottom: 6 }}>
+        Counted quantity
+      </Txt>
+      <Row style={{ marginBottom: 12, alignItems: "flex-start", gap: 8 }}>
+        <Stepper icon="remove" label="Decrease" onPress={() => step(-1)} />
+        <View style={{ flex: 1 }}>
+          <Field
+            placeholder="Counted quantity"
+            value={quantity}
+            onChange={setQuantity}
+            number
+          />
+        </View>
+        <Stepper icon="add" label="Increase" onPress={() => step(1)} />
+      </Row>
+      <Row style={{ flexWrap: "wrap", marginBottom: 16 }}>
         {units.map((u) => (
           <Chip key={u} active={unit === u} onPress={() => setUnit(u)}>
             {w(u)}
@@ -147,7 +210,7 @@ export function CountForm({
         onChange={setMrp}
         number
       />
-      <Row style={{ flexWrap: "wrap", marginBottom: 12 }}>
+      <Row style={{ flexWrap: "wrap", marginBottom: 16 }}>
         {units.map((u) => (
           <Chip
             key={u}
@@ -173,28 +236,31 @@ export function CountForm({
       {preview && (
         <View
           style={{
-            padding: 12,
-            backgroundColor: colors.tint,
-            borderRadius: 8,
+            paddingVertical: 12,
             gap: 4,
-            marginBottom: 12,
+            marginBottom: 16,
+            borderTopWidth: 1,
+            borderBottomWidth: 1,
+            borderColor: palette.rule,
           }}
         >
-          <Txt bold>
+          <Txt weight={600} num>
             {`${amountOf(preview.batch.quantity, product.baseUnit, w)} · ${rupees(preview.batch.pricePaise)} / ${w(product.baseUnit)}`}
           </Txt>
-          <Txt size={12} muted>
+          <Txt size={14} color={palette.ink2}>
             {`${hi ? "एक्सपायरी" : "Expires"} ${shortDate(preview.batch.expiry)}`}
           </Txt>
           {preview.notes.map((n) => (
-            <Txt key={n} size={12} style={{ color: colors.amber }}>
+            <Txt key={n} size={14} weight={600} color={palette.waiting}>
               {n}
             </Txt>
           ))}
         </View>
       )}
       {!!error && (
-        <Txt style={{ color: colors.red, marginBottom: 12 }}>{error}</Txt>
+        <View style={{ marginBottom: 16 }}>
+          <Notice>{error}</Notice>
+        </View>
       )}
       <Button disabled={busy} onPress={() => void save()} icon="checkmark">
         {hi ? "शेल्फ़ पर गिना · सेव करें" : "Counted on shelf · Save"}
@@ -288,22 +354,15 @@ export function StockCount() {
     );
   return (
     <View style={{ gap: 12 }}>
-      <Txt muted>
+      <Txt size={14} color={palette.ink2}>
         {hi
           ? `${counted.toLocaleString("en-IN")} / ${active.length.toLocaleString("en-IN")} दवाओं का स्टॉक गिना गया`
           : `${counted.toLocaleString("en-IN")} of ${active.length.toLocaleString("en-IN")} medicines have counted stock`}
       </Txt>
       {saved && (
-        <View
-          style={{
-            padding: 12,
-            backgroundColor: colors.tint,
-            borderRadius: 8,
-            gap: 8,
-          }}
-        >
-          <Txt>{`${hi ? "सेव हुआ:" : "Saved:"} ${saved.message}`}</Txt>
-          <Button secondary small onPress={() => choose(saved.product)}>
+        <View style={{ gap: 8 }}>
+          <Notice tone="paid">{`${hi ? "सेव हुआ:" : "Saved:"} ${saved.message}`}</Notice>
+          <Button variant="quiet" small onPress={() => choose(saved.product)}>
             {hi
               ? "इसी दवा का दूसरा बैच गिनें"
               : "Count another batch of this medicine"}
@@ -318,18 +377,19 @@ export function StockCount() {
             placeholder="Search medicine, salt or barcode"
           />
         </View>
-        <Button
-          secondary
-          small
-          icon="barcode-outline"
-          onPress={() =>
-            void scanner.open().then((r) => {
-              if (!r.opened) setNotice(CAMERA_OFF);
-            })
-          }
-        >
-          {hi ? "स्कैन" : "Scan"}
-        </Button>
+        <View style={{ marginBottom: 16 }}>
+          <Button
+            secondary
+            icon="barcode-outline"
+            onPress={() =>
+              void scanner.open().then((r) => {
+                if (!r.opened) setNotice(CAMERA_OFF);
+              })
+            }
+          >
+            {hi ? "स्कैन" : "Scan"}
+          </Button>
+        </View>
       </Row>
       <Row>
         <Chip active={uncounted} onPress={() => setUncounted(true)}>
@@ -339,39 +399,38 @@ export function StockCount() {
           {hi ? "सभी" : "All"}
         </Chip>
       </Row>
-      {!!notice && <Txt style={{ color: colors.amber }}>{notice}</Txt>}
-      {list.slice(0, SHOWN).map((p) => {
-        const batches = byProduct.get(p.id) ?? [];
-        const stock = batches.reduce((n, b) => n + Number(b.quantity), 0);
-        return (
-          <Pressable
-            key={p.id}
-            onPress={() => choose(p)}
-            style={styles.listRow}
-          >
-            <Row style={{ justifyContent: "space-between" }}>
-              <View style={{ flex: 1 }}>
-                <Txt bold>
-                  {p.name} {p.strength}
-                </Txt>
-                <Txt size={11} muted style={{ marginTop: 4 }}>
+      {!!notice && <Notice tone="waiting">{notice}</Notice>}
+      <View>
+        {list.slice(0, SHOWN).map((p) => {
+          const batches = byProduct.get(p.id) ?? [];
+          const stock = batches.reduce((n, b) => n + Number(b.quantity), 0);
+          return (
+            <ListRow
+              key={p.id}
+              onPress={() => choose(p)}
+              chevron={false}
+              title={`${p.name} ${p.strength}`}
+              detail={
+                <Txt size={13} color={palette.ink3}>
                   {p.generic ? `${p.generic} · ` : ""}
                   {w(p.form)}
                 </Txt>
-              </View>
-              <Badge warning={!batches.length}>
-                {batches.length
-                  ? amountOf(stock, p.baseUnit, w)
-                  : hi
-                    ? "गिनें"
-                    : "Count"}
-              </Badge>
-            </Row>
-          </Pressable>
-        );
-      })}
+              }
+              trailing={
+                <Badge tone={batches.length ? "neutral" : "waiting"}>
+                  {batches.length
+                    ? amountOf(stock, p.baseUnit, w)
+                    : hi
+                      ? "गिनें"
+                      : "Count"}
+                </Badge>
+              }
+            />
+          );
+        })}
+      </View>
       {!list.length && (
-        <Txt muted>
+        <Txt color={palette.ink3}>
           {uncounted && !query
             ? hi
               ? "सभी दवाओं का स्टॉक गिना जा चुका है।"
@@ -382,7 +441,7 @@ export function StockCount() {
         </Txt>
       )}
       {list.length > SHOWN && (
-        <Txt size={11} muted>
+        <Txt size={13} color={palette.ink3}>
           {hi
             ? `${list.length.toLocaleString("en-IN")} में से ${SHOWN} दिख रहे हैं · खोजकर ढूँढें`
             : `Showing ${SHOWN} of ${list.length.toLocaleString("en-IN")} · search to find others`}

@@ -33,7 +33,7 @@ module.exports = ({ config }) => {
         "expo-notifications",
         {
           icon: "./assets/notification-icon.png",
-          color: "#146D5A",
+          color: "#1F3FAA",
           // TestFlight and App Store builds use Apple's production notification service.
           // Builds installed over the cable are development-signed and must use the development one.
           mode:

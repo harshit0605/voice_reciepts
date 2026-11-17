@@ -14,7 +14,8 @@ import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
 import { useSession, uid } from "./session";
 import { useSaleEntry } from "./sale-entry";
-import { VoiceEntry } from "./voice-entry";
+import { VoiceEntry, Strip } from "./voice-entry";
+import { fonts } from "./theme";
 import { useBarcodeScanner, CAMERA_OFF } from "./scanner";
 import { CustomerPicker } from "./payments";
 import {
@@ -27,8 +28,14 @@ import {
   Chip,
   Sheet,
   Empty,
-  colors,
-  styles,
+  Amount,
+  TotalRule,
+  Section,
+  Stamp,
+  stampDate,
+  palette,
+  radius,
+  space,
   useText,
   SHOWN_PRODUCTS,
   useWord,
@@ -63,6 +70,34 @@ import {
   matchesSearch,
   bySearch,
 } from "@counterwell/core";
+/** A 48px round-cornered stepper button for quantities. */
+function StepButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: "add" | "remove";
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        width: 56,
+        height: 56,
+        borderRadius: radius.md,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: pressed ? palette.rule : palette.blueTint,
+      })}
+    >
+      <Icon name={icon} size={26} color={palette.blue} />
+    </Pressable>
+  );
+}
 function exactPaise(input: string) {
   const amount = D(input || 0).mul(100);
   if (!amount.isFinite() || !amount.isInteger() || amount.lt(0))
@@ -306,6 +341,22 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
       spoken ? (spokenUnit(spoken.unit, product) ?? "") : product.baseUnit,
     );
   };
+  const stepQty = (dir: 1 | -1) => {
+    const n = Number(qty) || 0;
+    const next = dir > 0 ? n + 1 : n - 1 > 0 ? n - 1 : n;
+    setQty(String(Math.round(next * 100) / 100));
+  };
+  /** The line total for what the add sheet currently shows, when it can be priced. */
+  let lineAmount: number | null = null;
+  if (selected && unit && Number(qty) > 0) {
+    try {
+      lineAmount = quote(
+        state,
+        [{ batchId: selected.id, quantity: qty, unit, confirmed: true }],
+        new Date().toISOString(),
+      )[0].netPaise;
+    } catch {}
+  }
   const add = async () => {
     if (!selected || addLock.current || busy) return;
     if (overStock) {
@@ -343,10 +394,14 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
   };
   const basketContent = (
     <>
-      <Row style={{ justifyContent: "space-between", marginBottom: 20 }}>
-        <Txt size={18} bold>
-          {t("basket")}
-        </Txt>
+      <Row style={{ justifyContent: "space-between", marginBottom: 8 }}>
+        {wide ? (
+          <Txt size={19} weight={600}>
+            {t("basket")}
+          </Txt>
+        ) : (
+          <View />
+        )}
         <Badge>{itemCount(basket.length, s.language)}</Badge>
       </Row>
       {basket.length === 0 ? (
@@ -366,31 +421,53 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                 .netPaise;
             } catch {}
             return (
-              <View key={i} style={styles.listRow}>
+              <View
+                key={i}
+                style={{
+                  borderBottomWidth: 1,
+                  borderColor: palette.rule,
+                  minHeight: 60,
+                  paddingVertical: 8,
+                }}
+              >
                 <Row style={{ justifyContent: "space-between" }}>
-                  <View style={{ flex: 1 }}>
-                    <Txt bold>
-                      {p?.name ?? "Unavailable product"} {p?.strength}
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Txt size={16} weight={600}>
+                      {p?.name ?? "Unavailable product"}{" "}
+                      <Txt size={14} color={palette.ink2}>
+                        {p?.strength}
+                      </Txt>
                     </Txt>
-                    <Txt size={12} muted style={{ marginTop: 5 }}>
-                      {line.quantity} {line.unit} ·{" "}
-                      {b?.code ?? "Unavailable batch"}
+                    <Txt size={14} color={palette.ink2} num>
+                      {line.quantity} × {line.unit} ·{" "}
+                      <Txt size={14} weight={600} num color={palette.ink2}>
+                        {b?.code ?? "Unavailable batch"}
+                      </Txt>
                     </Txt>
                   </View>
-                  <Txt bold>
-                    {amount === null
-                      ? s.language === "hi"
-                        ? "फिर जाँचें"
-                        : "Recheck item"
-                      : rupees(amount)}
-                  </Txt>
+                  {amount === null ? (
+                    <Txt size={14} weight={600} color={palette.declined}>
+                      {s.language === "hi" ? "फिर जाँचें" : "Recheck item"}
+                    </Txt>
+                  ) : (
+                    <Amount value={rupees(amount)} size={16} />
+                  )}
                   <Pressable
                     onPress={() =>
                       setBasket(basket.filter((_, index) => index !== i))
                     }
                     accessibilityLabel="Remove item"
+                    accessibilityRole="button"
+                    hitSlop={4}
+                    style={{
+                      width: 48,
+                      height: 48,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: -8,
+                    }}
                   >
-                    <Icon name="close-circle-outline" size={18} />
+                    <Icon name="close" size={22} color={palette.ink3} />
                   </Pressable>
                 </Row>
               </View>
@@ -398,12 +475,19 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
           })}
         </ScrollView>
       )}
-      <View style={{ marginTop: "auto", paddingTop: 24 }}>
-        <Row style={{ justifyContent: "space-between", marginBottom: 18 }}>
-          <Txt muted>{t("total")}</Txt>
-          <Txt size={27} bold>
-            {rupees(total)}
+      <View style={{ marginTop: "auto", paddingTop: 20 }}>
+        <TotalRule />
+        <Row
+          style={{
+            justifyContent: "space-between",
+            paddingVertical: 8,
+            marginBottom: 12,
+          }}
+        >
+          <Txt size={16} weight={600}>
+            {t("total")}
           </Txt>
+          <Amount value={rupees(total)} size={32} weight={700} />
         </Row>
         <Button
           disabled={
@@ -426,13 +510,13 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
           {t("checkout")}
         </Button>
         {basketOversold && (
-          <Txt size={11} style={{ color: colors.red, marginTop: 8 }}>
+          <Txt size={13} color={palette.declined} style={{ marginTop: 8 }}>
             {s.language === "hi"
               ? "किसी बैच का स्टॉक कम है। मात्रा घटाएँ।"
               : "Not enough stock in a batch. Reduce the quantity."}
           </Txt>
         )}
-        <Txt size={10} muted style={{ textAlign: "center", marginTop: 12 }}>
+        <Txt size={13} muted center style={{ marginTop: 12 }}>
           {selling.entry.voice.items.length > 0 ||
           selling.entry.voice.jobId ||
           selling.entry.voice.input.trim()
@@ -444,321 +528,381 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
       </View>
     </>
   );
+  const basketEmpty = basket.length === 0;
   return (
     <View style={{ flex: 1, flexDirection: "row" }}>
-      <View style={{ flex: 1, minWidth: 0, padding: wide ? 30 : 20 }}>
-        <Row style={{ justifyContent: "space-between", marginBottom: 23 }}>
-          <View style={{ flex: 1 }}>
-            <Txt size={28} bold style={{ letterSpacing: -0.8 }}>
-              {t("newSale")}
-            </Txt>
-            <Txt muted size={12} style={{ marginTop: 5 }}>
-              {s.language === "hi"
-                ? "दवाएँ जोड़ें, जाँचें और बिल बनाएँ।"
-                : "Add medicines, check the batch, and bill."}
-            </Txt>
-          </View>
-          <Button
-            secondary
-            small
-            disabled={!selling.ready}
-            icon="mic-outline"
-            onPress={() => setVoiceOpen(true)}
-          >
-            {s.language === "hi" ? "बोलें / लिखें" : "Voice / text"}
-          </Button>
-        </Row>
-        <Row
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View
           style={{
-            backgroundColor: "white",
-            borderWidth: 1,
-            borderColor: colors.line,
-            borderRadius: 10,
-            paddingHorizontal: 14,
-            marginBottom: 18,
+            flex: 1,
+            minWidth: 0,
+            paddingHorizontal: wide ? 30 : space.gutter,
+            paddingTop: 12,
           }}
         >
-          <Icon name="search-outline" />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t("search")}
-            placeholderTextColor={colors.muted}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              paddingVertical: 16,
-              fontSize: 14,
-              color: colors.ink,
-            }}
-          />
-          <Pressable
-            accessibilityLabel="Scan barcode"
-            onPress={() => void openScanner()}
-            style={{ padding: 6 }}
-          >
-            <Icon name="barcode-outline" color={colors.accent} />
-          </Pressable>
-        </Row>
-        <Row style={{ marginBottom: 22 }}>
-          <Chip active={filter === "all"} onPress={() => setFilter("all")}>
-            {t("all")}
-          </Chip>
-          <Chip active={filter === "low"} onPress={() => setFilter("low")}>
-            {t("lowStock")}
-          </Chip>
-          <View style={{ flex: 1 }} />
-          <Txt size={11} muted>
-            {s.language === "hi"
-              ? `${products.length} परिणाम`
-              : `${products.length} ${products.length === 1 ? "result" : "results"}`}
-          </Txt>
-        </Row>
-        {!!selling.error && (
-          <View style={{ gap: 8 }}>
-            <Txt style={{ color: colors.red }}>{selling.error}</Txt>
-            <Button
-              secondary
-              small
-              onPress={() => void selling.update((v) => v)}
+          <Row style={{ gap: 8, marginBottom: 12 }}>
+            <Row
+              style={{
+                flex: 1,
+                minWidth: 0,
+                gap: 6,
+                backgroundColor: palette.paper,
+                borderWidth: 1.5,
+                borderColor: palette.ruleStrong,
+                borderRadius: radius.md,
+                paddingLeft: 12,
+                minHeight: 56,
+              }}
             >
-              Retry saving draft
-            </Button>
-          </View>
-        )}
-        {scanNotice && (
-          <View
-            style={{
-              padding: 12,
-              backgroundColor: colors.amberBg,
-              gap: 8,
-              marginBottom: 12,
-            }}
-          >
-            <Txt>{scanNotice.message}</Txt>
-            {!!scanNotice.detail && (
-              <Txt muted size={12}>
-                {scanNotice.detail}
-              </Txt>
-            )}
-            <Row style={{ flexWrap: "wrap" }}>
-              {scanNotice.settings && (
-                <Button
-                  secondary
-                  small
-                  onPress={() => void Linking.openSettings()}
-                >
-                  Open Settings
-                </Button>
-              )}
-              <Button secondary small onPress={() => setScanNotice(null)}>
-                Dismiss
-              </Button>
+              <Icon name="search-outline" size={20} color={palette.ink2} />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder={t("search")}
+                placeholderTextColor={palette.ink3}
+                accessibilityLabel={t("search")}
+                selectionColor={palette.blue}
+                cursorColor={palette.blue}
+                autoCorrect={false}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  height: 54,
+                  fontSize: 16,
+                  fontFamily: fonts.regular,
+                  color: palette.ink,
+                }}
+              />
+              <Pressable
+                accessibilityLabel="Scan barcode"
+                accessibilityRole="button"
+                onPress={() => void openScanner()}
+                style={{
+                  width: 48,
+                  height: 48,
+                  marginRight: 3,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Icon name="barcode-outline" size={26} color={palette.blue} />
+              </Pressable>
             </Row>
-          </View>
-        )}
-        {selling.reviewRecovery && (
-          <View
-            style={{
-              padding: 12,
-              backgroundColor: colors.amberBg,
-              gap: 10,
-              marginBottom: 12,
-            }}
-          >
-            <Txt>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                s.language === "hi" ? "बोलें / लिखें" : "Voice / text"
+              }
+              disabled={!selling.ready}
+              onPress={() => setVoiceOpen(true)}
+              style={({ pressed }) => ({
+                width: 56,
+                height: 56,
+                borderRadius: radius.md,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: pressed ? palette.bluePressed : palette.blue,
+                opacity: selling.ready ? 1 : 0.4,
+              })}
+            >
+              <Icon name="mic" size={26} color="#FFFFFF" />
+            </Pressable>
+          </Row>
+          <Row style={{ marginBottom: 8, gap: 8 }}>
+            <Chip active={filter === "all"} onPress={() => setFilter("all")}>
+              {t("all")}
+            </Chip>
+            <Chip active={filter === "low"} onPress={() => setFilter("low")}>
+              {t("lowStock")}
+            </Chip>
+            <View style={{ flex: 1 }} />
+            <Txt size={13} muted num>
+              {s.language === "hi"
+                ? `${products.length} परिणाम`
+                : `${products.length} ${products.length === 1 ? "result" : "results"}`}
+            </Txt>
+          </Row>
+          {!!selling.error && (
+            <View style={{ gap: 8, marginBottom: 8 }}>
+              <Strip tone="declined">{selling.error}</Strip>
+              <Button
+                secondary
+                small
+                onPress={() => void selling.update((v) => v)}
+              >
+                Retry saving draft
+              </Button>
+            </View>
+          )}
+          {scanNotice && (
+            <Strip
+              tone="waiting"
+              icon="barcode-outline"
+              actions={
+                <Row style={{ flexWrap: "wrap", marginTop: 8 }}>
+                  {scanNotice.settings && (
+                    <Button
+                      secondary
+                      small
+                      onPress={() => void Linking.openSettings()}
+                    >
+                      Open Settings
+                    </Button>
+                  )}
+                  <Button secondary small onPress={() => setScanNotice(null)}>
+                    Dismiss
+                  </Button>
+                </Row>
+              }
+            >
+              {scanNotice.message}
+              {!!scanNotice.detail && (
+                <Txt size={13} weight={400} color={palette.ink2}>
+                  {"\n"}
+                  {scanNotice.detail}
+                </Txt>
+              )}
+            </Strip>
+          )}
+          {selling.reviewRecovery && (
+            <Strip
+              tone="waiting"
+              actions={
+                <Row style={{ marginTop: 8 }}>
+                  <Button
+                    secondary
+                    small
+                    onPress={() => selling.setReviewRecovery(false)}
+                  >
+                    {s.language === "hi"
+                      ? "ऑर्डर जाँचे — यह बिक्री अधूरी है"
+                      : "I checked Orders — this sale is unfinished"}
+                  </Button>
+                </Row>
+              }
+            >
               {s.language === "hi"
                 ? "बिक्री का ड्राफ्ट वापस मिला। पहले ऑर्डर जाँचें कि भुगतान या बिल पहले ही दर्ज तो नहीं हुआ।"
                 : "Recovered sale draft. Check Orders for a recorded bill or payment before using it again."}
-            </Txt>
-            <Button
-              secondary
-              small
-              onPress={() => selling.setReviewRecovery(false)}
+            </Strip>
+          )}
+          {recovery.kind === "uncertain" && (
+            <Strip
+              tone="waiting"
+              actions={
+                <Row style={{ flexWrap: "wrap", marginTop: 8 }}>
+                  <Button secondary small onPress={() => void s.sync()}>
+                    Check now
+                  </Button>
+                  <Button secondary small onPress={() => void setAside()}>
+                    Set aside and start a new sale
+                  </Button>
+                </Row>
+              }
             >
-              {s.language === "hi"
-                ? "ऑर्डर जाँचे — यह बिक्री अधूरी है"
-                : "I checked Orders — this sale is unfinished"}
-            </Button>
-          </View>
-        )}
-        {recovery.kind === "uncertain" && (
-          <View
-            style={{
-              padding: 12,
-              backgroundColor: colors.amberBg,
-              gap: 10,
-              marginBottom: 12,
-            }}
-          >
-            <Txt>
               No server response yet for this sale's payment. It may already be
               recorded, so do not collect again.
-            </Txt>
-            <Row style={{ flexWrap: "wrap" }}>
-              <Button secondary small onPress={() => void s.sync()}>
-                Check now
-              </Button>
-              <Button secondary small onPress={() => void setAside()}>
-                Set aside and start a new sale
-              </Button>
-            </Row>
-          </View>
-        )}
-        {(selling.entry.voice.items.length > 0 ||
-          !!selling.entry.voice.jobId) && (
-          <Button secondary small onPress={() => setVoiceOpen(true)}>
-            {selling.entry.voice.jobId
-              ? s.language === "hi"
-                ? "आवाज़ का ड्राफ्ट बन रहा है…"
-                : "Voice draft processing…"
-              : `${selling.entry.voice.items.length} ${s.language === "hi" ? "बोले सामान की जाँच बाकी" : "spoken items to review"}`}
-          </Button>
-        )}
-        {activeVoice !== null && (
-          <Button
-            secondary
-            small
-            onPress={() => {
-              setActiveVoice(null);
-              setVoiceOpen(true);
-            }}
-          >
-            {s.language === "hi"
-              ? "आवाज़ समीक्षा पर वापस जाएँ"
-              : "Return to voice review"}
-          </Button>
-        )}
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          // After a search, the first tap on Add must add, not just close the keyboard.
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-        >
-          {products.length > SHOWN_PRODUCTS && (
-            <Txt size={11} muted style={{ marginTop: 12 }}>
-              {s.language === "hi"
-                ? `${products.length.toLocaleString("en-IN")} में से ${SHOWN_PRODUCTS} दिख रहे हैं · नाम, साल्ट या बारकोड से खोजें`
-                : `Showing ${SHOWN_PRODUCTS} of ${products.length.toLocaleString("en-IN")} · search by name, salt or barcode`}
-            </Txt>
+            </Strip>
           )}
-          {products.slice(0, SHOWN_PRODUCTS).map((p) => {
-            const available = sellable.get(p.id) ?? [];
-            const count = available.reduce((n, b) => n + Number(b.quantity), 0);
-            return (
-              <View
-                key={p.id}
-                style={{
-                  paddingVertical: 17,
-                  borderBottomWidth: 1,
-                  borderColor: colors.line,
+          {(selling.entry.voice.items.length > 0 ||
+            !!selling.entry.voice.jobId) && (
+            <View style={{ marginBottom: 8 }}>
+              <Button secondary small onPress={() => setVoiceOpen(true)}>
+                {selling.entry.voice.jobId
+                  ? s.language === "hi"
+                    ? "आवाज़ का ड्राफ्ट बन रहा है…"
+                    : "Voice draft processing…"
+                  : `${selling.entry.voice.items.length} ${s.language === "hi" ? "बोले सामान की जाँच बाकी" : "spoken items to review"}`}
+              </Button>
+            </View>
+          )}
+          {activeVoice !== null && (
+            <View style={{ marginBottom: 8 }}>
+              <Button
+                secondary
+                small
+                onPress={() => {
+                  setActiveVoice(null);
+                  setVoiceOpen(true);
                 }}
               >
-                <Row>
-                  <View
-                    style={{
-                      width: 44,
-                      height: 44,
-                      backgroundColor: colors.surface,
-                      borderRadius: 11,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Icon
-                      name={
-                        p.baseUnit === "bottle"
-                          ? "flask-outline"
-                          : p.baseUnit === "tablet"
-                            ? "medical-outline"
-                            : "cube-outline"
-                      }
-                      color={colors.accent}
-                    />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Txt bold size={15}>
-                      {p.name}{" "}
-                      <Txt muted size={12}>
-                        {p.strength}
-                      </Txt>
-                    </Txt>
-                    <Txt size={11} muted style={{ marginTop: 5 }}>
-                      {p.generic} · {p.form}
-                    </Txt>
-                    <Row style={{ gap: 6, marginTop: 7 }}>
-                      <View
-                        style={{
-                          width: 5,
-                          height: 5,
-                          borderRadius: 3,
-                          backgroundColor:
-                            count <= Number(p.reorderAt)
-                              ? colors.amber
-                              : colors.accent,
-                        }}
-                      />
-                      {expiredOnly.has(p.id) ? (
-                        <Txt size={10} style={{ color: colors.red }}>
-                          {s.language === "hi"
-                            ? "सारा माल एक्सपायर है, न बेचें"
-                            : "All stock expired · do not sell"}
-                        </Txt>
-                      ) : (
-                        <Txt size={10} muted>
-                          {s.language === "hi"
-                            ? `${count} ${w(p.baseUnit)} उपलब्ध`
-                            : `${count} ${p.baseUnit}${count === 1 ? "" : "s"} available`}
-                        </Txt>
-                      )}
-                      {p.schedule !== "OTC" && (
-                        <Txt size={10} muted>
-                          · Rx
-                        </Txt>
-                      )}
-                    </Row>
-                  </View>
-                  <View style={{ alignItems: "flex-end", gap: 9 }}>
-                    <Txt bold size={14}>
-                      {available[0] ? rupees(available[0].pricePaise) : "—"}
-                      <Txt muted size={10}>
-                        {" "}
-                        / {p.baseUnit}
-                      </Txt>
-                    </Txt>
-                    <Button
-                      small
-                      secondary
-                      disabled={!available.length || busy}
-                      onPress={() => {
-                        setActiveVoice(null);
-                        select(available[0], null);
-                      }}
-                      icon="add"
-                    >
-                      {t("add")}
-                    </Button>
-                  </View>
-                </Row>
-              </View>
-            );
-          })}
-          {!products.length && (
-            <Empty
-              title={t("noResults")}
-              detail="Try a brand name, salt or barcode."
-            />
+                {s.language === "hi"
+                  ? "आवाज़ समीक्षा पर वापस जाएँ"
+                  : "Return to voice review"}
+              </Button>
+            </View>
           )}
-        </ScrollView>
-        {!wide && (
-          <Button
-            disabled={!basket.length}
-            onPress={() => setBasketOpen(true)}
-            icon="basket-outline"
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            // After a search, the first tap on Add must add, not just close the keyboard.
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
           >
-            {t("basket")} · {basket.length} · {rupees(total)}
-          </Button>
+            {products.length > SHOWN_PRODUCTS && (
+              <Txt size={13} muted style={{ marginVertical: 8 }}>
+                {s.language === "hi"
+                  ? `${products.length.toLocaleString("en-IN")} में से ${SHOWN_PRODUCTS} दिख रहे हैं · नाम, साल्ट या बारकोड से खोजें`
+                  : `Showing ${SHOWN_PRODUCTS} of ${products.length.toLocaleString("en-IN")} · search by name, salt or barcode`}
+              </Txt>
+            )}
+            {products.slice(0, SHOWN_PRODUCTS).map((p) => {
+              const available = sellable.get(p.id) ?? [];
+              const count = available.reduce(
+                (n, b) => n + Number(b.quantity),
+                0,
+              );
+              const low = count <= Number(p.reorderAt);
+              return (
+                <View
+                  key={p.id}
+                  style={{
+                    paddingVertical: 12,
+                    minHeight: 76,
+                    borderBottomWidth: 1,
+                    borderColor: palette.rule,
+                  }}
+                >
+                  <Row style={{ alignItems: "flex-start", gap: 12 }}>
+                    <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                      <Txt size={17} weight={600}>
+                        {p.name}{" "}
+                        <Txt size={16} weight={400} color={palette.ink2}>
+                          {p.strength}
+                        </Txt>
+                      </Txt>
+                      <Txt size={14} color={palette.ink2}>
+                        {/* Separate children so the form word is translated on its own. */}
+                        {p.generic}
+                        {p.generic && p.form ? " · " : ""}
+                        {p.form}
+                      </Txt>
+                      <Row style={{ gap: 8, marginTop: 2, flexWrap: "wrap" }}>
+                        {expiredOnly.has(p.id) ? (
+                          <Txt size={13} weight={600} color={palette.declined}>
+                            {s.language === "hi"
+                              ? "सारा माल एक्सपायर है, न बेचें"
+                              : "All stock expired · do not sell"}
+                          </Txt>
+                        ) : (
+                          <Txt
+                            size={13}
+                            num
+                            weight={low ? 600 : 500}
+                            color={low ? palette.waiting : palette.ink2}
+                          >
+                            {s.language === "hi"
+                              ? `${count} ${w(p.baseUnit)} उपलब्ध`
+                              : `${count} ${p.baseUnit}${count === 1 ? "" : "s"} available`}
+                            {low ? ` · ${t("lowStock")}` : ""}
+                          </Txt>
+                        )}
+                        {p.schedule !== "OTC" && <Badge tone="info">Rx</Badge>}
+                      </Row>
+                    </View>
+                    <View style={{ alignItems: "flex-end", gap: 8 }}>
+                      <Txt size={13} muted>
+                        <Amount
+                          value={
+                            available[0] ? rupees(available[0].pricePaise) : "—"
+                          }
+                          size={16}
+                        />
+                        {" "}/ {s.language === "hi" ? w(p.baseUnit) : p.baseUnit}
+                      </Txt>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: !available.length || busy }}
+                        disabled={!available.length || busy}
+                        onPress={() => {
+                          setActiveVoice(null);
+                          select(available[0], null);
+                        }}
+                        style={({ pressed }) => ({
+                          minHeight: 48,
+                          minWidth: 88,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 6,
+                          paddingHorizontal: 14,
+                          borderRadius: radius.md,
+                          backgroundColor: palette.blueTint,
+                          opacity:
+                            !available.length || busy ? 0.4 : pressed ? 0.65 : 1,
+                        })}
+                      >
+                        <Icon name="add" size={20} color={palette.blue} />
+                        <Txt size={15} weight={600} color={palette.blue}>
+                          {t("add")}
+                        </Txt>
+                      </Pressable>
+                    </View>
+                  </Row>
+                </View>
+              );
+            })}
+            {!products.length && (
+              <Empty
+                title={t("noResults")}
+                detail="Try a brand name, salt or barcode."
+              />
+            )}
+          </ScrollView>
+        </View>
+        {!wide && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("basket")}
+            accessibilityState={{ disabled: basketEmpty }}
+            disabled={basketEmpty}
+            onPress={() => setBasketOpen(true)}
+            style={({ pressed }) => ({
+              minHeight: 64,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: space.gutter,
+              backgroundColor: basketEmpty
+                ? palette.desk
+                : pressed
+                  ? "#242932"
+                  : palette.ink,
+              borderTopWidth: 1,
+              borderColor: basketEmpty ? palette.rule : palette.ink,
+            })}
+          >
+            {basketEmpty ? (
+              <>
+                <Txt size={16} weight={600} color={palette.ink2}>
+                  {t("basket")}
+                </Txt>
+                <Txt size={14} color={palette.ink2}>
+                  No items yet
+                </Txt>
+              </>
+            ) : (
+              <>
+                <View style={{ gap: 0 }}>
+                  <Txt size={16} weight={600} color="#FFFFFF">
+                    {t("basket")}
+                  </Txt>
+                  <Txt size={14} color="#D5DBE6" num>
+                    {itemCount(basket.length, s.language)}
+                  </Txt>
+                </View>
+                <Row style={{ gap: 8 }}>
+                  <Amount
+                    value={rupees(total)}
+                    size={24}
+                    weight={700}
+                    color="#FFFFFF"
+                  />
+                  <Icon name="chevron-up" size={22} color="#FFFFFF" />
+                </Row>
+              </>
+            )}
+          </Pressable>
         )}
       </View>
       {wide && (
@@ -766,8 +910,8 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
           style={{
             width: 340,
             borderLeftWidth: 1,
-            borderColor: colors.line,
-            backgroundColor: "white",
+            borderColor: palette.rule,
+            backgroundColor: palette.paper,
             padding: 25,
           }}
         >
@@ -792,57 +936,119 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
       >
         {selected && (
           <>
-            {!!scanWarning && (
-              <Txt style={{ color: colors.red, marginBottom: 12 }}>
-                {scanWarning}
-              </Txt>
+            {!!scanWarning && <Strip tone="declined">{scanWarning}</Strip>}
+            {voiceItem && (
+              <Strip tone="waiting" icon="mic-outline">
+                {(s.language === "hi" ? "बोला गया: " : "Spoken: ") +
+                  `${spokenItemTitle(voiceItem)} · ${voiceItem.quantity} ${voiceItem.unit}`}
+                {"\n"}
+                {s.language === "hi"
+                  ? "नाम, ताकत, रूप, मात्रा और इकाई जाँचें।"
+                  : "Verify medicine, strength, form, quantity and unit."}
+              </Strip>
             )}
-            <Txt muted size={12} style={{ marginBottom: 14 }}>
+            <Txt size={14} color={palette.ink2} style={{ marginBottom: 10 }}>
               Select the batch printed on the medicine you are supplying.
             </Txt>
-            <ScrollView horizontal style={{ marginBottom: 20 }}>
-              {(sellable.get(selected.productId) ?? []).map((b) => (
-                <Chip
-                  key={b.id}
-                  active={selected.id === b.id}
-                  onPress={() => {
-                    setSelected(b);
-                  }}
-                >
-                  {b.code} · {b.expiry}
-                </Chip>
-              ))}
-            </ScrollView>
-            {voiceItem && (
-              <View style={{ gap: 8, marginBottom: 14 }}>
-                <Txt muted>
-                  {s.language === "hi" ? "बोला गया: " : "Spoken: "}
-                  {spokenItemTitle(voiceItem)} · {voiceItem.quantity}{" "}
-                  {voiceItem.unit}
-                </Txt>
-                <Txt size={12} style={{ color: colors.amber }}>
-                  {s.language === "hi"
-                    ? "नाम, ताकत, रूप, मात्रा और इकाई जाँचें।"
-                    : "Verify medicine, strength, form, quantity and unit."}
-                </Txt>
-              </View>
-            )}
+            <View style={{ gap: 8, marginBottom: 24 }}>
+              {(sellable.get(selected.productId) ?? []).map((b) => {
+                const on = selected.id === b.id;
+                return (
+                  <Pressable
+                    key={b.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    onPress={() => {
+                      setSelected(b);
+                    }}
+                    style={{
+                      minHeight: 60,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      borderRadius: radius.md,
+                      borderWidth: on ? 2 : 1,
+                      borderColor: on ? palette.blue : palette.ruleStrong,
+                      backgroundColor: on ? palette.blueTint : palette.paper,
+                    }}
+                  >
+                    <Icon
+                      name={on ? "checkmark-circle" : "ellipse-outline"}
+                      size={24}
+                      color={on ? palette.blue : palette.ink3}
+                    />
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Txt size={16} weight={600} num>
+                        {b.code}
+                      </Txt>
+                      <Txt size={14} color={palette.ink2} num>
+                        {s.language === "hi" ? "एक्सपायरी" : "Exp"} {b.expiry}
+                      </Txt>
+                    </View>
+                    <Txt size={14} weight={500} color={palette.ink2} num>
+                      {s.language === "hi"
+                        ? `${b.quantity} स्टॉक में`
+                        : `${b.quantity} in stock`}
+                    </Txt>
+                  </Pressable>
+                );
+              })}
+            </View>
             {!unit && (
-              <Txt style={{ color: colors.red, marginBottom: 12 }}>
+              <Strip tone="declined">
                 {s.language === "hi"
                   ? "बोली गई इकाई नहीं मिली। सही इकाई नीचे चुनें।"
                   : "Spoken unit was not recognised. Choose the actual unit below."}
-              </Txt>
+              </Strip>
             )}
-            <Field
-              label={t("quantity")}
-              value={qty}
-              onChange={(v) => {
-                setQty(v);
-              }}
-              number
-            />
-            <Row style={{ flexWrap: "wrap", marginBottom: 20 }}>
+            <Txt size={14} weight={500} color={palette.ink2}>
+              {t("quantity")}
+            </Txt>
+            <Row style={{ gap: 12, marginTop: 6, marginBottom: 20 }}>
+              <StepButton
+                icon="remove"
+                label={s.language === "hi" ? "मात्रा घटाएँ" : "Decrease quantity"}
+                onPress={() => stepQty(-1)}
+              />
+              <TextInput
+                value={qty}
+                onChangeText={(v) => {
+                  setQty(v);
+                }}
+                accessibilityLabel={t("quantity")}
+                keyboardType="decimal-pad"
+                selectTextOnFocus
+                selectionColor={palette.blue}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  height: 56,
+                  paddingVertical: 0,
+                  textAlign: "center",
+                  textAlignVertical: "center",
+                  includeFontPadding: false,
+                  fontSize: 28,
+                  fontFamily: fonts.semibold,
+                  fontVariant: ["tabular-nums"],
+                  color: palette.ink,
+                  borderWidth: 1,
+                  borderColor: palette.ruleStrong,
+                  borderRadius: radius.md,
+                  backgroundColor: palette.paper,
+                }}
+              />
+              <StepButton
+                icon="add"
+                label={s.language === "hi" ? "मात्रा बढ़ाएँ" : "Increase quantity"}
+                onPress={() => stepQty(1)}
+              />
+            </Row>
+            <Txt size={14} weight={500} color={palette.ink2}>
+              {t("unit")}
+            </Txt>
+            <Row style={{ flexWrap: "wrap", gap: 8, marginTop: 6, marginBottom: 20 }}>
               {Object.keys(state.products[selected.productId].units).map(
                 (u) => (
                   <Chip
@@ -857,20 +1063,20 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                 ),
               )}
             </Row>
-
             {overStock && (
-              <Txt style={{ color: colors.red, marginBottom: 12 }}>
+              <Strip tone="declined">
                 {onlyInStock(stockLeft!.lt(0) ? D(0) : stockLeft!)}
-              </Txt>
+              </Strip>
             )}
             <Button
               disabled={!Number(qty) || !unit || busy || overStock}
               onPress={() => void add()}
               icon="checkmark"
             >
-              {s.language === "hi"
+              {(s.language === "hi"
                 ? `बैच ${selected.code} जाँचा · जोड़ें`
-                : `Batch ${selected.code} checked · Add`}
+                : `Batch ${selected.code} checked · Add`) +
+                (lineAmount === null ? "" : ` · ${rupees(lineAmount)}`)}
             </Button>
           </>
         )}
@@ -1207,16 +1413,19 @@ export function Checkout({
       });
       onComplete(invoice);
     });
+  const short = change !== null && change < 0;
+  const changeInk = short ? palette.declined : palette.paid;
   return (
     <View style={{ gap: 16 }}>
-      <Row style={{ justifyContent: "space-between" }}>
-        <Txt size={18}>{t("total")}</Txt>
-        <Txt size={30} bold>
-          {rupees(total)}
+      <View style={{ gap: 4 }}>
+        <Txt size={14} weight={500} color={palette.ink2}>
+          {t("total")}
         </Txt>
-      </Row>
+        <Amount value={rupees(total)} size={40} weight={700} />
+        <TotalRule />
+      </View>
       <CustomerPicker value={customerId} onChange={setCustomer} />
-      <Row style={{ flexWrap: "wrap" }}>
+      <Row style={{ flexWrap: "wrap", gap: 8 }}>
         {["cash", "upi", "split", "credit"].map((m) => (
           <Chip
             key={m}
@@ -1236,14 +1445,14 @@ export function Checkout({
         ))}
       </Row>
       {method === "cash" && (
-        <View style={{ gap: 10 }}>
+        <View style={{ gap: 4 }}>
           <Field
             label="Cash received (₹) · optional"
             value={received}
             onChange={setReceived}
             number
           />
-          <Row style={{ flexWrap: "wrap" }}>
+          <Row style={{ flexWrap: "wrap", gap: 8 }}>
             {quickAmounts(total).map((v) => (
               <Chip
                 key={v}
@@ -1255,17 +1464,25 @@ export function Checkout({
             ))}
           </Row>
           {change !== null && (
-            <Row style={{ justifyContent: "space-between" }}>
-              <Txt style={{ color: change < 0 ? colors.red : colors.ink }}>
-                {change < 0 ? "Short by" : "Return to customer"}
+            <Row
+              style={{
+                justifyContent: "space-between",
+                marginTop: 12,
+                paddingVertical: 12,
+                borderTopWidth: 1,
+                borderBottomWidth: 1,
+                borderColor: palette.rule,
+              }}
+            >
+              <Txt size={16} weight={600} color={changeInk}>
+                {short ? "Short by" : "Return to customer"}
               </Txt>
-              <Txt
-                size={22}
-                bold
-                style={{ color: change < 0 ? colors.red : colors.ink }}
-              >
-                {rupees(Math.abs(change))}
-              </Txt>
+              <Amount
+                value={rupees(Math.abs(change!))}
+                size={32}
+                weight={700}
+                color={changeInk}
+              />
             </Row>
           )}
         </View>
@@ -1294,11 +1511,11 @@ export function Checkout({
         />
       )}
       {method === "credit" && !approvedCredit && (
-        <Txt size={12} muted>
+        <Strip tone="waiting" icon="time-outline">
           {s.language === "hi"
             ? "उधार के लिए मालिक की मंज़ूरी चाहिए। सेल ऑर्डर में रुकी रहेगी और मंज़ूरी आते ही स्क्रीन पर दिखेगा।"
             : "Credit needs the owner's approval. The sale waits in Orders, and you will see it on screen as soon as they decide."}
-        </Txt>
+        </Strip>
       )}
       {(method === "upi" || method === "split") && (
         <>
@@ -1307,84 +1524,95 @@ export function Checkout({
             value={ref}
             onChange={setRef}
           />
-          <Pressable onPress={() => setVerified(!verified)}>
+          <Pressable
+            onPress={() => setVerified(!verified)}
+            style={{ minHeight: 48, justifyContent: "center" }}
+          >
             <Row>
               <Icon
                 name={verified ? "checkbox" : "square-outline"}
-                color={colors.accent}
+                size={24}
+                color={verified ? palette.blue : palette.ink3}
               />
-              <Txt size={12}>I checked receipt in the merchant payment app</Txt>
+              <Txt size={14} style={{ flex: 1 }}>
+                I checked receipt in the merchant payment app
+              </Txt>
             </Row>
           </Pressable>
-          <Txt muted size={11}>
+          <Txt size={13} muted>
             Recorded as manually verified, not bank-confirmed.
           </Txt>
         </>
       )}
       {rx && !state.orders[existingOrderId ?? ""]?.prescription && (
-        <View>
-          <Txt bold style={{ marginBottom: 12 }}>
-            Prescription register
-          </Txt>
-          <Field label="Patient name" value={patient} onChange={setPatient} />
-          <Field
-            label="Patient address"
-            value={address}
-            onChange={setAddress}
-          />
-          <Field label="Prescriber name" value={doctor} onChange={setDoctor} />
-          <Field
-            label="Prescriber address"
-            value={doctorAddress}
-            onChange={setDoctorAddress}
-          />
-          <Field
-            label="Prescription reference"
-            value={prescriptionRef}
-            onChange={setPrescriptionRef}
-          />
-        </View>
+        <Section title="Prescription register">
+          <View style={{ marginTop: 12 }}>
+            <Field label="Patient name" value={patient} onChange={setPatient} />
+            <Field
+              label="Patient address"
+              value={address}
+              onChange={setAddress}
+            />
+            <Field
+              label="Prescriber name"
+              value={doctor}
+              onChange={setDoctor}
+            />
+            <Field
+              label="Prescriber address"
+              value={doctorAddress}
+              onChange={setDoctorAddress}
+            />
+            <Field
+              label="Prescription reference"
+              value={prescriptionRef}
+              onChange={setPrescriptionRef}
+            />
+          </View>
+        </Section>
       )}
       {discountTooBig && (
-        <Txt style={{ color: colors.red }}>
+        <Strip tone="declined">
           {s.language === "hi"
             ? "यह छूट बिल से ज़्यादा है। मालिक से इसे मना करवाकर फिर से माँगें।"
             : "This discount is more than the bill. Ask the owner to decline it and request again."}
-        </Txt>
+        </Strip>
       )}
-      {!!error && <Txt style={{ color: colors.red }}>{error}</Txt>}
+      {!!error && <Strip tone="declined">{error}</Strip>}
       {awaitingServer && (
-        <Txt style={{ color: colors.amber }}>
+        <Strip tone="waiting">
           Waiting for the server to confirm this sale. Do not collect payment
           again.
-        </Txt>
+        </Strip>
       )}
-      <Button
-        disabled={busy || awaitingServer || discountTooBig}
-        onPress={() => void finish()}
-        icon="checkmark"
-      >
-        {busy
-          ? "Saving…"
-          : method === "credit" && !approvedCredit
-            ? "Ask the owner to approve credit"
-            : "Confirm payment & create bill"}
-      </Button>
-      {!existingOrderId && (
+      <View style={{ gap: 12, marginTop: 8 }}>
         <Button
-          secondary
-          disabled={busy || awaitingServer}
-          onPress={() =>
-            void guarded(async () => {
-              await hold();
-              onHeld();
-            })
-          }
+          disabled={busy || awaitingServer || discountTooBig}
+          onPress={() => void finish()}
+          icon="checkmark"
         >
-          {t("hold")}
+          {busy
+            ? "Saving…"
+            : method === "credit" && !approvedCredit
+              ? "Ask the owner to approve credit"
+              : "Confirm payment & create bill"}
         </Button>
-      )}
-      <Txt size={11} muted>
+        {!existingOrderId && (
+          <Button
+            secondary
+            disabled={busy || awaitingServer}
+            onPress={() =>
+              void guarded(async () => {
+                await hold();
+                onHeld();
+              })
+            }
+          >
+            {t("hold")}
+          </Button>
+        )}
+      </View>
+      <Txt size={13} muted>
         Check the medicines and payment before confirming. Finalised bills are
         corrected through a recorded return.
       </Txt>
@@ -1524,52 +1752,101 @@ export function ReceiptSheet({
       setError((e as Error).message);
     }
   }
+  const offlineBill = s.pending.some(
+    (e) => `${e.command.id}:invoice` === invoice?.id,
+  );
+  // A bill is on credit when its recorded payments fall short of the total.
+  const paidPaise = invoice
+    ? Object.values(s.state!.payments)
+        .filter((p) => p.invoiceId === invoice.id)
+        .reduce((n, p) => n + p.amountPaise, 0)
+    : 0;
+  const onCredit =
+    !!invoice && !offlineBill && paidPaise > 0 && paidPaise < invoice.totalPaise;
   return (
     <Sheet visible={!!invoice} title={t("receipt")} onClose={onClose}>
       {invoice && (
         <>
-          <View style={{ alignItems: "center", gap: 9, marginBottom: 25 }}>
-            <View
-              style={{
-                backgroundColor: colors.tint,
-                padding: 16,
-                borderRadius: 30,
-              }}
-            >
-              <Icon name="checkmark" size={26} color={colors.accent} />
+          <Row
+            style={{
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              marginBottom: 16,
+            }}
+          >
+            <View style={{ flex: 1, gap: 2 }}>
+              <Txt size={13} muted>
+                Bill no.
+              </Txt>
+              <Txt size={22} weight={700} num>
+                {invoice.number}
+              </Txt>
             </View>
-            <Txt size={22} bold>
-              {s.pending.some((e) => `${e.command.id}:invoice` === invoice.id)
-                ? "Saved on this phone · sends when online"
-                : "Bill saved"}
-            </Txt>
-            <Txt muted>{invoice.number}</Txt>
-            <Txt size={32} bold>
-              {rupees(invoice.totalPaise)}
-            </Txt>
-          </View>
-          {invoice.lines.map((l, i) => (
-            <Row
-              key={i}
-              style={{
-                justifyContent: "space-between",
-                paddingVertical: 13,
-                borderBottomWidth: 1,
-                borderColor: colors.line,
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Txt bold>
-                  {l.name} {l.strength}
-                </Txt>
-                <Txt muted size={11}>
-                  {l.quantity} {l.unit} · {l.batchCode}
-                </Txt>
-              </View>
-              <Txt>{rupees(l.netPaise)}</Txt>
+            <View style={{ paddingTop: 8, paddingRight: 6 }}>
+              <Stamp
+                tone={onCredit ? "waiting" : "paid"}
+                size="lg"
+                land
+                date={stampDate(invoice.occurredAt, s.language)}
+              >
+                {onCredit ? "Credit" : "Paid"}
+              </Stamp>
+            </View>
+          </Row>
+          {offlineBill ? (
+            <Strip tone="waiting" icon="cloud-offline-outline">
+              Saved on this phone · sends when online
+            </Strip>
+          ) : (
+            <Row style={{ gap: 6, marginBottom: 8 }}>
+              <Icon name="checkmark-circle" size={18} color={palette.paid} />
+              <Txt size={14} color={palette.ink2}>
+                Bill saved
+              </Txt>
             </Row>
-          ))}
-          <View style={{ gap: 10, marginTop: 24 }}>
+          )}
+          <View style={{ marginTop: 8 }}>
+            {invoice.lines.map((l, i) => (
+              <Row
+                key={i}
+                style={{
+                  justifyContent: "space-between",
+                  paddingVertical: 12,
+                  borderBottomWidth: 1,
+                  borderColor: palette.rule,
+                  minHeight: 60,
+                }}
+              >
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Txt size={16} weight={600}>
+                    {l.name}{" "}
+                    <Txt size={14} color={palette.ink2}>
+                      {l.strength}
+                    </Txt>
+                  </Txt>
+                  <Txt size={14} color={palette.ink2} num>
+                    {l.quantity} {l.unit} ·{" "}
+                    <Txt size={14} weight={600} num color={palette.ink2}>
+                      {l.batchCode}
+                    </Txt>
+                  </Txt>
+                </View>
+                <Amount value={rupees(l.netPaise)} size={16} />
+              </Row>
+            ))}
+          </View>
+          <View style={{ marginTop: 16 }}>
+            <TotalRule />
+            <Row
+              style={{ justifyContent: "space-between", paddingVertical: 8 }}
+            >
+              <Txt size={16} weight={600}>
+                {t("total")}
+              </Txt>
+              <Amount value={rupees(invoice.totalPaise)} size={32} weight={700} />
+            </Row>
+          </View>
+          <View style={{ gap: 12, marginTop: 24 }}>
             <Button onPress={() => void share()} icon="share-outline">
               {Platform.OS === "web" ? "Open printable receipt" : t("share")}
             </Button>
@@ -1583,7 +1860,9 @@ export function ReceiptSheet({
             </Button>
             {!!printId && (
               <>
-                <Txt>Print status: {printStatus}</Txt>
+                <Txt size={14} color={palette.ink2}>
+                  Print status: {printStatus}
+                </Txt>
                 <Button secondary onPress={() => void checkPrint()}>
                   Check print status
                 </Button>
@@ -1594,12 +1873,16 @@ export function ReceiptSheet({
                       value={reprintReason}
                       onChange={setReprintReason}
                     />
-                    <Pressable onPress={() => setPaperChecked(!paperChecked)}>
+                    <Pressable
+                      onPress={() => setPaperChecked(!paperChecked)}
+                      style={{ minHeight: 48, justifyContent: "center" }}
+                    >
                       <Row>
                         <Icon
                           name={paperChecked ? "checkbox" : "square-outline"}
+                          color={paperChecked ? palette.blue : palette.ink3}
                         />
-                        <Txt>I checked the printer and paper</Txt>
+                        <Txt size={14}>I checked the printer and paper</Txt>
                       </Row>
                     </Pressable>
                     <Button
@@ -1614,7 +1897,7 @@ export function ReceiptSheet({
               </>
             )}
             {!!error && (
-              <Txt size={12} muted>
+              <Txt size={14} color={palette.ink2}>
                 {error}
               </Txt>
             )}

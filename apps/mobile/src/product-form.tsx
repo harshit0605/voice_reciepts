@@ -1,7 +1,9 @@
 import React, { useRef, useState } from "react";
+import { View } from "react-native";
 import { useSession, uid } from "./session";
-import { Txt, Button, Field, Row, Chip, colors } from "./ui";
+import { Txt, Button, Field, Row, Chip, Icon, palette, Notice } from "./ui";
 import type { Product } from "@counterwell/core";
+export { Notice } from "./ui";
 /** Add or edit a catalogue product; `draft` prefills a new one (for example from an invoice line). */
 export function ProductForm({
   product,
@@ -129,7 +131,10 @@ export function ProductForm({
         value={aliases}
         onChange={A}
       />
-      <Row style={{ marginBottom: 20 }}>
+      <Txt size={14} weight={500} color={palette.ink2} style={{ marginBottom: 6 }}>
+        Schedule
+      </Txt>
+      <Row style={{ marginBottom: 24, flexWrap: "wrap" }}>
         {(["OTC", "H", "H1", "X"] as const).map((r) => (
           <Chip key={r} active={schedule === r} onPress={() => R(r)}>
             {r}
@@ -137,7 +142,9 @@ export function ProductForm({
         ))}
       </Row>
       {!!error && (
-        <Txt style={{ color: colors.red, marginBottom: 12 }}>{error}</Txt>
+        <View style={{ marginBottom: 16 }}>
+          <Notice>{error}</Notice>
+        </View>
       )}
       <Button disabled={busy} onPress={() => void save()}>
         Save medicine

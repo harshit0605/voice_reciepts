@@ -1,10 +1,31 @@
 import React, { useEffect, useState } from "react";
-import { View, Platform } from "react-native";
+import { View, Platform, Pressable, TextInput } from "react-native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
 import { useSession, uid } from "./session";
-import { Txt, Button, Field, Row, Chip, Sheet, colors, styles } from "./ui";
+import {
+  Txt,
+  Button,
+  Field,
+  Row,
+  Chip,
+  Sheet,
+  Section,
+  Amount,
+  Badge,
+  Stamp,
+  StaffMark,
+  Entry,
+  Line,
+  TotalRule,
+  Icon,
+  palette,
+  stampDate,
+  clock as hhmm,
+  styles,
+  type Tone,
+} from "./ui";
 import {
   D,
   NOTES,
@@ -42,12 +63,21 @@ export const dayLabel = (date: string, hi = false) =>
 /** Red when short, amber when over, green when it matches. */
 export const differenceColour = (paise?: number) =>
   paise === undefined
-    ? colors.muted
+    ? palette.ink3
     : paise < 0
-      ? colors.red
+      ? palette.declined
       : paise > 0
-        ? colors.amber
-        : colors.accent;
+        ? palette.waiting
+        : palette.paid;
+/** The stamp ink for a drawer difference: short is declined, over is waiting, a match is paid. */
+const differenceTone = (paise?: number): Tone =>
+  paise === undefined
+    ? "neutral"
+    : paise < 0
+      ? "declined"
+      : paise > 0
+        ? "waiting"
+        : "paid";
 const paiseOf = (value: string) => {
   if (!/^\d+(\.\d{1,2})?$/.test(value.trim())) return null;
   return D(value.trim()).mul(100).toNumber();
@@ -56,6 +86,125 @@ const whole = (value: string) => {
   if (!value.trim()) return 0;
   return /^\d{1,5}$/.test(value.trim()) ? Number(value.trim()) : null;
 };
+
+const STEP = 48;
+/** A − / + stepper around a numeric input, every target 48 tall. Shared with the returns form. */
+export function CountStepper({
+  value,
+  onChange,
+  label,
+  decimal = false,
+  placeholder = "0",
+  wide = false,
+  hi,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+  decimal?: boolean;
+  placeholder?: string;
+  wide?: boolean;
+  hi: boolean;
+}) {
+  const bump = (by: number) => {
+    const n = Number(value.trim() || "0");
+    if (Number.isNaN(n)) return;
+    const next = Math.max(0, Math.round((n + by) * 100) / 100);
+    onChange(String(next));
+  };
+  const button = (icon: "remove" | "add", by: number, name: string) => (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={name}
+      onPress={() => bump(by)}
+      style={({ pressed }) => ({
+        width: STEP,
+        height: STEP,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: 10,
+        backgroundColor: pressed ? palette.rule : palette.blueTint,
+      })}
+    >
+      <Icon name={icon} size={22} color={palette.blue} />
+    </Pressable>
+  );
+  return (
+    <Row style={{ gap: 4 }}>
+      {button("remove", -1, `${label} ${hi ? "घटाएँ" : "minus one"}`)}
+      <TextInput
+        accessibilityLabel={label}
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        placeholderTextColor={palette.ink3}
+        selectionColor={palette.blue}
+        keyboardType={decimal ? "decimal-pad" : "number-pad"}
+        maxFontSizeMultiplier={1.4}
+        style={[
+          styles.input,
+          {
+            width: 64,
+            height: STEP,
+            minHeight: STEP,
+            paddingHorizontal: 4,
+            paddingVertical: 0,
+            textAlign: "center",
+            fontVariant: ["tabular-nums"],
+          },
+        ]}
+      />
+      {button("add", 1, `${label} ${hi ? "बढ़ाएँ" : "plus one"}`)}
+    </Row>
+  );
+}
+
+/** One line of the count register: the denomination, the stepper, and what it adds up to. */
+function CountRow({
+  label,
+  value,
+  onChange,
+  amount,
+  hi,
+  wide = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  amount: string;
+  hi: boolean;
+  wide?: boolean;
+}) {
+  return (
+    <Row
+      style={{
+        gap: 8,
+        minHeight: 60,
+        paddingVertical: 6,
+        borderBottomWidth: 1,
+        borderColor: palette.rule,
+      }}
+    >
+      <View style={{ width: 62 }}>
+        <Txt num weight={600}>
+          {label}
+        </Txt>
+      </View>
+      <CountStepper
+        label={label}
+        value={value}
+        onChange={onChange}
+        placeholder={wide ? "₹" : "0"}
+        decimal={wide}
+        wide={wide}
+        hi={hi}
+      />
+      <View style={{ flex: 1, alignItems: "flex-end" }}>
+        <Amount value={amount} size={16} weight={500} color={palette.ink2} />
+      </View>
+    </Row>
+  );
+}
 
 /** Count notes one kind at a time, or type the total. */
 function useCashCount() {
@@ -88,8 +237,8 @@ function useCashCount() {
     setTotal("");
   };
   const element = (
-    <View style={{ gap: 4 }}>
-      <Row style={{ marginBottom: 8 }}>
+    <View>
+      <Row style={{ marginBottom: 12 }}>
         <Chip active={byNotes} onPress={() => setByNotes(true)}>
           {hi ? "नोट गिनें" : "Count notes"}
         </Chip>
@@ -98,35 +247,26 @@ function useCashCount() {
         </Chip>
       </Row>
       {byNotes ? (
-        <>
+        <View style={{ borderTopWidth: 1, borderColor: palette.rule }}>
           {NOTES.map((n) => (
-            <Row key={n} style={{ alignItems: "center" }}>
-              <Txt bold style={{ width: 64 }}>
-                ₹{n} ×
-              </Txt>
-              <View style={{ flex: 1 }}>
-                <Field
-                  value={notes[n] ?? ""}
-                  onChange={(v) => setNotes({ ...notes, [n]: v })}
-                  number
-                  placeholder="0"
-                />
-              </View>
-              <Txt muted style={{ width: 92, textAlign: "right" }}>
-                {rupees(n * 100 * (whole(notes[n] ?? "") ?? 0))}
-              </Txt>
-            </Row>
+            <CountRow
+              key={n}
+              label={`₹${n} ×`}
+              value={notes[n] ?? ""}
+              onChange={(v) => setNotes({ ...notes, [n]: v })}
+              amount={rupees(n * 100 * (whole(notes[n] ?? "") ?? 0))}
+              hi={hi}
+            />
           ))}
-          <Row style={{ alignItems: "center" }}>
-            <Txt bold style={{ width: 64 }}>
-              {hi ? "सिक्के" : "Coins"}
-            </Txt>
-            <View style={{ flex: 1 }}>
-              <Field value={coins} onChange={setCoins} number placeholder="₹" />
-            </View>
-            <View style={{ width: 92 }} />
-          </Row>
-        </>
+          <CountRow
+            label={hi ? "सिक्के" : "Coins"}
+            value={coins}
+            onChange={setCoins}
+            amount={rupees(coins.trim() ? (paiseOf(coins) ?? 0) : 0)}
+            hi={hi}
+            wide
+          />
+        </View>
       ) : (
         <Field
           label="Total cash (₹)"
@@ -135,12 +275,27 @@ function useCashCount() {
           number
         />
       )}
-      <Row style={{ justifyContent: "space-between", marginTop: 4 }}>
-        <Txt muted>{hi ? "गिनी गई नकदी" : "Cash counted"}</Txt>
-        <Txt size={24} bold>
-          {paise === null ? "—" : rupees(paise)}
-        </Txt>
-      </Row>
+      <View style={{ marginTop: 12 }}>
+        <TotalRule />
+        <Row
+          style={{
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            marginTop: 8,
+          }}
+        >
+          <Txt size={14} weight={500} color={palette.ink2} style={{ flex: 1 }}>
+            {hi ? "गिनी गई नकदी" : "Cash counted"}
+          </Txt>
+          {paise === null ? (
+            <Txt num size={40} weight={700}>
+              —
+            </Txt>
+          ) : (
+            <Amount value={rupees(paise)} size={40} weight={700} />
+          )}
+        </Row>
+      </View>
     </View>
   );
   return { element, paise, denominations, reset };
@@ -232,68 +387,93 @@ export function DrawerPanel() {
         ? "गिनती सेव हुई। मालिक को नतीजा दिखेगा।"
         : "Count saved. The owner sees the result.";
 
-  const lastCheck = drawer?.checks?.at(-1);
-  const myLastCheck = drawer?.checks?.filter((c) => c.by === me.id).at(-1);
+  const checks = (drawer?.checks ?? []).filter((c) => owner || c.by === me.id);
+  const openerName = drawer
+    ? (state.members[drawer.openedBy]?.name ?? (hi ? "" : "someone"))
+    : "";
   return (
-    <View style={{ gap: 12 }}>
+    <View style={{ gap: 16 }}>
       {drawer ? (
-        <View style={styles.panel}>
+        <View style={{ gap: 12 }}>
+          <Row style={{ justifyContent: "space-between" }}>
+            <Badge tone="paid">{hi ? "खुली" : "Open"}</Badge>
+            <Txt size={13} muted num>
+              {hhmm(drawer.openedAt)}
+            </Txt>
+          </Row>
+          <Row style={{ alignItems: "flex-start" }}>
+            <StaffMark id={drawer.openedBy} name={openerName} size={32} />
+            <View style={{ flex: 1 }}>
+              <Txt size={14} color={palette.ink2}>
+                {hi
+                  ? `${clock(drawer.openedAt)} पर ${openerName} ने ${rupees(drawer.openingPaise)} से खोला`
+                  : `Opened ${clock(drawer.openedAt)} by ${openerName} with ${rupees(drawer.openingPaise)}`}
+                {indiaDate(drawer.openedAt) !== indiaDate(new Date().toISOString())
+                  ? ` · ${dayLabel(indiaDate(drawer.openedAt), hi)}`
+                  : ""}
+              </Txt>
+            </View>
+          </Row>
           {owner && (
-            <>
-              <Txt muted size={12}>
+            <View style={{ gap: 2 }}>
+              <Txt size={14} weight={500} color={palette.ink2}>
                 {hi ? "दराज़ में होना चाहिए" : "Should be in the drawer"}
               </Txt>
-              <Txt size={34} bold style={{ marginTop: 6 }}>
-                {rupees(expectedCash(state, drawer.id))}
-              </Txt>
-            </>
+              <Amount
+                value={rupees(expectedCash(state, drawer.id))}
+                size={40}
+                weight={700}
+              />
+            </View>
           )}
-          <Txt size={12} muted style={{ marginTop: owner ? 8 : 0 }}>
-            {hi
-              ? `${clock(drawer.openedAt)} पर ${state.members[drawer.openedBy]?.name ?? ""} ने ${rupees(drawer.openingPaise)} से खोला`
-              : `Opened ${clock(drawer.openedAt)} by ${state.members[drawer.openedBy]?.name ?? "someone"} with ${rupees(drawer.openingPaise)}`}
-            {indiaDate(drawer.openedAt) !== indiaDate(new Date().toISOString())
-              ? ` · ${dayLabel(indiaDate(drawer.openedAt), hi)}`
-              : ""}
-          </Txt>
           {owner && !!drawer.openingDifferencePaise && (
             <Txt
-              size={12}
-              style={{
-                marginTop: 6,
-                color: differenceColour(drawer.openingDifferencePaise),
-              }}
+              size={14}
+              color={differenceColour(drawer.openingDifferencePaise)}
             >
               {hi
                 ? `खोलते समय पिछली बार छोड़ी नकदी से ${differenceText(drawer.openingDifferencePaise)}`
                 : `At opening: ${differenceText(drawer.openingDifferencePaise)} against the cash left at the last close`}
             </Txt>
           )}
-          {owner && lastCheck && (
-            <Txt
-              size={12}
-              style={{
-                marginTop: 6,
-                color: differenceColour(lastCheck.differencePaise),
-              }}
-            >
-              {hi
-                ? `आख़िरी गिनती ${clock(lastCheck.at)} · ${state.members[lastCheck.by]?.name ?? ""} · ${differenceText(lastCheck.differencePaise)}`
-                : `Last count ${clock(lastCheck.at)} by ${state.members[lastCheck.by]?.name ?? "someone"}: ${differenceText(lastCheck.differencePaise)}`}
-            </Txt>
-          )}
-          {!owner && myLastCheck && (
-            <Txt size={12} muted style={{ marginTop: 6 }}>
-              {hi
-                ? `आपने ${clock(myLastCheck.at)} पर ${rupees(myLastCheck.countedPaise)} गिने`
-                : `You counted ${rupees(myLastCheck.countedPaise)} at ${clock(myLastCheck.at)}`}
-            </Txt>
+          {checks.length > 0 && (
+            <View>
+              {checks.map((c) => (
+                <Entry
+                  key={c.at}
+                  time={hhmm(c.at)}
+                  title={
+                    owner
+                      ? `${hi ? "गिनती" : "Count"} · ${rupees(c.countedPaise)}`
+                      : `${hi ? "आपने गिने" : "You counted"} ${rupees(c.countedPaise)}`
+                  }
+                  who={{
+                    id: c.by,
+                    name: state.members[c.by]?.name,
+                  }}
+                  detail={
+                    owner ? (
+                      <Txt
+                        size={14}
+                        weight={600}
+                        color={differenceColour(c.differencePaise)}
+                      >
+                        {differenceText(c.differencePaise)}
+                      </Txt>
+                    ) : undefined
+                  }
+                />
+              ))}
+            </View>
           )}
         </View>
       ) : (
-        <View style={styles.panel}>
-          <Txt bold>{hi ? "दराज़ बंद है" : "The drawer is closed"}</Txt>
-          <Txt size={12} muted style={{ marginTop: 6 }}>
+        <View style={{ gap: 8 }}>
+          <Badge tone="neutral">{hi ? "बंद" : "Closed"}</Badge>
+          <Txt bold size={19}>
+            {hi ? "दराज़ बंद है" : "The drawer is closed"}
+          </Txt>
+          <Txt size={14} color={palette.ink2}>
             {previous
               ? hi
                 ? `आख़िरी बार ${dayLabel(indiaDate(previous.closedAt!), hi)} ${clock(previous.closedAt)} पर ${state.members[previous.closedBy ?? ""]?.name ?? ""} ने बंद किया`
@@ -303,13 +483,7 @@ export function DrawerPanel() {
                 : "Count the cash in it and open it before the first cash sale."}
           </Txt>
           {owner && previous?.discrepancyPaise !== undefined && (
-            <Txt
-              size={12}
-              style={{
-                marginTop: 6,
-                color: differenceColour(previous.discrepancyPaise),
-              }}
-            >
+            <Txt size={14} color={differenceColour(previous.discrepancyPaise)}>
               {hi ? "बंद करते समय" : "At close"}:{" "}
               {differenceText(previous.discrepancyPaise)}
               {previous.keptPaise !== undefined
@@ -320,37 +494,35 @@ export function DrawerPanel() {
         </View>
       )}
       {!canUse ? (
-        <Txt muted size={12}>
+        <Txt muted size={13}>
           {hi
             ? "दराज़ के लिए पैसे लेने की अनुमति चाहिए।"
             : "Drawer access needs payment collection permission."}
         </Txt>
       ) : drawer ? (
-        <Row style={{ flexWrap: "wrap" }}>
-          <Button
-            small
-            icon="calculator-outline"
-            onPress={() => setStep("count")}
-          >
+        <View style={{ gap: 12 }}>
+          <Button icon="calculator-outline" onPress={() => setStep("count")}>
             {hi ? "नकदी गिनें" : "Count cash"}
           </Button>
-          <Button
-            small
-            secondary
-            icon="swap-vertical-outline"
-            onPress={() => setStep("move")}
-          >
-            {hi ? "पैसे डालें / निकालें" : "Cash in / out"}
-          </Button>
-          <Button
-            small
-            secondary
-            icon="lock-closed-outline"
-            onPress={() => setStep("close")}
-          >
-            {hi ? "दराज़ बंद करें" : "Close drawer"}
-          </Button>
-        </Row>
+          <Row style={{ flexWrap: "wrap" }}>
+            <Button
+              small
+              secondary
+              icon="swap-vertical-outline"
+              onPress={() => setStep("move")}
+            >
+              {hi ? "पैसे डालें / निकालें" : "Cash in / out"}
+            </Button>
+            <Button
+              small
+              secondary
+              icon="lock-closed-outline"
+              onPress={() => setStep("close")}
+            >
+              {hi ? "दराज़ बंद करें" : "Close drawer"}
+            </Button>
+          </Row>
+        </View>
       ) : (
         <Button icon="lock-open-outline" onPress={() => setStep("open")}>
           {hi ? "गिनकर दराज़ खोलें" : "Count and open drawer"}
@@ -378,18 +550,19 @@ export function DrawerPanel() {
         onClose={close}
       >
         {done ? (
-          <View style={{ gap: 14 }}>
-            <View style={styles.panel}>
-              <Txt bold size={16}>
+          <View style={{ gap: 24 }}>
+            <Row style={{ alignItems: "flex-start" }}>
+              <Icon name="checkmark-circle" size={26} color={palette.paid} />
+              <Txt bold size={16} style={{ flex: 1 }}>
                 {done}
               </Txt>
-            </View>
+            </Row>
             <Button onPress={close}>{hi ? "ठीक है" : "Done"}</Button>
           </View>
         ) : (
           <View style={{ gap: 12 }}>
             {step !== "move" && (
-              <Txt muted size={12}>
+              <Txt size={14} color={palette.ink2}>
                 {step === "open"
                   ? hi
                     ? "पहली बिक्री से पहले दराज़ की सारी नकदी गिनें।"
@@ -433,7 +606,7 @@ export function DrawerPanel() {
                   ))}
                 </Row>
                 <Field label="Reason" value={reason} onChange={setReason} />
-                <Txt muted size={12}>
+                <Txt size={14} color={palette.ink2}>
                   {hi
                     ? "आपके नाम से दर्ज होगा और मालिक को दिन की रिपोर्ट में दिखेगा।"
                     : "Recorded with your name and shown to the owner in the day report."}
@@ -466,14 +639,14 @@ export function DrawerPanel() {
                       </Chip>
                     ))}
                 </Row>
-                <Txt muted size={12}>
+                <Txt size={14} color={palette.ink2}>
                   {hi
                     ? "बाकी नकदी मालिक या तिजोरी में जाती है। अगली बार खोलते समय गिनती इससे मिलाई जाएगी।"
                     : "The rest goes to the owner or the safe. The next opening count is compared with this."}
                 </Txt>
               </>
             )}
-            {!!error && <Txt style={{ color: colors.red }}>{error}</Txt>}
+            {!!error && <Txt color={palette.declined}>{error}</Txt>}
             <Button
               disabled={busy}
               icon="checkmark"
@@ -597,29 +770,6 @@ async function sharePdf(html: string, name: string) {
   });
 }
 
-function Line({
-  label,
-  value,
-  strong = false,
-  colour,
-}: {
-  label: string;
-  value: string;
-  strong?: boolean;
-  colour?: string;
-}) {
-  return (
-    <Row style={{ justifyContent: "space-between", paddingVertical: 5 }}>
-      <Txt muted={!strong} bold={strong} style={{ flex: 1 }}>
-        {label}
-      </Txt>
-      <Txt bold={strong} style={colour ? { color: colour } : undefined}>
-        {value}
-      </Txt>
-    </Row>
-  );
-}
-
 /** One day's report: live, or a saved revision with what changed since the one before. */
 /** Why a report is still provisional: which phones have not synced since, and recoveries to check. */
 function WaitingFor({ eod }: { eod: Eod }) {
@@ -632,23 +782,24 @@ function WaitingFor({ eod }: { eod: Eod }) {
   ).length;
   if (!phones.length && !recoveries) return null;
   return (
-    <View style={{ marginTop: 8, gap: 4 }}>
+    <View style={{ marginTop: 12, gap: 8 }}>
+      <Badge tone="waiting">{hi ? "इंतज़ार" : "Waiting"}</Badge>
       {phones.map((d) => (
-        <Txt key={d.id} size={12} style={{ color: colors.amber }}>
+        <Txt key={d.id} size={14} color={palette.waiting}>
           {hi
             ? `इंतज़ार: ${deviceLabel(state, d)} · आख़िरी बार ${dayLabel(indiaDate(d.lastSeen), hi)} ${clock(d.lastSeen)}${d.pendingCount ? ` · ${d.pendingCount} बिल भेजना बाकी` : ""}`
             : `Waiting for ${deviceLabel(state, d)} · last seen ${dayLabel(indiaDate(d.lastSeen), hi)} ${clock(d.lastSeen)}${d.pendingCount ? ` · ${d.pendingCount} unsent` : ""}`}
         </Txt>
       ))}
       {recoveries > 0 && (
-        <Txt size={12} style={{ color: colors.amber }}>
+        <Txt size={14} color={palette.waiting}>
           {hi
             ? `${recoveries} वापस मिली बिक्री की जाँच बाकी (समीक्षा में)`
             : `${recoveries} recovered ${recoveries === 1 ? "sale" : "sales"} to check in Reviews`}
         </Txt>
       )}
       {phones.length > 0 && (
-        <Txt size={11} muted>
+        <Txt size={13} muted>
           {hi
             ? "जो फ़ोन अब इस्तेमाल नहीं होता, उसे प्रबंधन में हटाएँ।"
             : "Revoke a phone that is no longer used in Administration."}
@@ -680,20 +831,33 @@ export function DayReportView({
       : 0;
   const r = report;
   return (
-    <View style={{ gap: 18 }}>
-      <View>
-        <Txt size={20} bold>
+    <View>
+      <View style={{ marginBottom: 24 }}>
+        <Txt size={28} weight={700}>
           {dayLabel(r.date, hi)}
         </Txt>
-        <Txt muted size={12} style={{ marginTop: 4 }}>
-          {eod
-            ? `${hi ? "संस्करण" : "Revision"} ${eod.revision} · ${clock(eod.createdAt)}${eod.provisional ? (hi ? " · फ़ोन सिंक होना बाकी" : " · waiting for phones to sync") : hi ? " · सभी फ़ोन सिंक" : " · all phones synced"}`
-            : hi
-              ? "अभी तक का हिसाब"
-              : "So far today"}
-        </Txt>
+        <Row style={{ marginTop: 8, flexWrap: "wrap", gap: 8 }}>
+          <Txt size={14} color={palette.ink2} num>
+            {eod
+              ? `${hi ? "संस्करण" : "Revision"} ${eod.revision} · ${clock(eod.createdAt)}`
+              : hi
+                ? "अभी तक का हिसाब"
+                : "So far today"}
+          </Txt>
+          {eod && (
+            <Badge tone={eod.provisional ? "waiting" : "paid"}>
+              {eod.provisional
+                ? hi
+                  ? "फ़ोन सिंक होना बाकी"
+                  : "waiting for phones to sync"
+                : hi
+                  ? "सभी फ़ोन सिंक"
+                  : "all phones synced"}
+            </Badge>
+          )}
+        </Row>
         {!!previous && (change !== 0 || cashChange !== 0) && (
-          <Txt size={12} style={{ marginTop: 6, color: colors.amber }}>
+          <Txt size={14} color={palette.waiting} style={{ marginTop: 8 }}>
             {hi
               ? `संस्करण ${previous.revision} से बदलाव: बिक्री ${change >= 0 ? "+" : "−"}${rupees(Math.abs(change))}, नकद ${cashChange >= 0 ? "+" : "−"}${rupees(Math.abs(cashChange))}`
               : `Since revision ${previous.revision}: sales ${change >= 0 ? "+" : "−"}${rupees(Math.abs(change))}, cash ${cashChange >= 0 ? "+" : "−"}${rupees(Math.abs(cashChange))}`}
@@ -701,12 +865,14 @@ export function DayReportView({
         )}
         {eod?.provisional && <WaitingFor eod={eod} />}
       </View>
-      <View style={styles.panel}>
-        <Line
-          label={hi ? "शुद्ध बिक्री" : "Net sales"}
-          value={rupees(r.sales.netPaise)}
-          strong
-        />
+      <View style={{ marginBottom: 32 }}>
+        <Txt size={14} weight={500} color={palette.ink2}>
+          {hi ? "शुद्ध बिक्री" : "Net sales"}
+        </Txt>
+        <Amount value={rupees(r.sales.netPaise)} size={40} weight={700} />
+        <View style={{ marginTop: 8 }}>
+          <TotalRule />
+        </View>
         <Line label={hi ? "बिल" : "Bills"} value={String(r.sales.bills)} />
         <Line label={hi ? "नकद" : "Cash"} value={rupees(r.sales.cashPaise)} />
         <Line label="UPI" value={rupees(r.sales.upiPaise)} />
@@ -724,14 +890,28 @@ export function DayReportView({
         />
       </View>
       {r.drawers.map((d) => (
-        <View key={d.id} style={styles.panel}>
-          <Txt bold style={{ marginBottom: 6 }}>
-            {hi ? "नकद दराज़" : "Cash drawer"} ·{" "}
-            {indiaDate(d.openedAt) !== r.date
-              ? `${dayLabel(indiaDate(d.openedAt), hi)} `
-              : ""}
-            {clock(d.openedAt)} {d.openedBy}
-          </Txt>
+        <Section
+          key={d.id}
+          title={hi ? "नकद दराज़" : "Cash drawer"}
+          action={
+            <Badge tone={d.closedAt ? "neutral" : "paid"}>
+              {d.closedAt ? (hi ? "बंद" : "Closed") : hi ? "खुली" : "Open"}
+            </Badge>
+          }
+        >
+          <Row style={{ paddingVertical: 12 }}>
+            <StaffMark id={d.openedBy} name={d.openedBy} size={32} />
+            <Txt size={14} color={palette.ink2} style={{ flex: 1 }}>
+              <Txt size={14} weight={600}>
+                {d.openedBy}
+              </Txt>
+              {` · ${hi ? "खोली" : "opened"} ${
+                indiaDate(d.openedAt) !== r.date
+                  ? `${dayLabel(indiaDate(d.openedAt), hi)} `
+                  : ""
+              }${clock(d.openedAt)}`}
+            </Txt>
+          </Row>
           <Line
             label={hi ? "शुरुआती नकदी" : "Opening cash"}
             value={rupees(d.openingPaise)}
@@ -744,7 +924,7 @@ export function DayReportView({
                   : "Against cash left at last close"
               }
               value={differenceText(d.openingDifferencePaise)}
-              colour={differenceColour(d.openingDifferencePaise)}
+              color={differenceColour(d.openingDifferencePaise)}
             />
           )}
           <Line
@@ -765,18 +945,42 @@ export function DayReportView({
                 label={`${hi ? "गिनी" : "Counted"} ${clock(d.closedAt)} · ${d.closedBy ?? ""}`}
                 value={rupees(d.countedPaise)}
               />
-              <Line
-                label={hi ? "अंतर" : "Difference"}
-                value={differenceText(d.differencePaise)}
-                strong
-                colour={differenceColour(d.differencePaise)}
-              />
+              <TotalRule />
+              <Row
+                style={{
+                  justifyContent: "space-between",
+                  minHeight: 60,
+                  paddingVertical: 12,
+                }}
+              >
+                <Txt size={15} weight={600}>
+                  {hi ? "अंतर" : "Difference"}
+                </Txt>
+                <Stamp
+                  tone={differenceTone(d.differencePaise)}
+                  size="md"
+                  date={
+                    d.closedAt ? stampDate(d.closedAt, s.language) : undefined
+                  }
+                >
+                  {differenceText(d.differencePaise)}
+                </Stamp>
+              </Row>
             </>
           ) : (
-            <Line
-              label={hi ? "बंद" : "Closed"}
-              value={hi ? "अभी नहीं" : "Not yet"}
-            />
+            <Row
+              style={{
+                justifyContent: "space-between",
+                paddingVertical: 12,
+                borderBottomWidth: 1,
+                borderColor: palette.rule,
+              }}
+            >
+              <Txt size={15} color={palette.ink2}>
+                {hi ? "बंद" : "Closed"}
+              </Txt>
+              <Badge tone="waiting">{hi ? "अभी नहीं" : "Not yet"}</Badge>
+            </Row>
           )}
           {d.keptPaise !== undefined && (
             <Line
@@ -792,95 +996,100 @@ export function DayReportView({
                   : "Late sales after close"
               }
               value={rupees(d.lateChangePaise)}
-              colour={colors.amber}
+              color={palette.waiting}
             />
           )}
           {d.checks.map((c, i) => (
-            <Line
+            <Entry
               key={i}
-              label={`${hi ? "गिनती" : "Count"} ${clock(c.at)} · ${c.name}: ${rupees(c.countedPaise)}`}
-              value={differenceText(c.differencePaise)}
-              colour={differenceColour(c.differencePaise)}
+              time={hhmm(c.at)}
+              title={`${hi ? "गिनती" : "Count"} · ${rupees(c.countedPaise)}`}
+              who={{ id: c.by, name: c.name }}
+              amount={differenceText(c.differencePaise)}
+              amountColor={differenceColour(c.differencePaise)}
             />
           ))}
-        </View>
+        </Section>
       ))}
       {r.movements.length > 0 && (
-        <View style={styles.panel}>
-          <Txt bold style={{ marginBottom: 6 }}>
-            {hi ? "दराज़ में डाले / निकाले पैसे" : "Cash put in and taken out"}
-          </Txt>
+        <Section
+          title={hi ? "दराज़ में डाले / निकाले पैसे" : "Cash put in and taken out"}
+        >
           {r.movements.map((m, i) => (
-            <Line
+            <Entry
               key={i}
-              label={`${clock(m.at)} · ${m.name} · ${m.reason}`}
-              value={`${m.kind === "introduced" ? "+" : "−"}${rupees(m.amountPaise)}`}
+              time={hhmm(m.at)}
+              title={m.reason}
+              who={{ name: m.name }}
+              amount={`${m.kind === "introduced" ? "+" : "−"}${rupees(m.amountPaise)}`}
             />
           ))}
-        </View>
+        </Section>
       )}
-      <View style={styles.panel}>
-        <Txt bold style={{ marginBottom: 6 }}>
-          {hi ? "स्टाफ़" : "Staff"}
-        </Txt>
+      <Section title={hi ? "स्टाफ़" : "Staff"}>
         {r.staff.map((p) => (
           <View
             key={p.id}
             style={{
-              paddingVertical: 8,
+              paddingVertical: 12,
               borderBottomWidth: 1,
-              borderColor: colors.line,
+              borderColor: palette.rule,
+              minHeight: 60,
             }}
           >
-            <Row style={{ justifyContent: "space-between" }}>
-              <Txt bold>{p.name}</Txt>
-              <Txt bold>{rupees(p.salesPaise)}</Txt>
+            <Row style={{ alignItems: "flex-start" }}>
+              <StaffMark id={p.id} name={p.name} size={32} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Txt bold>{p.name}</Txt>
+                <Txt size={14} color={palette.ink2}>
+                  {[
+                    `${p.bills} ${hi ? "बिल" : p.bills === 1 ? "bill" : "bills"}`,
+                    `${hi ? "नकद" : "cash"} ${rupees(p.cashInPaise)}`,
+                    `UPI ${rupees(p.upiInPaise)}`,
+                    p.creditGivenPaise
+                      ? `${hi ? "उधार" : "credit"} ${rupees(p.creditGivenPaise)}`
+                      : "",
+                    p.discountsPaise
+                      ? `${hi ? "छूट" : "discount"} ${rupees(p.discountsPaise)}`
+                      : "",
+                    p.refundsPaise
+                      ? `${hi ? "वापसी दी" : "refunded"} ${rupees(p.refundsPaise)}`
+                      : "",
+                    p.cancelled
+                      ? `${p.cancelled} ${hi ? "रद्द" : "cancelled"}`
+                      : "",
+                    p.cashOutPaise
+                      ? `${hi ? "निकाले" : "paid out"} ${rupees(p.cashOutPaise)}`
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </Txt>
+              </View>
+              <Amount value={rupees(p.salesPaise)} size={16} />
             </Row>
-            <Txt size={12} muted style={{ marginTop: 4 }}>
-              {[
-                `${p.bills} ${hi ? "बिल" : p.bills === 1 ? "bill" : "bills"}`,
-                `${hi ? "नकद" : "cash"} ${rupees(p.cashInPaise)}`,
-                `UPI ${rupees(p.upiInPaise)}`,
-                p.creditGivenPaise
-                  ? `${hi ? "उधार" : "credit"} ${rupees(p.creditGivenPaise)}`
-                  : "",
-                p.discountsPaise
-                  ? `${hi ? "छूट" : "discount"} ${rupees(p.discountsPaise)}`
-                  : "",
-                p.refundsPaise
-                  ? `${hi ? "वापसी दी" : "refunded"} ${rupees(p.refundsPaise)}`
-                  : "",
-                p.cancelled
-                  ? `${p.cancelled} ${hi ? "रद्द" : "cancelled"}`
-                  : "",
-                p.cashOutPaise
-                  ? `${hi ? "निकाले" : "paid out"} ${rupees(p.cashOutPaise)}`
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </Txt>
           </View>
         ))}
         {!r.staff.length && (
-          <Txt muted>{hi ? "कोई गतिविधि नहीं" : "No activity"}</Txt>
-        )}
-      </View>
-      {r.cancelled.length > 0 && (
-        <View style={styles.panel}>
-          <Txt bold style={{ marginBottom: 6 }}>
-            {hi ? "रद्द ऑर्डर" : "Cancelled orders"}
+          <Txt muted style={{ paddingVertical: 12 }}>
+            {hi ? "कोई गतिविधि नहीं" : "No activity"}
           </Txt>
+        )}
+      </Section>
+      {r.cancelled.length > 0 && (
+        <Section title={hi ? "रद्द ऑर्डर" : "Cancelled orders"}>
           {r.cancelled.map((o) => (
-            <Line
+            <Entry
               key={o.orderId}
-              label={`${clock(o.at)} · ${o.name} · ${o.reason}`}
-              value={rupees(o.valuePaise)}
+              time={hhmm(o.at)}
+              title={o.reason}
+              who={{ name: o.name }}
+              amount={rupees(o.valuePaise)}
             />
           ))}
-        </View>
+        </Section>
       )}
-      <View style={styles.panel}>
+      <View style={{ marginBottom: 24 }}>
         <Line
           label={hi ? "नया उधार" : "New credit given"}
           value={rupees(r.credit.givenPaise)}
@@ -889,18 +1098,23 @@ export function DayReportView({
           label={hi ? "उधार वापस मिला" : "Credit repaid"}
           value={rupees(r.credit.repaidPaise)}
         />
+        <TotalRule />
         <Line
           label={hi ? "ग्राहकों पर कुल बाकी" : "Owed by customers"}
           value={rupees(r.credit.outstandingPaise)}
           strong
         />
       </View>
-      <Txt muted size={11}>
+      <Txt muted size={13} style={{ marginBottom: 16 }}>
         {hi
           ? "दराज़ का अंतर साझा दराज़ का है; अपने आप किसी एक व्यक्ति पर नहीं आता।"
           : "A drawer difference belongs to the shared drawer. It does not by itself show who is responsible."}
       </Txt>
-      {!!error && <Txt style={{ color: colors.red }}>{error}</Txt>}
+      {!!error && (
+        <Txt color={palette.declined} style={{ marginBottom: 12 }}>
+          {error}
+        </Txt>
+      )}
       <Button
         icon="share-outline"
         onPress={() =>

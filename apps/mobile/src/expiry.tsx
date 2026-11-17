@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import {
   D,
   expiryRows,
@@ -12,16 +12,19 @@ import {
 } from "@counterwell/core";
 import { useSession, uid } from "./session";
 import {
+  Amount,
   Badge,
   Button,
   Empty,
   Field,
+  ListRow,
   Row,
+  Section,
   Sheet,
+  Stamp,
   Txt,
   useWord,
-  colors,
-  styles,
+  palette,
 } from "./ui";
 import { Page, useRun } from "./screens";
 
@@ -136,15 +139,16 @@ export function ExpiryScreen({
         ? action.batch.quantity
         : action.batch.quarantined,
     );
-  const rowStyle = [
-    styles.listRow,
-    {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      justifyContent: "space-between" as const,
-      gap: 12,
-    },
-  ];
+  const batchLine = (code: string, expiry: string) => (
+    <Row style={{ gap: 6, flexWrap: "wrap" }}>
+      <Txt size={13} num weight={600} color={palette.ink2}>
+        {code}
+      </Txt>
+      <Txt size={13} num color={palette.ink3}>
+        {shortDate(expiry)}
+      </Txt>
+    </Row>
+  );
   return (
     <Page
       title={hi ? "एक्सपायरी" : "Expiry"}
@@ -172,21 +176,19 @@ export function ExpiryScreen({
       ) : (
         <>
           {expired.length > 0 && (
-            <View
-              style={[
-                styles.panel,
-                { marginBottom: 22, backgroundColor: colors.amberBg },
-              ]}
-            >
-              <Txt size={12} style={{ color: colors.amber }}>
+            <View style={{ marginBottom: 32, gap: 6 }}>
+              <Txt size={14} color={palette.ink2}>
                 {hi
                   ? "एक्सपायर माल, लागत पर"
                   : "Expired stock still counted at cost"}
               </Txt>
-              <Txt size={30} bold style={{ marginTop: 6, color: colors.amber }}>
-                {rupees(sumCostValue(expired))}
-              </Txt>
-              <Txt size={12} style={{ marginTop: 6, color: colors.amber }}>
+              <Amount
+                value={rupees(sumCostValue(expired))}
+                size={40}
+                weight={700}
+                color={palette.declined}
+              />
+              <Txt size={14} color={palette.ink2}>
                 {hi
                   ? "इसे बिक्री से हटाएँ। यह बेचा नहीं जा सकता और स्टॉक की कीमत बढ़ाता है।"
                   : "It cannot be sold and it inflates your stock value. Take it off the shelf."}
@@ -196,93 +198,95 @@ export function ExpiryScreen({
           {groups.map((g) => {
             const list = rows.filter((r) => r.group === g);
             if (!list.length) return null;
+            const ink = g === "expired" ? palette.declined : palette.waiting;
             return (
-              <View key={g} style={{ marginBottom: 24 }}>
-                <Row
-                  style={{ justifyContent: "space-between", marginBottom: 8 }}
-                >
-                  <Txt bold size={17}>
-                    {title(g, hi)} · {list.length}
-                  </Txt>
-                  <Txt muted size={12}>
+              <Section
+                key={g}
+                title={`${title(g, hi)} · ${list.length}`}
+                action={
+                  <Txt size={13} num color={palette.ink2}>
                     {hi ? "लागत" : "At cost"} {rupees(sumCostValue(list))}
                   </Txt>
-                </Row>
+                }
+              >
                 {list.map((r) => (
-                  <Pressable
+                  <ListRow
                     key={r.batch.id}
-                    accessibilityRole="button"
                     onPress={() => open(r)}
-                    style={rowStyle}
-                  >
-                    <View style={{ flex: 1, gap: 4 }}>
-                      <Txt bold>
-                        {r.product.name} <Txt muted>{r.product.strength}</Txt>
+                    chevron={false}
+                    title={
+                      <Txt weight={600}>
+                        {r.product.name}{" "}
+                        <Txt color={palette.ink3}>{r.product.strength}</Txt>
                       </Txt>
-                      <Txt size={12} muted>
-                        {hi ? "बैच" : "Batch"} {r.batch.code} ·{" "}
-                        {shortDate(r.batch.expiry)}
-                      </Txt>
-                      <Txt
-                        size={12}
-                        style={{
-                          color: g === "expired" ? colors.red : colors.amber,
-                        }}
-                      >
-                        {left(r.daysLeft, hi)}
-                      </Txt>
-                    </View>
-                    <View style={{ alignItems: "flex-end", gap: 4 }}>
-                      <Badge warning={g !== "within90"}>
-                        {r.quantity} {r.product.baseUnit}
-                      </Badge>
-                      <Txt size={12}>
-                        {r.costValuePaise === undefined
-                          ? hi
-                            ? "लागत दर्ज नहीं"
-                            : "No cost recorded"
-                          : `${hi ? "लागत" : "Cost"} ${rupees(r.costValuePaise)}`}
-                      </Txt>
-                      <Txt size={11} muted>
-                        MRP {rupees(r.mrpValuePaise)}
-                      </Txt>
-                    </View>
-                  </Pressable>
+                    }
+                    detail={
+                      <View style={{ gap: 4 }}>
+                        {batchLine(r.batch.code, r.batch.expiry)}
+                        <Row style={{ gap: 8, flexWrap: "wrap" }}>
+                          {g === "expired" && (
+                            <Badge tone="declined">Expired</Badge>
+                          )}
+                          <Txt size={13} weight={600} color={ink}>
+                            {left(r.daysLeft, hi)}
+                          </Txt>
+                        </Row>
+                      </View>
+                    }
+                    trailing={
+                      <View style={{ alignItems: "flex-end", gap: 2 }}>
+                        <Txt size={14} num weight={600}>
+                          {r.quantity} {r.product.baseUnit}
+                        </Txt>
+                        {r.costValuePaise === undefined ? (
+                          <Txt size={13} color={palette.ink3}>
+                            {hi ? "लागत दर्ज नहीं" : "No cost recorded"}
+                          </Txt>
+                        ) : (
+                          <Txt size={14} num weight={500}>
+                            {`${hi ? "लागत" : "Cost"} ${rupees(r.costValuePaise)}`}
+                          </Txt>
+                        )}
+                        <Txt size={13} num color={palette.ink3}>
+                          MRP {rupees(r.mrpValuePaise)}
+                        </Txt>
+                      </View>
+                    }
+                  />
                 ))}
-              </View>
+              </Section>
             );
           })}
           {setAside.length > 0 && (
-            <View style={{ marginBottom: 24 }}>
-              <Txt bold size={17} style={{ marginBottom: 8 }}>
-                {hi
+            <Section
+              title={
+                hi
                   ? "अलग रखा हुआ, निपटारा बाकी"
-                  : "Set aside, waiting to be disposed"}
-              </Txt>
+                  : "Set aside, waiting to be disposed"
+              }
+            >
               {setAside.map((b) => {
                 const p = state.products[b.productId];
                 return (
-                  <Pressable
+                  <ListRow
                     key={b.id}
-                    accessibilityRole="button"
                     onPress={() => dispose(b)}
-                    style={rowStyle}
-                  >
-                    <View style={{ flex: 1, gap: 4 }}>
-                      <Txt bold>
-                        {p.name} <Txt muted>{p.strength}</Txt>
+                    chevron={false}
+                    title={
+                      <Txt weight={600}>
+                        {p.name} <Txt color={palette.ink3}>{p.strength}</Txt>
                       </Txt>
-                      <Txt size={12} muted>
-                        {hi ? "बैच" : "Batch"} {b.code} · {shortDate(b.expiry)}
-                      </Txt>
-                    </View>
-                    <Badge>
-                      {b.quarantined} {p.baseUnit}
-                    </Badge>
-                  </Pressable>
+                    }
+                    detail={batchLine(b.code, b.expiry)}
+                    trailing={
+                      <Badge tone="waiting">
+                        {b.quarantined} {p.baseUnit}
+                      </Badge>
+                    }
+                  />
                 );
               })}
-            </View>
+            </Section>
           )}
         </>
       )}
@@ -297,10 +301,18 @@ export function ExpiryScreen({
       >
         {action && (
           <>
-            <Txt bold>{action.name}</Txt>
-            <Txt muted style={{ marginBottom: 14 }}>
-              {hi ? "बैच" : "Batch"} {action.batch.code} ·{" "}
-              {shortDate(action.batch.expiry)}
+            <Txt weight={600}>{action.name}</Txt>
+            <Txt
+              size={14}
+              num
+              color={palette.ink2}
+              style={{ marginBottom: 14 }}
+            >
+              {hi ? "बैच" : "Batch"}{" "}
+              <Txt size={14} num weight={600}>
+                {action.batch.code}
+              </Txt>{" "}
+              · {shortDate(action.batch.expiry)}
               {action.mode === "quarantine"
                 ? ` · ${left(action.daysLeft, hi)}`
                 : ""}
@@ -321,7 +333,9 @@ export function ExpiryScreen({
               number
             />
             <Field label="Reason" value={reason} onChange={setReason} />
+            <View style={{ marginTop: 8 }} />
             <Button
+              variant={action.mode === "dispose" ? "danger" : "primary"}
               disabled={!valid}
               onPress={() =>
                 void run(async () => {

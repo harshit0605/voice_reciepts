@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Pressable, View } from "react-native";
 import { D } from "@counterwell/core";
 import { useSession } from "./session";
-import { Txt, Icon, Row, colors } from "./ui";
+import { Txt, Icon, Row, palette } from "./ui";
 
 /**
  * Billing is refused until the owner confirms the shop is ready. A new owner lands on an empty
@@ -16,15 +16,15 @@ export function ShopSetup({
   wide: boolean;
 }) {
   const s = useSession();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const state = s.state;
   if (!state || s.demo || state.settings.readinessConfirmed) return null;
   const hi = s.language === "hi";
   const pad = { paddingVertical: 12, paddingHorizontal: wide ? 32 : 20 };
   if (s.identity?.actor.role !== "owner")
     return (
-      <View style={[pad, { backgroundColor: colors.amberBg }]}>
-        <Txt size={13} style={{ color: colors.amber }}>
+      <View style={[pad, { backgroundColor: palette.waitingTint }]}>
+        <Txt size={14} weight={600} color={palette.waiting}>
           {hi
             ? "मालिक अभी दुकान सेट कर रहे हैं। तैयार होने पर बिल बनने लगेंगे।"
             : "The owner is still setting up the shop. Bills can be made once it is ready."}
@@ -71,45 +71,88 @@ export function ShopSetup({
     },
   ];
   const done = steps.filter((step) => step.done).length;
+  const next = steps.find((step) => !step.done);
   return (
     <View
       style={[
         pad,
         {
-          backgroundColor: "white",
+          backgroundColor: palette.paper,
           borderBottomWidth: 1,
-          borderColor: colors.line,
-          gap: 8,
+          borderColor: palette.rule,
+          paddingVertical: 4,
         },
       ]}
     >
-      <Pressable onPress={() => setOpen(!open)} accessibilityRole="button">
+      <Pressable
+        onPress={() => setOpen(!open)}
+        accessibilityRole="button"
+        style={{ minHeight: 48, justifyContent: "center" }}
+      >
         <Row style={{ justifyContent: "space-between" }}>
-          <Txt bold>
+          <Txt size={14} weight={600} style={{ flex: 1 }}>
             {hi
               ? `दुकान सेट करें · ${steps.length} में से ${done} हुए`
               : `Set up your shop · ${done} of ${steps.length} done`}
           </Txt>
-          <Icon name={open ? "chevron-up" : "chevron-down"} size={18} />
+          <Icon
+            name={open ? "chevron-up" : "chevron-down"}
+            size={18}
+            color={palette.ink3}
+          />
         </Row>
       </Pressable>
+      {!open && next && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => navigate(next.page)}
+          style={{ minHeight: 48, justifyContent: "center", paddingBottom: 4 }}
+        >
+          <Row style={{ gap: 8 }}>
+            <Txt size={14} color={palette.blue} weight={600} style={{ flex: 1 }}>
+              {hi ? next.hi : next.en}
+            </Txt>
+            <Icon name="chevron-forward" size={16} color={palette.blue} />
+          </Row>
+        </Pressable>
+      )}
       {open &&
         steps.map((step) => (
           <Pressable
             key={step.en}
             accessibilityRole="button"
             onPress={() => navigate(step.page)}
+            style={{
+              minHeight: 48,
+              justifyContent: "center",
+              borderTopWidth: 1,
+              borderColor: palette.rule,
+            }}
           >
             <Row style={{ gap: 10 }}>
               <Icon
                 name={step.done ? "checkmark-circle" : "ellipse-outline"}
-                color={step.done ? colors.accent : colors.muted}
+                color={step.done ? palette.paid : palette.ink3}
                 size={18}
               />
-              <Txt size={13} style={{ flex: 1 }} muted={step.done}>
+              <Txt
+                size={14}
+                style={{ flex: 1 }}
+                color={step.done ? palette.ink3 : palette.ink}
+              >
                 {hi ? step.hi : step.en}
               </Txt>
-              {!step.done && <Icon name="chevron-forward" size={14} />}
+              {step.done ? (
+                <Txt size={13} color={palette.paid} weight={600}>
+                  {hi ? "हो गया" : "Done"}
+                </Txt>
+              ) : (
+                <Icon
+                  name="chevron-forward"
+                  size={16}
+                  color={palette.ink3}
+                />
+              )}
             </Row>
           </Pressable>
         ))}

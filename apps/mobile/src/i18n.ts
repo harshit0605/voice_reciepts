@@ -11,7 +11,7 @@ export const labels = {
     reviews: "Reviews",
     administration: "Administration",
     newSale: "New sale",
-    search: "Search medicine, salt or barcode",
+    search: "Medicine, salt or barcode",
     all: "All medicines",
     lowStock: "Low stock",
     add: "Add",

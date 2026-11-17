@@ -288,7 +288,7 @@ export const hindiCopy: Record<string, string> = {
   "· Recorded stock": "· दर्ज स्टॉक",
   "· Revision": "· संशोधन",
   "· UPI": "· यूपीआई",
-  "+ Record opening batch count": "+ शुरुआती बैच गिनती दर्ज करें",
+  "Record opening batch count": "शुरुआती बैच गिनती दर्ज करें",
   "A difference belongs to the shared drawer, not automatically to a specific employee.":
     "अंतर साझा दराज़ का है। इसे अपने-आप किसी कर्मचारी की कमी नहीं माना जाता।",
   "Camera observations are review candidates. Employee alerts and automatic theft conclusions are disabled.":
@@ -574,4 +574,18 @@ export const hindiCopy: Record<string, string> = {
     "रिकॉर्डिंग समझ नहीं आई। फ़ोन के पास बोलकर फिर कोशिश करें, या दवाएँ टाइप करें।",
   "Couldn't read this bill. Try a clearer photo, or enter it by hand.":
     "यह बिल पढ़ा नहीं जा सका। साफ़ फ़ोटो लें, या हाथ से भरें।",
+  "Paid": "चुकता",
+  "Bill no.": "बिल नं.",
+  "No items yet": "अभी कोई दवा नहीं",
+  Expired: "एक्सपायर",
+  Schedule: "शेड्यूल",
+  Decrease: "घटाएँ",
+  Increase: "बढ़ाएँ",
+  "Search by name or phone": "नाम या फ़ोन से खोजें",
+  "No bills found": "कोई बिल नहीं मिला",
+  "No customers yet": "अभी कोई ग्राहक नहीं",
+  "No medicines found": "कोई दवा नहीं मिली",
+  "Shop backups": "दुकान के बैकअप",
+  "Bring back sales that only reached the shop PC.":
+    "जो बिक्री सिर्फ़ दुकान के कंप्यूटर तक पहुँची, उसे वापस लाएँ।",
 };

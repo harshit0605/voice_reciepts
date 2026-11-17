@@ -15,3 +15,9 @@ apps/mobile/ios/
 deploy/backups/
 apps/mobile/google-services.json
 apps/mobile/GoogleService-Info.plist
+
+# Impeccable design-run scratch (screenshots, decision page state); the surface brief and builder brief are kept.
+apps/mobile/.impeccable/review/
+apps/mobile/.impeccable/questions/
+apps/mobile/.impeccable/direction-payload.json
+apps/mobile/.impeccable/brief-body.md

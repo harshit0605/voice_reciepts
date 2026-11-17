@@ -1,7 +1,23 @@
 import React, { useState } from "react";
 import { Keyboard, View } from "react-native";
 import { useSession, uid } from "./session";
-import { Txt, Button, Field, Row, Chip, colors, styles, useWord } from "./ui";
+import {
+  Txt,
+  Button,
+  Field,
+  Row,
+  Chip,
+  Amount,
+  Badge,
+  Stamp,
+  ListRow,
+  TotalRule,
+  Icon,
+  palette,
+  stampDate,
+  useWord,
+} from "./ui";
+import { CountStepper } from "./drawer";
 import {
   rupees,
   balance,
@@ -116,63 +132,90 @@ export function ReturnForm({
   }
   return (
     <View style={{ gap: 12 }}>
-      <Txt muted>
-        {hi
-          ? `बिल ${invoice.number} · सिर्फ़ वही दर्ज करें जो ग्राहक ने सच में वापस किया। पैसा मालिक की मंज़ूरी के बाद ही लौटेगा।`
-          : `Bill ${invoice.number} · Enter only what the customer physically handed back. No money moves until the owner approves.`}
-      </Txt>
-      {waiting && (
-        <Txt style={{ color: colors.amber }}>
-          {hi
-            ? "इस बिल की एक वापसी पहले से मालिक के पास है।"
-            : "A return for this bill is already waiting for the owner."}
+      <View style={{ gap: 4 }}>
+        <Txt num size={22} weight={600}>
+          {`${hi ? "बिल" : "Bill"} ${invoice.number}`}
         </Txt>
+        <Txt size={14} color={palette.ink2}>
+          {hi
+            ? "सिर्फ़ वही दर्ज करें जो ग्राहक ने सच में वापस किया। पैसा मालिक की मंज़ूरी के बाद ही लौटेगा।"
+            : "Enter only what the customer physically handed back. No money moves until the owner approves."}
+        </Txt>
+      </View>
+      {waiting && (
+        <Row style={{ alignItems: "flex-start" }}>
+          <Badge tone="waiting">{hi ? "इंतज़ार" : "Waiting"}</Badge>
+          <Txt size={14} color={palette.waiting} style={{ flex: 1 }}>
+            {hi
+              ? "इस बिल की एक वापसी पहले से मालिक के पास है।"
+              : "A return for this bill is already waiting for the owner."}
+          </Txt>
+        </Row>
       )}
-      {rows.map((r) => {
-        const units = Object.keys(returnUnits(state, invoice, r.index));
-        const e = entries[r.index];
-        const set = (patch: Partial<typeof e>) =>
-          setEntries(
-            entries.map((x, i) => (i === r.index ? { ...x, ...patch } : x)),
+      <View style={{ borderTopWidth: 1, borderColor: palette.ruleStrong }}>
+        {rows.map((r) => {
+          const units = Object.keys(returnUnits(state, invoice, r.index));
+          const e = entries[r.index];
+          const set = (patch: Partial<typeof e>) =>
+            setEntries(
+              entries.map((x, i) => (i === r.index ? { ...x, ...patch } : x)),
+            );
+          return (
+            <View
+              key={r.index}
+              style={{
+                paddingVertical: 14,
+                gap: 8,
+                borderBottomWidth: 1,
+                borderColor: palette.rule,
+              }}
+            >
+              <Txt bold>
+                {r.line.name} {r.line.strength}
+              </Txt>
+              <Txt size={14} color={palette.ink2}>
+                <Txt size={14} weight={600} num color={palette.ink2}>
+                  {r.line.batchCode}
+                </Txt>
+                {` · ${hi ? "बेचा" : "Sold"} ${soldText(state, invoice, r.index, w)}`}
+                {r.returned.gt(0)
+                  ? ` · ${hi ? "पहले लौटे" : "already returned"} ${amountOf(r.returned.toFixed(), baseUnit(state, invoice, r.index), w)}`
+                  : ""}
+              </Txt>
+              {r.remaining.lte(0) ? (
+                <Txt muted>{hi ? "पूरा लौट चुका" : "Fully returned"}</Txt>
+              ) : (
+                <>
+                  <Row style={{ justifyContent: "space-between" }}>
+                    <Txt size={14} weight={500} color={palette.ink2}>
+                      {hi ? "लौटाई मात्रा" : "Quantity returned"}
+                    </Txt>
+                    <CountStepper
+                      label="Quantity returned"
+                      value={e.quantity}
+                      onChange={(quantity) => set({ quantity })}
+                      decimal
+                      hi={hi}
+                    />
+                  </Row>
+                  <Row style={{ flexWrap: "wrap" }}>
+                    {units.map((u) => (
+                      <Chip
+                        key={u}
+                        active={e.unit === u}
+                        onPress={() => set({ unit: u })}
+                      >
+                        {w(u)}
+                      </Chip>
+                    ))}
+                  </Row>
+                </>
+              )}
+            </View>
           );
-        return (
-          <View key={r.index} style={styles.listRow}>
-            <Txt bold>
-              {r.line.name} {r.line.strength} · {r.line.batchCode}
-            </Txt>
-            <Txt muted size={12} style={{ marginTop: 4, marginBottom: 8 }}>
-              {`${hi ? "बेचा" : "Sold"} ${soldText(state, invoice, r.index, w)}`}
-              {r.returned.gt(0)
-                ? ` · ${hi ? "पहले लौटे" : "already returned"} ${amountOf(r.returned.toFixed(), baseUnit(state, invoice, r.index), w)}`
-                : ""}
-            </Txt>
-            {r.remaining.lte(0) ? (
-              <Txt muted>{hi ? "पूरा लौट चुका" : "Fully returned"}</Txt>
-            ) : (
-              <>
-                <Field
-                  label="Quantity returned"
-                  value={e.quantity}
-                  onChange={(quantity) => set({ quantity })}
-                  number
-                />
-                <Row style={{ flexWrap: "wrap" }}>
-                  {units.map((u) => (
-                    <Chip
-                      key={u}
-                      active={e.unit === u}
-                      onPress={() => set({ unit: u })}
-                    >
-                      {w(u)}
-                    </Chip>
-                  ))}
-                </Row>
-              </>
-            )}
-          </View>
-        );
-      })}
-      <Txt size={12} bold muted>
+        })}
+      </View>
+      <Txt size={14} weight={600} color={palette.ink2} style={{ marginTop: 12 }}>
         {hi ? "वापसी का कारण" : "Why it came back"}
       </Txt>
       <Row style={{ flexWrap: "wrap" }}>
@@ -184,15 +227,22 @@ export function ReturnForm({
       </Row>
       <Field label="Other reason" value={reason} onChange={setReason} />
       {quote && (
-        <View style={styles.panel}>
-          <Txt muted size={12}>
-            {hi ? "ग्राहक को लौटाना है" : "Refund to the customer"}
-          </Txt>
-          <Txt size={28} bold style={{ marginTop: 6 }}>
-            {rupees(quote.payablePaise)}
-          </Txt>
+        <View style={{ gap: 4 }}>
+          <TotalRule />
+          <Row
+            style={{
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginTop: 8,
+            }}
+          >
+            <Txt size={14} weight={500} color={palette.ink2} style={{ flex: 1 }}>
+              {hi ? "ग्राहक को लौटाना है" : "Refund to the customer"}
+            </Txt>
+            <Amount value={rupees(quote.payablePaise)} size={40} weight={700} />
+          </Row>
           {quote.creditReductionPaise > 0 && (
-            <Txt size={12} style={{ marginTop: 6, color: colors.amber }}>
+            <Txt size={14} color={palette.waiting}>
               {hi
                 ? `${rupees(quote.creditReductionPaise)} ग्राहक के उधार से कटेगा`
                 : `${rupees(quote.creditReductionPaise)} comes off what the customer owes`}
@@ -200,14 +250,16 @@ export function ReturnForm({
           )}
         </View>
       )}
-      {!!problem && <Txt style={{ color: colors.red }}>{problem}</Txt>}
-      {!!error && <Txt style={{ color: colors.red }}>{error}</Txt>}
-      <Button
-        disabled={busy || !quote || reason.trim().length < 3 || waiting}
-        onPress={() => void submit()}
-      >
-        {hi ? "मालिक से मंज़ूरी माँगें" : "Ask the owner to approve"}
-      </Button>
+      {!!problem && <Txt color={palette.declined}>{problem}</Txt>}
+      {!!error && <Txt color={palette.declined}>{error}</Txt>}
+      <View style={{ marginTop: 12 }}>
+        <Button
+          disabled={busy || !quote || reason.trim().length < 3 || waiting}
+          onPress={() => void submit()}
+        >
+          {hi ? "मालिक से मंज़ूरी माँगें" : "Ask the owner to approve"}
+        </Button>
+      </View>
     </View>
   );
 }
@@ -267,29 +319,56 @@ export function RefundForm({
   const payable = quote?.payablePaise ?? 0;
   return (
     <View style={{ gap: 12 }}>
-      <Txt bold>{`${hi ? "बिल" : "Bill"} ${invoice.number}`}</Txt>
-      {lines.map((l) => (
-        <Txt key={l.index}>
-          {invoice.lines[l.index]?.name} {invoice.lines[l.index]?.strength} ·{" "}
-          {amountOf(l.quantity, baseUnit(state, invoice, l.index), w)}
+      <Row style={{ justifyContent: "space-between" }}>
+        <Txt num size={22} weight={600}>
+          {`${hi ? "बिल" : "Bill"} ${invoice.number}`}
         </Txt>
-      ))}
+        <Stamp
+          tone="approved"
+          size="sm"
+          date={
+            approval.decidedAt ? stampDate(approval.decidedAt, s.language) : undefined
+          }
+        >
+          {hi ? "मंज़ूर" : "Approved"}
+        </Stamp>
+      </Row>
+      <View style={{ borderTopWidth: 1, borderColor: palette.ruleStrong }}>
+        {lines.map((l) => (
+          <ListRow
+            key={l.index}
+            title={`${invoice.lines[l.index]?.name ?? ""} ${invoice.lines[l.index]?.strength ?? ""}`}
+            trailing={
+              <Txt num weight={600}>
+                {amountOf(l.quantity, baseUnit(state, invoice, l.index), w)}
+              </Txt>
+            }
+          />
+        ))}
+      </View>
       {quote && (
-        <View style={styles.panel}>
-          <Txt muted size={12}>
-            {payable
-              ? hi
-                ? "ग्राहक को लौटाएँ"
-                : "Hand back to the customer"
-              : hi
-                ? "कुछ नहीं लौटाना"
-                : "Nothing to hand back"}
-          </Txt>
-          <Txt size={30} bold style={{ marginTop: 6 }}>
-            {rupees(payable)}
-          </Txt>
+        <View style={{ gap: 4 }}>
+          <TotalRule />
+          <Row
+            style={{
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginTop: 8,
+            }}
+          >
+            <Txt size={14} weight={500} color={palette.ink2} style={{ flex: 1 }}>
+              {payable
+                ? hi
+                  ? "ग्राहक को लौटाएँ"
+                  : "Hand back to the customer"
+                : hi
+                  ? "कुछ नहीं लौटाना"
+                  : "Nothing to hand back"}
+            </Txt>
+            <Amount value={rupees(payable)} size={40} weight={700} />
+          </Row>
           {quote.creditReductionPaise > 0 && (
-            <Txt size={12} style={{ marginTop: 6, color: colors.amber }}>
+            <Txt size={14} color={palette.waiting}>
               {hi
                 ? `${rupees(quote.creditReductionPaise)} ग्राहक के उधार से कटेगा`
                 : `${rupees(quote.creditReductionPaise)} comes off what the customer owes`}
@@ -298,7 +377,7 @@ export function RefundForm({
         </View>
       )}
       {payable > 0 && (
-        <Row>
+        <Row style={{ marginTop: 8 }}>
           <Chip active={method === "cash"} onPress={() => setMethod("cash")}>
             {hi ? "नकद" : "Cash"}
           </Chip>
@@ -314,28 +393,30 @@ export function RefundForm({
           onChange={setRef}
         />
       )}
-      <Txt muted size={12}>
+      <Txt size={14} color={palette.ink2}>
         {hi
           ? "लौटाया गया सामान अलग रखा जाता है और मालिक की जाँच के बाद ही फिर बिकेगा।"
           : "Returned stock is kept aside and goes back on sale only after the owner checks it."}
       </Txt>
-      {!!problem && <Txt style={{ color: colors.red }}>{problem}</Txt>}
-      {!!error && <Txt style={{ color: colors.red }}>{error}</Txt>}
-      <Button
-        disabled={
-          busy || !quote || (method === "upi" && payable > 0 && !ref.trim())
-        }
-        onPress={() => void record()}
-        icon="checkmark"
-      >
-        {payable
-          ? hi
-            ? `${rupees(payable)} लौटाया · दर्ज करें`
-            : `${rupees(payable)} given back · Record`
-          : hi
-            ? "वापसी दर्ज करें"
-            : "Record the return"}
-      </Button>
+      {!!problem && <Txt color={palette.declined}>{problem}</Txt>}
+      {!!error && <Txt color={palette.declined}>{error}</Txt>}
+      <View style={{ marginTop: 12 }}>
+        <Button
+          disabled={
+            busy || !quote || (method === "upi" && payable > 0 && !ref.trim())
+          }
+          onPress={() => void record()}
+          icon="checkmark"
+        >
+          {payable
+            ? hi
+              ? `${rupees(payable)} लौटाया · दर्ज करें`
+              : `${rupees(payable)} given back · Record`
+            : hi
+              ? "वापसी दर्ज करें"
+              : "Record the return"}
+        </Button>
+      </View>
     </View>
   );
 }
@@ -402,46 +483,79 @@ export function CustomerPicker({
     }
   }
   return (
-    <View style={{ gap: 10 }}>
-      <Txt size={12} muted>
+    <View>
+      <Txt size={14} weight={600} color={palette.ink2} style={{ marginBottom: 4 }}>
         {hi ? "ग्राहक" : "Customer"}
       </Txt>
-      <Row style={{ flexWrap: "wrap" }}>
-        <Chip active={!value} onPress={() => onChange("")}>
-          {hi ? "सामान्य ग्राहक" : "Walk-in"}
-        </Chip>
-        {chosen && <Chip active>{chosen.name}</Chip>}
-      </Row>
-      {chosen && owes > 0 && (
-        <Txt size={12} style={{ color: colors.amber }}>
-          {hi ? `पहले से बाकी ${rupees(owes)}` : `Already owes ${rupees(owes)}`}
-        </Txt>
-      )}
+      <View style={{ borderTopWidth: 1, borderColor: palette.ruleStrong }}>
+        <ListRow
+          title={hi ? "सामान्य ग्राहक" : "Walk-in"}
+          onPress={() => onChange("")}
+          chevron={false}
+          trailing={
+            !value ? <Icon name="checkmark" size={22} color={palette.blue} /> : undefined
+          }
+        />
+        {chosen && (
+          <ListRow
+            title={chosen.name}
+            detail={
+              owes > 0 ? (
+                <Txt size={14} color={palette.waiting}>
+                  {hi ? "पहले से बाकी" : "Already owes"}
+                </Txt>
+              ) : undefined
+            }
+            trailing={
+              <Row style={{ gap: 8 }}>
+                {owes > 0 && (
+                  <Amount value={rupees(owes)} color={palette.waiting} />
+                )}
+                <Icon name="checkmark" size={22} color={palette.blue} />
+              </Row>
+            }
+          />
+        )}
+      </View>
       {!adding ? (
-        <>
+        <View style={{ marginTop: 16 }}>
           <Field
             value={query}
             onChange={setQuery}
             placeholder="Find customer by name or phone"
           />
           {(q || matches.length <= 6) && matches.length > 0 && (
-            <Row style={{ flexWrap: "wrap" }}>
-              {matches.map((c) => (
-                <Chip
-                  key={c.id}
-                  onPress={() => {
-                    onChange(c.id);
-                    setQuery("");
-                  }}
-                >
-                  {c.phone ? `${c.name} · ${c.phone.slice(-4)}` : c.name}
-                </Chip>
-              ))}
-            </Row>
+            <View
+              style={{
+                borderTopWidth: 1,
+                borderColor: palette.rule,
+                marginBottom: 16,
+              }}
+            >
+              {matches.map((c) => {
+                const dues = balance(state, c.id);
+                return (
+                  <ListRow
+                    key={c.id}
+                    title={c.name}
+                    detail={c.phone || undefined}
+                    chevron={false}
+                    trailing={
+                      dues > 0 ? (
+                        <Amount value={rupees(dues)} color={palette.waiting} />
+                      ) : undefined
+                    }
+                    onPress={() => {
+                      onChange(c.id);
+                      setQuery("");
+                    }}
+                  />
+                );
+              })}
+            </View>
           )}
           <Button
             secondary
-            small
             icon="person-add-outline"
             onPress={() => {
               setAdding(true);
@@ -451,29 +565,34 @@ export function CustomerPicker({
           >
             {hi ? "नया ग्राहक" : "New customer"}
           </Button>
-        </>
+        </View>
       ) : (
-        <View style={styles.panel}>
+        <View style={{ marginTop: 24 }}>
+          <Txt size={19} weight={600} style={{ marginBottom: 12 }}>
+            {hi ? "नया ग्राहक" : "New customer"}
+          </Txt>
           <Field label="Customer name" value={name} onChange={setName} />
           <Field label="Phone" value={phone} onChange={setPhone} number />
-          {!!error && <Txt style={{ color: colors.red }}>{error}</Txt>}
-          <Row>
+          {!!error && (
+            <Txt color={palette.declined} style={{ marginBottom: 12 }}>
+              {error}
+            </Txt>
+          )}
+          <Button
+            disabled={busy || !name.trim()}
+            onPress={() => void add()}
+          >
+            {busy
+              ? hi
+                ? "सेव हो रहा है…"
+                : "Saving…"
+              : hi
+                ? "सेव करें"
+                : "Save customer"}
+          </Button>
+          <View style={{ marginTop: 16, alignItems: "flex-end" }}>
             <Button
-              small
-              disabled={busy || !name.trim()}
-              onPress={() => void add()}
-            >
-              {busy
-                ? hi
-                  ? "सेव हो रहा है…"
-                  : "Saving…"
-                : hi
-                  ? "सेव करें"
-                  : "Save customer"}
-            </Button>
-            <Button
-              small
-              secondary
+              variant="quiet"
               onPress={() => {
                 Keyboard.dismiss();
                 setAdding(false);
@@ -481,7 +600,7 @@ export function CustomerPicker({
             >
               {hi ? "रद्द" : "Cancel"}
             </Button>
-          </Row>
+          </View>
         </View>
       )}
     </View>
@@ -542,7 +661,7 @@ export function useAttention(): Attention[] {
         key: "approvals",
         page: "reviews",
         text: hi
-          ? `${waiting} अनुरोध आपकी मंज़ूरी का इंतज़ार कर रहे हैं · देखें`
+          ? `${waiting} अनुरोध आपकी मंज़ूरी का इंतज़ार कर ${waiting === 1 ? "रहा है" : "रहे हैं"} · देखें`
           : `${waiting === 1 ? "A request is" : `${waiting} requests are`} waiting for your approval · Review`,
       });
   }

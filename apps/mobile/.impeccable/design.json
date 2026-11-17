@@ -1,0 +1,542 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-17T13:36:00.839060+00:00",
+  "title": "Design System: Counterwell",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Register Paper",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#14171C",
+          "#2A2F38",
+          "#495160",
+          "#68707D",
+          "#8C93A0",
+          "#B4C2D8",
+          "#DCE3EE",
+          "#F1F4F8"
+        ]
+      },
+      "desk": {
+        "role": "neutral",
+        "displayName": "Desk",
+        "canonical": "#F1F4F8",
+        "tonalRamp": [
+          "#14171C",
+          "#2A2F38",
+          "#495160",
+          "#68707D",
+          "#8C93A0",
+          "#B4C2D8",
+          "#DCE3EE",
+          "#F1F4F8"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Black Ink",
+        "canonical": "#14171C",
+        "tonalRamp": [
+          "#14171C",
+          "#2A2F38",
+          "#495160",
+          "#68707D",
+          "#8C93A0",
+          "#B4C2D8",
+          "#DCE3EE",
+          "#F1F4F8"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink 2",
+        "canonical": "#495160",
+        "tonalRamp": [
+          "#14171C",
+          "#2A2F38",
+          "#495160",
+          "#68707D",
+          "#8C93A0",
+          "#B4C2D8",
+          "#DCE3EE",
+          "#F1F4F8"
+        ]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Ink 3",
+        "canonical": "#68707D",
+        "tonalRamp": [
+          "#14171C",
+          "#2A2F38",
+          "#495160",
+          "#68707D",
+          "#8C93A0",
+          "#B4C2D8",
+          "#DCE3EE",
+          "#F1F4F8"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Pale-Blue Ruling",
+        "canonical": "#DCE3EE",
+        "tonalRamp": [
+          "#14171C",
+          "#2A2F38",
+          "#495160",
+          "#68707D",
+          "#8C93A0",
+          "#B4C2D8",
+          "#DCE3EE",
+          "#F1F4F8"
+        ]
+      },
+      "rule-strong": {
+        "role": "neutral",
+        "displayName": "Strong Ruling",
+        "canonical": "#B4C2D8",
+        "tonalRamp": [
+          "#14171C",
+          "#2A2F38",
+          "#495160",
+          "#68707D",
+          "#8C93A0",
+          "#B4C2D8",
+          "#DCE3EE",
+          "#F1F4F8"
+        ]
+      },
+      "margin-red": {
+        "role": "tertiary",
+        "displayName": "Margin Red",
+        "canonical": "#E0564A",
+        "tonalRamp": [
+          "#5A1A14",
+          "#962D24",
+          "#E0564A",
+          "#E77369",
+          "#ED948C",
+          "#F2B4AE",
+          "#F8D5D2",
+          "#FCEDEB"
+        ]
+      },
+      "ballpoint-blue": {
+        "role": "primary",
+        "displayName": "Ballpoint Blue",
+        "canonical": "#1F3FAA",
+        "tonalRamp": [
+          "#0B1A4D",
+          "#132A73",
+          "#1F3FAA",
+          "#3A5BC4",
+          "#6A84D6",
+          "#9DB0E6",
+          "#C9D4F2",
+          "#E9EEFB"
+        ]
+      },
+      "ballpoint-blue-pressed": {
+        "role": "primary",
+        "displayName": "Pressed Blue",
+        "canonical": "#17318A",
+        "tonalRamp": [
+          "#0B1A4D",
+          "#132A73",
+          "#1F3FAA",
+          "#3A5BC4",
+          "#6A84D6",
+          "#9DB0E6",
+          "#C9D4F2",
+          "#E9EEFB"
+        ]
+      },
+      "blue-tint": {
+        "role": "primary",
+        "displayName": "Blue Tint",
+        "canonical": "#E9EEFB",
+        "tonalRamp": [
+          "#0B1A4D",
+          "#132A73",
+          "#1F3FAA",
+          "#3A5BC4",
+          "#6A84D6",
+          "#9DB0E6",
+          "#C9D4F2",
+          "#E9EEFB"
+        ]
+      },
+      "approved-violet": {
+        "role": "secondary",
+        "displayName": "Approved Violet",
+        "canonical": "#5B3FB2",
+        "tonalRamp": [
+          "#26184F",
+          "#3D2A80",
+          "#5B3FB2",
+          "#7760C6",
+          "#9A88D6",
+          "#BDB0E5",
+          "#DCD4F2",
+          "#F0ECFA"
+        ]
+      },
+      "approved-tint": {
+        "role": "secondary",
+        "displayName": "Approved Tint",
+        "canonical": "#F0ECFA",
+        "tonalRamp": [
+          "#26184F",
+          "#3D2A80",
+          "#5B3FB2",
+          "#7760C6",
+          "#9A88D6",
+          "#BDB0E5",
+          "#DCD4F2",
+          "#F0ECFA"
+        ]
+      },
+      "declined-red": {
+        "role": "secondary",
+        "displayName": "Declined Red",
+        "canonical": "#BF3428",
+        "tonalRamp": [
+          "#4F140F",
+          "#83221A",
+          "#BF3428",
+          "#D2574C",
+          "#E0827A",
+          "#EBAAA4",
+          "#F5D0CC",
+          "#FCEBE9"
+        ]
+      },
+      "declined-tint": {
+        "role": "secondary",
+        "displayName": "Declined Tint",
+        "canonical": "#FCEBE9",
+        "tonalRamp": [
+          "#4F140F",
+          "#83221A",
+          "#BF3428",
+          "#D2574C",
+          "#E0827A",
+          "#EBAAA4",
+          "#F5D0CC",
+          "#FCEBE9"
+        ]
+      },
+      "paid-green": {
+        "role": "secondary",
+        "displayName": "Paid Green",
+        "canonical": "#16774A",
+        "tonalRamp": [
+          "#09331F",
+          "#0F5535",
+          "#16774A",
+          "#3A9468",
+          "#68B08C",
+          "#98CAB0",
+          "#C6E3D3",
+          "#E5F3EB"
+        ]
+      },
+      "paid-tint": {
+        "role": "secondary",
+        "displayName": "Paid Tint",
+        "canonical": "#E5F3EB",
+        "tonalRamp": [
+          "#09331F",
+          "#0F5535",
+          "#16774A",
+          "#3A9468",
+          "#68B08C",
+          "#98CAB0",
+          "#C6E3D3",
+          "#E5F3EB"
+        ]
+      },
+      "waiting-amber": {
+        "role": "secondary",
+        "displayName": "Waiting Amber",
+        "canonical": "#935600",
+        "tonalRamp": [
+          "#3D2400",
+          "#663C00",
+          "#935600",
+          "#B07418",
+          "#C99848",
+          "#DDBB80",
+          "#EFDAB3",
+          "#FDF1DC"
+        ]
+      },
+      "waiting-tint": {
+        "role": "secondary",
+        "displayName": "Waiting Tint",
+        "canonical": "#FDF1DC",
+        "tonalRamp": [
+          "#3D2400",
+          "#663C00",
+          "#935600",
+          "#B07418",
+          "#C99848",
+          "#DDBB80",
+          "#EFDAB3",
+          "#FDF1DC"
+        ]
+      },
+      "scrim": {
+        "role": "neutral",
+        "displayName": "Sheet Scrim",
+        "canonical": "rgba(16, 22, 34, 0.42)"
+      },
+      "staff-ink-magenta": {
+        "role": "tertiary",
+        "displayName": "Staff Ink Magenta",
+        "canonical": "#9C2F6C"
+      },
+      "staff-ink-teal": {
+        "role": "tertiary",
+        "displayName": "Staff Ink Teal",
+        "canonical": "#0E6E7C"
+      }
+    },
+    "typographyMeta": {
+      "total": {
+        "displayName": "Total",
+        "purpose": "The big money figure; paise at 52% via Amount."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Screen titles."
+      },
+      "sheet-title": {
+        "displayName": "Sheet title",
+        "purpose": "Bottom-sheet headers and bill numbers."
+      },
+      "heading": {
+        "displayName": "Heading",
+        "purpose": "Section headings on a rule-strong underline."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Reading text."
+      },
+      "row-title": {
+        "displayName": "Row title",
+        "purpose": "Entry and ListRow titles, button labels."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels, row detail, chips, banners."
+      },
+      "small": {
+        "displayName": "Small",
+        "purpose": "Time column, hints, errors, sync text."
+      },
+      "micro": {
+        "displayName": "Micro",
+        "purpose": "Badges, stamp dates, tab labels; the 12sp floor."
+      }
+    },
+    "shadows": [
+      {
+        "name": "sheet-lift",
+        "value": "0 6px 18px rgba(15,26,46,0.12) (Android elevation 6)",
+        "purpose": "Bottom sheets only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "stamp-land",
+        "value": "340ms, Easing.out(exp), scale 1.7 to 1, opacity 0 to 1",
+        "purpose": "A decision stamp coming down; once; skipped under Reduce Motion."
+      },
+      {
+        "name": "press",
+        "value": "scale 0.985 / opacity 0.65",
+        "purpose": "Button press feedback."
+      },
+      {
+        "name": "sheet-slide",
+        "value": "native Modal slide; touches ignored for 400ms",
+        "purpose": "Bottom sheets."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide",
+        "value": "768dp",
+        "purpose": "Sidebar (248dp) replaces the bottom tab bar."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Filled ballpoint blue; one per screen region.",
+      "html": "<button class=\"ds-btn-primary\">Review &amp; collect</button>",
+      "css": ".ds-btn-primary{font-family:'Counterwell Anek','Anek Devanagari',sans-serif;font-weight:600;font-size:16px;color:#fff;background:#1F3FAA;border:0;border-radius:10px;min-height:52px;padding:0 20px;transition:transform .1s,background .1s}.ds-btn-primary:hover{background:#17318A}.ds-btn-primary:active{background:#17318A;transform:scale(.985)}.ds-btn-primary:focus-visible{outline:2px solid #1F3FAA;outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Blue on tint, for the second action.",
+      "html": "<button class=\"ds-btn-secondary\">Print receipt</button>",
+      "css": ".ds-btn-secondary{font-family:'Counterwell Anek','Anek Devanagari',sans-serif;font-weight:600;font-size:16px;color:#1F3FAA;background:#E9EEFB;border:0;border-radius:10px;min-height:52px;padding:0 20px}.ds-btn-secondary:hover,.ds-btn-secondary:active{opacity:.65}.ds-btn-secondary:focus-visible{outline:2px solid #1F3FAA;outline-offset:2px}"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Red outline, no fill; always set apart from other buttons.",
+      "html": "<button class=\"ds-btn-danger\">Sign out</button>",
+      "css": ".ds-btn-danger{font-family:'Counterwell Anek','Anek Devanagari',sans-serif;font-weight:600;font-size:16px;color:#BF3428;background:transparent;border:1px solid #BF3428;border-radius:10px;min-height:52px;padding:0 20px}.ds-btn-danger:hover,.ds-btn-danger:active{opacity:.65}.ds-btn-danger:focus-visible{outline:2px solid #BF3428;outline-offset:2px}"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Labelled input; focus thickens the border to 2px blue.",
+      "html": "<label class=\"ds-field\"><span>Username</span><input placeholder=\"shopowner\"></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:6px;font-family:'Counterwell Anek','Anek Devanagari',sans-serif}.ds-field span{font-size:14px;font-weight:500;color:#495160}.ds-field input{font-family:inherit;font-size:17px;color:#14171C;background:#fff;border:1px solid #B4C2D8;border-radius:10px;min-height:52px;padding:10px 14px}.ds-field input::placeholder{color:#68707D}.ds-field input:focus-visible{outline:none;border:2px solid #1F3FAA;padding:10px 13px}"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "A choice among a few; selected is filled blue.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip ds-chip-on\">All medicines</button><button class=\"ds-chip\">Low stock</button></div>",
+      "css": ".ds-chips{display:flex;gap:8px}.ds-chip{font-family:'Counterwell Anek','Anek Devanagari',sans-serif;font-size:14px;font-weight:500;color:#495160;background:#fff;border:1px solid #B4C2D8;border-radius:10px;min-height:40px;padding:0 14px}.ds-chip:hover{opacity:.75}.ds-chip:focus-visible{outline:2px solid #1F3FAA;outline-offset:2px}.ds-chip-on{background:#1F3FAA;border-color:#1F3FAA;color:#fff;font-weight:600}"
+    },
+    {
+      "name": "Stamp",
+      "kind": "custom",
+      "refersTo": "stamp",
+      "description": "A decision, inked: double border, capitals, date line, -4deg tilt. Decision moments only.",
+      "html": "<div class=\"ds-stamp\"><div class=\"ds-stamp-in\"><b>Paid</b><small>17 NOV &#8729; 18:44</small></div></div>",
+      "css": ".ds-stamp{display:inline-block;border:2px solid #16774A;border-radius:6px;padding:2.5px;transform:rotate(-4deg);font-family:'Counterwell Anek','Anek Devanagari',sans-serif;color:#16774A;animation:ds-land .34s cubic-bezier(.16,1,.3,1)}.ds-stamp-in{border:1px solid #16774A;border-radius:3px;padding:6px 16px;text-align:center;text-transform:uppercase}.ds-stamp b{display:block;font-size:22px;font-weight:700;letter-spacing:1.76px}.ds-stamp small{display:block;font-size:12px;font-weight:600;letter-spacing:.6px;font-variant-numeric:tabular-nums}@keyframes ds-land{from{opacity:0;transform:rotate(-4deg) scale(1.7)}}@media (prefers-reduced-motion:reduce){.ds-stamp{animation:none}}"
+    },
+    {
+      "name": "Register Entry",
+      "kind": "custom",
+      "refersTo": "entry",
+      "description": "Time column, red margin rule, title, staff mark, amount on the right edge.",
+      "html": "<div class=\"ds-entry\"><span class=\"ds-entry-time\">12:49</span><div class=\"ds-entry-body\"><span class=\"ds-entry-title\">Bill 000014</span><span class=\"ds-mark\">RK</span><span class=\"ds-entry-amt\">&#8377;145.00</span><span class=\"ds-entry-detail\">Cash &#8729; 2 items</span></div></div>",
+      "css": ".ds-entry{display:flex;min-height:60px;border-bottom:1px solid #DCE3EE;font-family:'Counterwell Anek','Anek Devanagari',sans-serif}.ds-entry:hover{background:#F1F4F8}.ds-entry-time{width:52px;padding-top:15px;font-size:13px;font-weight:500;color:#68707D;font-variant-numeric:tabular-nums}.ds-entry-body{flex:1;border-left:1px solid #E0564A;padding:12px 0 12px 12px;display:flex;flex-wrap:wrap;align-items:flex-start;gap:4px 12px}.ds-entry-title{flex:1;font-size:16px;font-weight:600;color:#14171C}.ds-mark{width:24px;height:24px;border:1.5px solid #9C2F6C;border-radius:50%;color:#9C2F6C;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;box-sizing:border-box}.ds-entry-amt{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;color:#14171C}.ds-entry-detail{flex-basis:100%;font-size:14px;color:#495160}"
+    },
+    {
+      "name": "Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Small inked state label for list rows.",
+      "html": "<span class=\"ds-badge\">Rx</span> <span class=\"ds-badge ds-badge-wait\">Waiting</span>",
+      "css": ".ds-badge{display:inline-block;font-family:'Counterwell Anek','Anek Devanagari',sans-serif;font-size:12px;font-weight:600;color:#1F3FAA;background:#E9EEFB;border:1px solid #1F3FAA;border-radius:6px;padding:2px 7px;font-variant-numeric:tabular-nums}.ds-badge-wait{color:#935600;background:#FDF1DC;border-color:#935600}"
+    },
+    {
+      "name": "Phone Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab-active",
+      "description": "Five tabs; the active one gets a blue-tint pill and blue label.",
+      "html": "<nav class=\"ds-tabs\"><a class=\"ds-tab ds-tab-on\"><i></i>Sell</a><a class=\"ds-tab\"><i></i>Orders</a><a class=\"ds-tab\"><i></i>Stock</a><a class=\"ds-tab\"><i></i>More</a></nav>",
+      "css": ".ds-tabs{display:flex;background:#fff;border-top:1px solid #DCE3EE;padding:6px 0 8px;font-family:'Counterwell Anek','Anek Devanagari',sans-serif}.ds-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-height:52px;font-size:12px;font-weight:500;color:#495160;cursor:pointer}.ds-tab i{width:56px;height:30px;border-radius:15px;display:block;background:transparent}.ds-tab:hover i{background:#F1F4F8}.ds-tab:focus-visible{outline:2px solid #1F3FAA}.ds-tab-on{color:#1F3FAA;font-weight:600}.ds-tab-on i{background:#E9EEFB}"
+    },
+    {
+      "name": "Current Sale Bar",
+      "kind": "custom",
+      "refersTo": "sale-bar",
+      "description": "Heavy ink bar pinned above the phone tabs with item count and total.",
+      "html": "<button class=\"ds-sale\"><span><b>Current sale</b><small>2 items</small></span><span class=\"ds-sale-amt\">&#8377;148<small>.50</small></span></button>",
+      "css": ".ds-sale{width:100%;min-height:64px;display:flex;justify-content:space-between;align-items:center;padding:0 20px;background:#14171C;color:#fff;border:0;font-family:'Counterwell Anek','Anek Devanagari',sans-serif;text-align:left}.ds-sale:hover,.ds-sale:active{background:#242932}.ds-sale b{display:block;font-size:16px;font-weight:600}.ds-sale small{font-size:14px;color:#D5DBE6}.ds-sale-amt{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}.ds-sale-amt small{font-size:12px;font-weight:500;color:#fff}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Register & Stamp",
+    "overview": "Counterwell is the shop's paper register, made live. Every screen is a page of cool white register paper. Pale-blue ruling is the grid and the only divider. Where a page records dated events, a 1px red margin rule runs down it. Text is black ink. Ballpoint blue is the only action colour. Decisions don't sit in coloured boxes: they land as rubber stamps in their own inks, with a date line under the word. Each person has their own ink too, in the circled initials beside every entry they made.\n\nThe density is a ledger's, not a dashboard's. Lists are ruled rows that run edge to edge inside a 20dp gutter. Amounts are locked to one right edge in tabular figures. Size sets the hierarchy, not containers: the big total is just a 40sp figure with smaller paise, with no box around it. Bordered panels exist but are used sparingly. One family, Anek Devanagari (bundled with patched vertical metrics as \"Counterwell Anek\"), sets Hindi and English with matched forms, so both languages get the same quality.\n\nThe build turns down the card-stack SaaS dashboard and the floating + button. Nothing floats over the page except bottom sheets. The current sale is a heavy ink bar pinned above the tabs, not a FAB.",
+    "keyCharacteristics": [
+      "White paper, pale-blue rules, black ink, one blue for action.",
+      "Stamps for decisions, Badges for states in lists, StaffMarks for people.",
+      "Amounts end on the right edge in tabular figures. Paise are set smaller at display sizes.",
+      "A fixed 52dp time column and a red margin rule on registers.",
+      "One typeface for both scripts. Hindi always gets the full 1.45 line.",
+      "Flat paper. Only sheets lift."
+    ],
+    "rules": [
+      {
+        "name": "The One Blue Rule",
+        "body": "Ballpoint blue means \"you can do this\". It never decorates, and no second action colour exists.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink Means Something Rule",
+        "body": "Violet, red, green and amber appear only for their meanings. The margin red is a ruling line, never a status, and never thicker than 1px.",
+        "section": "colors"
+      },
+      {
+        "name": "The Not By Colour Alone Rule",
+        "body": "Every tone comes with an icon or words: Banners and Notices carry a tone icon, Stamps carry the word, and the sync pill always shows an icon.",
+        "section": "colors"
+      },
+      {
+        "name": "The Hindi Line Rule",
+        "body": "`Txt` sets the line height. Below 26sp, every line is 1.45 × size. At 26sp and up, English tightens to 1.2 and Hindi keeps 1.45, because Devanagari marks rise to 0.98em above the baseline. Always set text through `Txt` (or `Amount`). Don't hard-code `lineHeight` on Hindi-capable text.",
+        "section": "typography"
+      },
+      {
+        "name": "The Bullet Operator Rule",
+        "body": "Anek kerns \"·\" (U+00B7) into the space after it, so \"a · b\" draws as \"a ·b\". `Txt` swaps every middle dot for \"∙\" (U+2219), which has the same shape without the kerning. Write \"·\" in copy and let `Txt` do the swap. Text drawn outside `Txt` has to do the swap itself.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "Every amount, count, bill number, time and stamp date is set with `num` (tabular-nums). Number fields set tabular figures too.",
+        "section": "typography"
+      },
+      {
+        "name": "The 12sp Floor Rule",
+        "body": "`Txt` clamps sizes to at least 12sp and caps system font scaling at 1.4×.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sync Glyph Rule",
+        "body": "On phones the sync state is an icon plus its tone colour: a tick on paid-green tint when synced, a clock on amber when bills are pending, a slashed cloud on red when offline. Words appear only when there's something to say (\"3 pending\", \"Offline\"). Synced shows the icon alone. On wide layouts the words always show.",
+        "section": "layout"
+      },
+      {
+        "name": "The Apart Rule",
+        "body": "Destructive actions (the `danger` button: red outline, red text, no fill) sit apart from other buttons, separated by space. They never share a row with a primary action.",
+        "section": "layout"
+      },
+      {
+        "name": "The Only Sheets Lift Rule",
+        "body": "Nothing else gets a shadow. A block that needs grouping gets a Section rule or, sparingly, a 1px-ruled Panel.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do set every string through `Txt` or `Amount` so the Hindi line height, the \"∙\" swap, the 12sp floor and the font-scale cap apply.",
+      "Do end every amount on the right edge in tabular figures, with paise set smaller at 22sp and up.",
+      "Do use a Stamp only at a decision moment (receipt, approval, day-report difference), and a Badge for state in list rows.",
+      "Do put a StaffMark beside every entry a person made, and a 24-hour time in the 52dp column on dated registers.",
+      "Do keep one primary blue button per screen region, and set danger buttons apart.",
+      "Do switch to the sidebar at 768dp and show sync as icon-plus-colour on phones, with words only for pending or offline.",
+      "Do keep touch targets at 48dp or more."
+    ],
+    "donts": [
+      "Don't add a second action colour, or use stamp inks or the margin red for decoration.",
+      "Don't box numbers or stack cards. Hierarchy is by size and ruling. Use Panel sparingly.",
+      "Don't add a floating action button. The current sale lives in the pinned ink bar.",
+      "Don't give anything but sheets a shadow.",
+      "Don't make the margin rule thicker than 1px.",
+      "Don't let colour be the only signal for a status.",
+      "Don't replace the bundled Counterwell Anek files with stock Anek, or load fonts over the network."
+    ]
+  }
+}

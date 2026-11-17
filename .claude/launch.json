@@ -48,6 +48,15 @@
         "dev:gateway"
       ],
       "port": 4101
+    },
+    {
+      "name": "mobile-design",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd apps/mobile && npx expo start --web --port 8095"
+      ],
+      "port": 8095
     }
   ]
 }

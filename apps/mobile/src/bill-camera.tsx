@@ -3,7 +3,7 @@ import { View, Image, Pressable, Platform } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Print from "expo-print";
 import * as FileSystem from "expo-file-system";
-import { Sheet, Button, Txt, Row, Icon, colors } from "./ui";
+import { Sheet, Button, Txt, Row, Icon, palette, radius } from "./ui";
 
 export type BillFile = { uri: string; name: string; type: string };
 type Page = { uri: string; base64: string; width: number; height: number };
@@ -122,8 +122,8 @@ export function BillCamera({
       onClose={close}
     >
       {visible && Platform.OS !== "web" && !denied && (
-        <View style={{ gap: 14 }}>
-          <Txt muted size={12}>
+        <View style={{ gap: 16 }}>
+          <Txt size={14} color={palette.ink2}>
             {t(
               "Lay the bill flat in good light and fill the frame. Take one photo for each page.",
               "बिल को अच्छी रोशनी में सीधा रखें और पूरा फ़्रेम भरें। हर पन्ने की एक फ़ोटो लें।",
@@ -131,11 +131,55 @@ export function BillCamera({
           </Txt>
           <CameraView
             ref={camera}
-            style={{ height: 420, borderRadius: 12, overflow: "hidden" }}
+            style={{ height: 400, borderRadius: radius.md, overflow: "hidden" }}
             facing="back"
           />
+          <View style={{ alignItems: "center", gap: 8 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                pages.length
+                  ? t(
+                      `Take page ${pages.length + 1}`,
+                      `पन्ना ${pages.length + 1} लें`,
+                    )
+                  : t("Take photo", "फ़ोटो लें")
+              }
+              accessibilityState={{ disabled: busy }}
+              disabled={busy}
+              onPress={() => void shoot()}
+              style={({ pressed }) => ({
+                width: 76,
+                height: 76,
+                borderRadius: 38,
+                borderWidth: 3,
+                borderColor: palette.blue,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: busy ? 0.4 : 1,
+                transform: [{ scale: pressed ? 0.96 : 1 }],
+              })}
+            >
+              <View
+                style={{
+                  width: 58,
+                  height: 58,
+                  borderRadius: 29,
+                  backgroundColor: palette.blue,
+                }}
+              />
+            </Pressable>
+            <Txt size={14} weight={600} color={palette.blue}>
+              {pages.length
+                ? t(
+                    `Take page ${pages.length + 1}`,
+                    `पन्ना ${pages.length + 1} लें`,
+                  )
+                : t("Take photo", "फ़ोटो लें")}
+            </Txt>
+          </View>
           {pages.length > 0 && (
-            <Row style={{ flexWrap: "wrap" }}>
+            <Row style={{ flexWrap: "wrap", gap: 10 }}>
               {pages.map((p, index) => (
                 <Pressable
                   key={p.uri}
@@ -143,6 +187,7 @@ export function BillCamera({
                     `Remove page ${index + 1}`,
                     `पन्ना ${index + 1} हटाएँ`,
                   )}
+                  hitSlop={8}
                   onPress={() =>
                     setPages((current) =>
                       current.filter((x) => x.uri !== p.uri),
@@ -154,9 +199,9 @@ export function BillCamera({
                     style={{
                       width: 64,
                       height: 86,
-                      borderRadius: 6,
+                      borderRadius: radius.sm,
                       borderWidth: 1,
-                      borderColor: colors.line,
+                      borderColor: palette.rule,
                     }}
                   />
                   <View
@@ -164,29 +209,21 @@ export function BillCamera({
                       position: "absolute",
                       top: 2,
                       right: 2,
-                      backgroundColor: colors.surface,
+                      backgroundColor: palette.paper,
                       borderRadius: 10,
                     }}
                   >
-                    <Icon name="close-circle" size={18} />
+                    <Icon name="close-circle" size={20} color={palette.ink2} />
                   </View>
                 </Pressable>
               ))}
             </Row>
           )}
-          <Button
-            icon="camera-outline"
-            secondary
-            disabled={busy}
-            onPress={() => void shoot()}
-          >
-            {pages.length
-              ? t(
-                  `Take page ${pages.length + 1}`,
-                  `पन्ना ${pages.length + 1} लें`,
-                )
-              : t("Take photo", "फ़ोटो लें")}
-          </Button>
+          {!!error && (
+            <Txt size={14} weight={600} color={palette.declined}>
+              {error}
+            </Txt>
+          )}
           {pages.length > 0 && (
             <Button
               icon="cloud-upload-outline"
@@ -201,7 +238,6 @@ export function BillCamera({
                   )}
             </Button>
           )}
-          {!!error && <Txt style={{ color: colors.red }}>{error}</Txt>}
         </View>
       )}
       {visible && denied && (

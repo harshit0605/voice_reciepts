@@ -46,7 +46,7 @@ export function useBarcodeScanner(
     <Sheet visible={visible} title={title} onClose={() => setVisible(false)}>
       {visible && (
         <CameraView
-          style={{ height: 320 }}
+          style={{ height: 320, borderRadius: 10, overflow: "hidden" }}
           barcodeScannerSettings={{ barcodeTypes: [...BARCODES] }}
           onBarcodeScanned={(event) => {
             if (handled.current) return;

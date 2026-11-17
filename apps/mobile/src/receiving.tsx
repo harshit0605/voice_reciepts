@@ -7,8 +7,20 @@ import { useSession, uid } from "./session";
 import * as storage from "./storage";
 import { API_URL, cookieHeaders } from "./auth";
 import { appendFile } from "./upload";
-import { Txt, Button, Field, Row, Chip, Badge, colors, styles } from "./ui";
-import { ProductForm } from "./product-form";
+import {
+  Txt,
+  Button,
+  Field,
+  Row,
+  Chip,
+  Badge,
+  Icon,
+  Line,
+  ListRow,
+  Section,
+  palette,
+} from "./ui";
+import { ProductForm, Notice } from "./product-form";
 import { BillCamera, type BillFile } from "./bill-camera";
 import {
   catalogueSignature,
@@ -286,7 +298,7 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
         .includes(searchSupplier.toLowerCase()),
     )
     .slice(0, 8);
-  if (!loaded) return <ActivityIndicator color={colors.accent} />;
+  if (!loaded) return <ActivityIndicator color={palette.blue} />;
   return (
     <View style={{ gap: 20 }}>
       <Row style={{ justifyContent: "space-between" }}>
@@ -296,24 +308,13 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
             "1 · बिल → 2 · सामान → 3 · स्टॉक जोड़ें",
           )}
         </Badge>
-        <Txt size={10} muted>
+        <Txt size={12} color={palette.ink3}>
           {saved
             ? t("Draft saved", "ड्राफ्ट सहेजा गया")
             : t("Saving…", "सहेज रहे हैं…")}
         </Txt>
       </Row>
-      {error !== "" && (
-        <View
-          accessibilityRole="alert"
-          style={{
-            padding: 14,
-            backgroundColor: colors.amberBg,
-            borderRadius: 8,
-          }}
-        >
-          <Txt style={{ color: colors.red }}>{error}</Txt>
-        </View>
-      )}
+      {error !== "" && <Notice>{error}</Notice>}
       {failedJob && (
         <Button
           secondary
@@ -340,15 +341,15 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
       )}
       {draft.jobId ? (
         <View style={{ gap: 12 }}>
-          <ActivityIndicator color={colors.accent} />
-          <Txt bold>{t("Reading your invoice…", "आपका बिल पढ़ रहे हैं…")}</Txt>
-          <Txt muted>
+          <ActivityIndicator color={palette.blue} />
+          <Txt weight={600}>{t("Reading your invoice…", "आपका बिल पढ़ रहे हैं…")}</Txt>
+          <Txt color={palette.ink2}>
             {t(
               "You can close this screen and return. The saved job will resume without another upload.",
               "आप यह स्क्रीन बंद करके वापस आ सकते हैं। दोबारा अपलोड की ज़रूरत नहीं है।",
             )}
           </Txt>
-          <Txt size={11} muted>
+          <Txt size={13} color={palette.ink3}>
             {jobStatus}
           </Txt>
           <Button
@@ -361,10 +362,10 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
       ) : null}
       {!draft.lines.length && !draft.jobId && (
         <View style={{ gap: 12 }}>
-          <Txt size={22} bold>
+          <Txt size={22} weight={700}>
             {t("Receive supplier stock", "सप्लायर से स्टॉक लें")}
           </Txt>
-          <Txt muted>
+          <Txt color={palette.ink2}>
             {t(
               "Upload a bill or enter it manually. Stock changes only after your final review.",
               "बिल अपलोड करें या हाथ से भरें। अंतिम जाँच के बाद ही स्टॉक बढ़ेगा।",
@@ -433,7 +434,7 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
             </Button>
           )}
           {!!allowance && (
-            <Txt size={11} muted>
+            <Txt size={13} color={palette.ink3}>
               {t("Invoice uploads this month: ", "इस महीने बिल अपलोड: ")}
               {allowance}
             </Txt>
@@ -447,16 +448,16 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
             )
             .slice(0, 5)
             .map((j) => (
-              <Pressable
+              <ListRow
                 key={j.id}
                 onPress={() => change({ jobId: j.id, documentId: j.id })}
-                style={styles.listRow}
-              >
-                <Txt bold>{j.name}</Txt>
-                <Txt muted size={12}>
-                  {j.status} · {t("Resume saved upload", "सहेजा अपलोड खोलें")}
-                </Txt>
-              </Pressable>
+                title={j.name}
+                detail={
+                  <Txt size={14} color={palette.ink2}>
+                    {j.status} · {t("Resume saved upload", "सहेजा अपलोड खोलें")}
+                  </Txt>
+                }
+              />
             ))}
         </View>
       )}
@@ -466,20 +467,22 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
         </Button>
       )}
       {draft.warnings.map((w, i) => (
-        <Txt key={i} size={12} style={{ color: colors.amber }}>
+        <Notice key={i} tone="waiting">
           {w}
-        </Txt>
+        </Notice>
       ))}
       {!draft.jobId && (
         <>
           <View style={{ gap: 8 }}>
-            <Txt size={18} bold>
+            <Txt size={19} weight={600}>
               {t("Invoice details", "बिल का विवरण")}
             </Txt>
             {!!draft.supplierName && (
-              <Txt size={12} muted>
+              <Txt size={14} color={palette.ink2}>
                 {t("On the document: ", "बिल पर: ")}
-                {draft.supplierName} {draft.supplierGstin}
+                <Txt size={14} num weight={600}>
+                  {draft.supplierName} {draft.supplierGstin}
+                </Txt>
               </Txt>
             )}
             <Field
@@ -499,7 +502,7 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
               ))}
             </Row>
             <Button
-              secondary
+              variant="quiet"
               small
               onPress={() => setShowNewSupplier(!showNewSupplier)}
             >
@@ -514,6 +517,7 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
                 />
                 <Field
                   label="GSTIN"
+                  identifier
                   value={draft.supplierGstin}
                   onChange={(supplierGstin) =>
                     change({ supplierGstin: supplierGstin.toUpperCase() })
@@ -551,6 +555,7 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
             )}
             <Field
               label={t("Invoice number", "बिल नंबर")}
+              identifier
               value={draft.number}
               onChange={(number) => change({ number })}
             />
@@ -570,14 +575,14 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
             />
           </View>
           <View>
-            <Row style={{ justifyContent: "space-between" }}>
-              <Txt size={18} bold>
-                {t("Received items", "मिला हुआ सामान")}
-              </Txt>
-              <Badge warning={confirmed !== draft.lines.length}>
-                {confirmed} / {draft.lines.length} {t("reviewed", "जाँचे गए")}
-              </Badge>
-            </Row>
+            <Section
+              title={t("Received items", "मिला हुआ सामान")}
+              action={
+                <Badge tone={confirmed !== draft.lines.length ? "waiting" : "paid"}>
+                  {confirmed} / {draft.lines.length} {t("reviewed", "जाँचे गए")}
+                </Badge>
+              }
+            >
             {draft.lines.map((line, i) => (
               <ReceivingItem
                 key={line.id}
@@ -595,6 +600,7 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
                 }
               />
             ))}
+            </Section>
             <Button
               secondary
               icon="add"
@@ -607,30 +613,22 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
               {t("Add received item", "मिला सामान जोड़ें")}
             </Button>
           </View>
-          <View
-            style={{
-              borderTopWidth: 1,
-              borderColor: colors.line,
-              paddingTop: 20,
-              gap: 12,
-            }}
-          >
-            <Txt size={18} bold>
+          <View style={{ gap: 12 }}>
+            <Txt size={19} weight={600}>
               {t("Check totals", "कुल जाँचें")}
             </Txt>
-            <Row style={{ justifyContent: "space-between" }}>
-              <Txt muted>{t("Items including tax", "टैक्स सहित सामान")}</Txt>
-              <Txt bold>{rupees(sum)}</Txt>
-            </Row>
-            <Row style={{ justifyContent: "space-between" }}>
-              <Txt muted>{t("Difference from invoice", "बिल से अंतर")}</Txt>
-              <Txt
-                bold
-                style={{ color: difference === 0 ? colors.accent : colors.red }}
-              >
-                {difference === null ? "—" : rupees(difference)}
-              </Txt>
-            </Row>
+            <View>
+              <Line
+                label={t("Items including tax", "टैक्स सहित सामान")}
+                value={rupees(sum)}
+              />
+              <Line
+                strong
+                label={t("Difference from invoice", "बिल से अंतर")}
+                value={difference === null ? "—" : rupees(difference)}
+                color={difference === 0 ? palette.paid : palette.declined}
+              />
+            </View>
             <Field
               number
               label={t(
@@ -648,11 +646,11 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
               />
             )}
             {!!validation && (
-              <Txt size={12} muted>
+              <Txt size={14} color={palette.ink2}>
                 {validation}
               </Txt>
             )}
-            <Txt size={11} muted>
+            <Txt size={13} color={palette.ink3}>
               {t(
                 "Confirm the supplied medicine, strength, batch, pack size and prices. Purchase costs are never shown to employees.",
                 "मिली दवा, ताकत, बैच, पैक और कीमतों की जाँच करें। खरीद लागत कर्मचारियों को नहीं दिखती।",
@@ -685,9 +683,11 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
           </View>
         </>
       )}
-      <Button secondary small onPress={() => setDiscard(!discard)}>
-        {t("Discard this draft", "यह ड्राफ्ट हटाएँ")}
-      </Button>
+      <View style={{ marginTop: 24, alignItems: "flex-end" }}>
+        <Button variant="quiet" small onPress={() => setDiscard(!discard)}>
+          {t("Discard this draft", "यह ड्राफ्ट हटाएँ")}
+        </Button>
+      </View>
       {discard && (
         <View style={{ gap: 10 }}>
           <Txt>
@@ -697,6 +697,7 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
             )}
           </Txt>
           <Button
+            variant="danger"
             onPress={() => {
               setDraft(fresh());
               setFailedJob(undefined);
@@ -743,57 +744,83 @@ function ReceivingItem({
   return (
     <View
       style={{
-        paddingVertical: 18,
         borderBottomWidth: 1,
-        borderColor: colors.line,
-        marginBottom: 14,
+        borderColor: palette.rule,
       }}
     >
-      <Pressable onPress={toggle} accessibilityRole="button">
-        <Row style={{ justifyContent: "space-between" }}>
-          <View style={{ flex: 1, gap: 5 }}>
-            <Txt bold>
+      <Pressable
+        onPress={toggle}
+        accessibilityRole="button"
+        style={{ paddingVertical: 13, minHeight: 60, justifyContent: "center" }}
+      >
+        <Row style={{ alignItems: "flex-start" }}>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Txt weight={600}>
               {product
                 ? `${product.name} ${product.strength}`
                 : line.source?.name || t("Choose product", "सामान चुनें")}
             </Txt>
-            <Txt muted size={12}>
-              {product
-                ? `${line.quantity || "—"} + ${line.bonus || "0"} ${line.unit || "…"} · ${line.code || "…"}`
-                : t(
-                    "Match this line to your catalogue",
-                    "इस सामान को कैटलॉग से मिलाएँ",
-                  )}
-            </Txt>
+            {product ? (
+              <Row style={{ gap: 6, flexWrap: "wrap" }}>
+                <Txt size={13} num weight={600} color={palette.ink2}>
+                  {line.code || "…"}
+                </Txt>
+                <Txt size={13} num color={palette.ink3}>
+                  {`${line.quantity || "—"} + ${line.bonus || "0"} ${line.unit || "…"}`}
+                </Txt>
+              </Row>
+            ) : (
+              <Txt size={14} color={palette.ink2}>
+                {t(
+                  "Match this line to your catalogue",
+                  "इस सामान को कैटलॉग से मिलाएँ",
+                )}
+              </Txt>
+            )}
+            <View style={{ marginTop: 2 }}>
+              <Badge tone={validReview ? "paid" : "waiting"}>
+                {validReview ? t("Reviewed", "जाँचा गया") : t("Review", "जाँचें")}
+              </Badge>
+            </View>
           </View>
-          <Badge warning={!validReview}>
-            {validReview ? t("Reviewed", "जाँचा गया") : t("Review", "जाँचें")}
-          </Badge>
+          <View style={{ alignItems: "flex-end", gap: 6 }}>
+            {!!line.total && (
+              <Txt num weight={600}>
+                {`₹${line.total}`}
+              </Txt>
+            )}
+            <Icon
+              name={expanded ? "chevron-up" : "chevron-down"}
+              size={18}
+              color={palette.ink3}
+            />
+          </View>
         </Row>
       </Pressable>
       {expanded && (
-        <View style={{ gap: 12, marginTop: 18 }}>
+        <View style={{ gap: 12, paddingTop: 8, paddingBottom: 24 }}>
           {line.source && (
             <View
               style={{
-                padding: 12,
-                backgroundColor: colors.tint,
-                borderRadius: 8,
-                gap: 5,
+                paddingVertical: 10,
+                gap: 4,
+                borderTopWidth: 1,
+                borderBottomWidth: 1,
+                borderColor: palette.rule,
               }}
             >
-              <Txt size={11} bold>
+              <Txt size={14} weight={600}>
                 {t(
                   "Read from invoice — check against original",
                   "बिल से पढ़ा गया — मूल बिल से जाँचें",
                 )}
               </Txt>
-              <Txt size={12}>
+              <Txt size={14} num color={palette.ink2}>
                 {line.source.name} {line.source.strength} ·{" "}
                 {line.source.quantity ?? "?"} {line.source.unit ?? "?"} +{" "}
                 {line.source.bonusQuantity ?? "0"} {t("bonus", "बोनस")}
               </Txt>
-              <Txt size={12}>
+              <Txt size={14} num color={palette.ink2}>
                 {t("Pack: ", "पैक: ")}
                 {line.source.packSize ?? "?"} · GST{" "}
                 {line.source.taxBps === null
@@ -810,40 +837,40 @@ function ReceivingItem({
             value={search}
             onChange={setSearch}
           />
-          {productSuggestions(products, search).map((p) => (
-            <Pressable
-              accessibilityRole="button"
-              key={p.id}
-              onPress={() =>
-                change({
-                  productId: p.id,
-                  unit: "",
-                  priceUnit: "",
-                  price: "",
-                  cost: "",
-                })
-              }
-              style={{
-                padding: 12,
-                backgroundColor:
-                  p.id === line.productId ? colors.tint : "white",
-                borderRadius: 8,
-              }}
-            >
-              <Txt bold>
-                {p.name} {p.strength}
-              </Txt>
-              <Txt size={11} muted>
-                {p.form} · GST {p.taxBps / 100}% ·{" "}
-                {Object.entries(p.units)
-                  .map(([u, n]) => `${u} = ${n} ${p.baseUnit}`)
-                  .join(" · ")}
-              </Txt>
-            </Pressable>
-          ))}
+          <View>
+            {productSuggestions(products, search).map((p) => (
+              <ListRow
+                key={p.id}
+                chevron={false}
+                onPress={() =>
+                  change({
+                    productId: p.id,
+                    unit: "",
+                    priceUnit: "",
+                    price: "",
+                    cost: "",
+                  })
+                }
+                leading={
+                  p.id === line.productId ? (
+                    <Icon name="checkmark-circle" size={20} color={palette.blue} />
+                  ) : undefined
+                }
+                title={`${p.name} ${p.strength}`}
+                detail={
+                  <Txt size={13} color={palette.ink3}>
+                    {p.form} · GST {p.taxBps / 100}% ·{" "}
+                    {Object.entries(p.units)
+                      .map(([u, n]) => `${u} = ${n} ${p.baseUnit}`)
+                      .join(" · ")}
+                  </Txt>
+                }
+              />
+            ))}
+          </View>
           {!productSuggestions(products, search).length && !newProduct && (
             <View style={{ gap: 8 }}>
-              <Txt muted>
+              <Txt color={palette.ink2}>
                 {t(
                   "No catalogue product matches this line.",
                   "इस लाइन से कैटलॉग का कोई सामान नहीं मिलता।",
@@ -875,13 +902,13 @@ function ReceivingItem({
           {newProduct && (
             <View
               style={{
-                padding: 12,
-                borderWidth: 1,
-                borderColor: colors.line,
-                borderRadius: 8,
+                paddingVertical: 12,
+                borderTopWidth: 1,
+                borderBottomWidth: 1,
+                borderColor: palette.ruleStrong,
               }}
             >
-              <Txt bold style={{ marginBottom: 10 }}>
+              <Txt weight={600} style={{ marginBottom: 12 }}>
                 {t(
                   "New medicine from this invoice line: check every field",
                   "इस बिल लाइन से नई दवा: हर जानकारी जाँचें",
@@ -903,7 +930,7 @@ function ReceivingItem({
                 }}
               />
               <View style={{ height: 10 }} />
-              <Button secondary small onPress={() => setNewProduct(null)}>
+              <Button variant="quiet" small onPress={() => setNewProduct(null)}>
                 {t("Cancel", "रद्द करें")}
               </Button>
             </View>
@@ -912,27 +939,35 @@ function ReceivingItem({
             <>
               {line.source?.taxBps != null &&
                 line.source.taxBps !== product.taxBps && (
-                  <Txt style={{ color: colors.amber }}>
+                  <Notice tone="waiting">
                     {t(
                       "Invoice tax differs from catalogue tax. Check both before confirming.",
                       "बिल और कैटलॉग का टैक्स अलग है। पुष्टि से पहले दोनों जाँचें।",
                     )}
-                  </Txt>
+                  </Notice>
                 )}
-              <Field
-                label={t("Physical batch code", "मिले बैच का नंबर")}
-                value={line.code}
-                onChange={(code) => change({ code })}
-              />
-              <Field
-                label={t(
-                  "Confirmed expiry (YYYY-MM-DD)",
-                  "जाँची गई एक्सपायरी (YYYY-MM-DD)",
-                )}
-                value={line.expiry}
-                onChange={(expiry) => change({ expiry })}
-              />
-              <Txt bold size={12}>
+              <Row style={{ alignItems: "flex-start" }}>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    identifier
+                    label={t("Physical batch code", "मिले बैच का नंबर")}
+                    value={line.code}
+                    onChange={(code) => change({ code })}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    identifier
+                    label={t(
+                      "Confirmed expiry (YYYY-MM-DD)",
+                      "जाँची गई एक्सपायरी (YYYY-MM-DD)",
+                    )}
+                    value={line.expiry}
+                    onChange={(expiry) => change({ expiry })}
+                  />
+                </View>
+              </Row>
+              <Txt size={14} weight={500} color={palette.ink2}>
                 {t("Received quantity is in", "मिली मात्रा की इकाई")}
               </Txt>
               <Row style={{ flexWrap: "wrap" }}>
@@ -946,29 +981,35 @@ function ReceivingItem({
                   </Chip>
                 ))}
               </Row>
-              <Field
-                number
-                label={t("Paid quantity", "खरीदी मात्रा")}
-                value={line.quantity}
-                onChange={(quantity) => change({ quantity })}
-              />
-              <Field
-                number
-                label={t(
-                  "Free / bonus quantity (same unit)",
-                  "मुफ़्त / बोनस मात्रा (उसी इकाई में)",
-                )}
-                value={line.bonus}
-                onChange={(bonus) => change({ bonus })}
-              />
+              <Row style={{ alignItems: "flex-start" }}>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    number
+                    label={t("Paid quantity", "खरीदी मात्रा")}
+                    value={line.quantity}
+                    onChange={(quantity) => change({ quantity })}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    number
+                    label={t(
+                      "Free / bonus quantity (same unit)",
+                      "मुफ़्त / बोनस मात्रा (उसी इकाई में)",
+                    )}
+                    value={line.bonus}
+                    onChange={(bonus) => change({ bonus })}
+                  />
+                </View>
+              </Row>
               {!!line.unit && (
-                <Txt style={{ color: colors.accent }}>
+                <Txt size={14} num weight={600} color={palette.blue}>
                   {t("Stock conversion: ", "स्टॉक परिवर्तन: ")}
                   {line.quantity || "0"} + {line.bonus || "0"} {line.unit} ×{" "}
                   {product.units[line.unit]} {product.baseUnit}
                 </Txt>
               )}
-              <Txt bold size={12}>
+              <Txt size={14} weight={500} color={palette.ink2}>
                 {t("Prices below are per", "नीचे की कीमतें प्रति")}
               </Txt>
               <Row style={{ flexWrap: "wrap" }}>
@@ -982,18 +1023,24 @@ function ReceivingItem({
                   </Chip>
                 ))}
               </Row>
-              <Field
-                number
-                label={t("MRP (₹)", "एमआरपी (₹)")}
-                value={line.mrp}
-                onChange={(mrp) => change({ mrp })}
-              />
-              <Field
-                number
-                label={t("Selling price (₹)", "बिक्री कीमत (₹)")}
-                value={line.price}
-                onChange={(price) => change({ price })}
-              />
+              <Row style={{ alignItems: "flex-start" }}>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    number
+                    label={t("MRP (₹)", "एमआरपी (₹)")}
+                    value={line.mrp}
+                    onChange={(mrp) => change({ mrp })}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    number
+                    label={t("Selling price (₹)", "बिक्री कीमत (₹)")}
+                    value={line.price}
+                    onChange={(price) => change({ price })}
+                  />
+                </View>
+              </Row>
               <Field
                 number
                 label={t(
@@ -1013,12 +1060,12 @@ function ReceivingItem({
                 onChange={(total) => change({ total })}
               />
               {result && (
-                <View style={{ gap: 6 }}>
-                  <Txt bold style={{ color: colors.accent }}>
+                <View style={{ gap: 4 }}>
+                  <Txt weight={600} num color={palette.blue}>
                     +{D(result.quantity).plus(result.bonusQuantity).toFixed()}{" "}
                     {product.baseUnit}
                   </Txt>
-                  <Txt size={12} muted>
+                  <Txt size={14} num color={palette.ink2}>
                     {t("Per base unit: ", "प्रति मूल इकाई: ")}
                     {rupees(result.batch.pricePaise)} · MRP{" "}
                     {rupees(result.batch.mrpPaise)}
@@ -1027,13 +1074,8 @@ function ReceivingItem({
               )}
             </>
           )}
-          {!!error && (
-            <Txt size={12} style={{ color: colors.amber }}>
-              {error}
-            </Txt>
-          )}
+          {!!error && <Notice tone="waiting">{error}</Notice>}
           <Button
-            secondary
             disabled={!!error}
             onPress={() => {
               change({
@@ -1045,9 +1087,11 @@ function ReceivingItem({
           >
             {t("Confirm this item", "इस सामान की पुष्टि करें")}
           </Button>
-          <Button secondary small onPress={remove}>
-            {t("Remove item", "सामान हटाएँ")}
-          </Button>
+          <View style={{ marginTop: 12, alignItems: "flex-end" }}>
+            <Button variant="danger" small onPress={remove}>
+              {t("Remove item", "सामान हटाएँ")}
+            </Button>
+          </View>
         </View>
       )}
     </View>
