@@ -10,6 +10,7 @@ import {
   useAudioRecorder,
   useAudioRecorderState,
   RecordingPresets,
+  getRecordingPermissionsAsync,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
 } from "expo-audio";
@@ -20,6 +21,8 @@ import { Txt, Button, Field, Row, Badge, Sheet, colors, styles } from "./ui";
 import {
   readableQuantity,
   readableUnit,
+  spokenItemTitle,
+  NO_MEDICINES_WARNING,
   applyVoiceResult,
   emptyVoice,
   parseExactSaleText,
@@ -238,7 +241,9 @@ export function VoiceEntry({
   }, [recording]);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state !== "active" && recordingRef.current) {
+      // "inactive" is also what iOS reports while a system prompt (the microphone permission) is
+      // showing; only a real move to the background is an interruption.
+      if (state === "background" && recordingRef.current) {
         void stopRef.current(false);
         setError(
           t(
@@ -269,7 +274,11 @@ export function VoiceEntry({
             "आवाज़ के लिए इंटरनेट चाहिए। ऑफलाइन में लिखें या खोजें।",
           ),
         );
-      if (!(await requestRecordingPermissionsAsync()).granted)
+      // Confirm the permission first, so the system prompt never appears mid-recording.
+      const permission = await getRecordingPermissionsAsync();
+      if (!(
+        permission.granted || (await requestRecordingPermissionsAsync()).granted
+      ))
         throw new Error(
           t(
             "Microphone access was declined. You can still type items.",
@@ -507,14 +516,19 @@ export function VoiceEntry({
         )}
         {work.warnings.map((w, i) => (
           <Txt key={i} size={12} style={{ color: colors.amber }}>
-            {w}
+            {w === NO_MEDICINES_WARNING
+              ? t(
+                  NO_MEDICINES_WARNING,
+                  "रिकॉर्डिंग में कोई दवा नहीं सुनाई दी। फ़ोन के पास बोलकर फिर कोशिश करें, या दवाएँ टाइप करें।",
+                )
+              : w}
           </Txt>
         ))}
         {work.items.map((item) => (
           <View key={item.id} style={styles.listRow}>
             <Row style={{ justifyContent: "space-between", marginBottom: 14 }}>
               <Txt bold size={17} style={{ flex: 1 }}>
-                {item.name} {item.strength}
+                {spokenItemTitle(item)}
               </Txt>
               {item.uncertain && (
                 <Badge warning>{t("Check carefully", "ध्यान से जाँचें")}</Badge>

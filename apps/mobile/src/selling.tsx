@@ -38,6 +38,7 @@ import {
   D,
   consumeVoiceItem,
   spokenUnit,
+  spokenItemTitle,
   spokenQuantity,
   emptyVoice,
   recoverCheckout,
@@ -816,7 +817,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
               <View style={{ gap: 8, marginBottom: 14 }}>
                 <Txt muted>
                   {s.language === "hi" ? "बोला गया: " : "Spoken: "}
-                  {voiceItem.name} {voiceItem.strength} · {voiceItem.quantity}{" "}
+                  {spokenItemTitle(voiceItem)} · {voiceItem.quantity}{" "}
                   {voiceItem.unit}
                 </Txt>
                 <Txt size={12} style={{ color: colors.amber }}>

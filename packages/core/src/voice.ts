@@ -94,7 +94,31 @@ export function spokenUnit(value: string, product: Product): string | null {
   );
   if (direct) return direct;
   const canonical = units[value.trim().toLowerCase()] ?? units[valueKey];
-  return canonical && product.units[canonical] ? canonical : null;
+  if (!canonical) return null;
+  // Product unit names may differ in case ("Strip"), so match them the same way as spoken ones.
+  return (
+    Object.keys(product.units).find(
+      (u) => normalVoice(u) === normalVoice(canonical),
+    ) ?? null
+  );
+}
+/** Shown when an extraction heard no medicines; replaces whatever prose the model wrote. */
+export const NO_MEDICINES_WARNING =
+  "No medicines heard. Try again closer to the phone, or type the items.";
+/** Review title: the strength is appended only when the name does not already carry it. */
+export function spokenItemTitle(item: {
+  name: string;
+  strength?: string | null;
+}): string {
+  const name = item.name.trim(),
+    strength = (item.strength ?? "").trim();
+  if (!strength) return name;
+  const number = strength.match(/\d+(?:\.\d+)?/)?.[0];
+  const hasNumber =
+    number && new RegExp(`(^|[^\\d.])${number}(?![\\d])`).test(name);
+  const lower = name.toLowerCase();
+  if (hasNumber || lower.includes(strength.toLowerCase())) return name;
+  return `${name} ${strength}`;
 }
 const numbers: Record<string, string> = {
   half: "0.5",
@@ -256,7 +280,7 @@ export function applyVoiceResult(
       ...work.items,
       ...draft.items.map((item) => ({ ...item, id: id() })),
     ],
-    warnings: draft.warnings,
+    warnings: draft.items.length ? draft.warnings : [NO_MEDICINES_WARNING],
     appliedJobIds: [...work.appliedJobIds, jobId].slice(-100),
     error: undefined,
     source: "api",
