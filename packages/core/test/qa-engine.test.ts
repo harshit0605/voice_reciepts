@@ -15,6 +15,7 @@ import {
   parseExpiry,
   quote,
   refundQuote,
+  openRefundRequest,
   round,
   totals,
   type Actor,
@@ -2483,5 +2484,118 @@ describe("permissions", () => {
       undefined,
       "recovery",
     );
+  });
+});
+
+describe("server-side fixes from API testing", () => {
+  const opening = (quantity: string, expiry = "2027-12-31"): Operation => ({
+    type: "stock.opening",
+    batch: {
+      id: `ob-${quantity}-${expiry}`,
+      productId: "dolo",
+      code: `OB-${quantity}-${expiry}`,
+      expiry,
+      quantity,
+      quarantined: "0",
+      pricePaise: 100,
+      mrpPaise: 280,
+      verifiedCost: false,
+    },
+    reason: "count",
+  });
+  it("opening stock must be whole units unless the product is measured, and may already be expired", () => {
+    const s = freshState();
+    fails(() => run(s, opening("10.5")), undefined, "whole base units");
+    expect(
+      run(s, opening("10")).state.batches["ob-10-2027-12-31"],
+    ).toBeTruthy();
+    expect(
+      run(s, opening("3", "2020-01-01")).state.batches["ob-3-2020-01-01"],
+    ).toBeTruthy();
+    const loose = addProduct(freshState(), { id: "kgp", price: 100, tax: 0 });
+    loose.products["kgp"].baseUnit = "kg";
+    const o = opening("2.5") as Extract<Operation, { type: "stock.opening" }>;
+    o.batch.id = "kg-ob";
+    o.batch.code = "KG1";
+    o.batch.productId = "kgp";
+    expect(run(loose, o).state.batches["kg-ob"].quantity).toBe("2.5");
+  });
+  it("the owner can cancel an approved but unused refund approval, never a used one", () => {
+    const s0 = step(
+      step(freshState(), {
+        type: "order.save",
+        orderId: "o-rf",
+        version: 0,
+        lines: [L("dolo-b1", "1", "strip")],
+        counterId: "counter-1",
+      } as Operation),
+      pay(2800, { orderId: "o-rf" }),
+    );
+    const inv = invoiceOf(s0);
+    let s = approved(
+      s0,
+      "refund",
+      { invoiceId: inv.id, lines: [{ index: 0, quantity: "1" }] },
+      "rf-a",
+      staff,
+    );
+    s = step(s, {
+      type: "approval.decide",
+      approvalId: "rf-a",
+      approve: false,
+    });
+    expect(s.approvals["rf-a"].status).toBe("rejected");
+    expect(
+      Object.values(s.approvals).some((a) => openRefundRequest(a, inv.id)),
+    ).toBe(false);
+    // a decided-and-used approval can never be reopened or cancelled
+    s = approved(
+      s,
+      "refund",
+      { invoiceId: inv.id, lines: [{ index: 0, quantity: "1" }] },
+      "rf-b",
+      staff,
+    );
+    s = step(
+      s,
+      {
+        type: "refund.execute",
+        approvalId: "rf-b",
+        cashPaise: 280,
+        upiPaise: 0,
+      },
+      { actor: staff },
+    );
+    expect(s.approvals["rf-b"].status).toBe("used");
+    fails(
+      () =>
+        run(s, { type: "approval.decide", approvalId: "rf-b", approve: false }),
+      undefined,
+      "not pending",
+    );
+    // other approval kinds stay final once approved
+    s = approved(
+      freshState(),
+      "stock",
+      { batchId: "dolo-b1", quantity: "-1", kind: "damage", reason: "broken" },
+      "st-a",
+    );
+    fails(
+      () =>
+        run(s, { type: "approval.decide", approvalId: "st-a", approve: false }),
+      undefined,
+      "not pending",
+    );
+  });
+  it("end of day cannot be closed for a date after today in India", () => {
+    const s = freshState();
+    fails(
+      () => run(s, { type: "eod.close", date: "2026-09-24" }),
+      undefined,
+      "future",
+    );
+    expect(
+      run(s, { type: "eod.close", date: indiaDate(NOW) }).state.eods,
+    ).toBeTruthy();
   });
 });

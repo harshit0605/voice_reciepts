@@ -73,6 +73,8 @@ app.use(
 app.onError((e, c) => {
   if (e instanceof ZodError)
     return c.json({ error: "Invalid input", issues: e.issues }, 400);
+  if (e instanceof SyntaxError)
+    return c.json({ error: "Request body must be JSON" }, 400);
   if (e instanceof DomainError)
     return c.json(
       { error: e.message, code: e.code },
@@ -175,6 +177,17 @@ app.get("/api/v1/state", (c) =>
       : employeeView(c.get("state"), c.get("actor").id),
   ),
 );
+const staffHidden = [
+  "suppliers",
+  "purchases",
+  "stock",
+  "reviews",
+  "observations",
+  "audit",
+  "eods",
+  "commands",
+  "quarantine",
+] as const;
 app.get("/api/v1/sync", async (c) => {
   const since = z.coerce
     .number()
@@ -182,14 +195,16 @@ app.get("/api/v1/sync", async (c) => {
     .min(-1)
     .parse(c.req.query("since") ?? -1);
   const actor = c.get("actor");
-  return c.json(
-    await changes(actor.businessId, since, (state) => {
-      const member = state.members[actor.id];
-      if (!member?.active)
-        throw new DomainError("FORBIDDEN", "Account disabled");
-      return member.role === "owner" ? state : employeeView(state, actor.id);
-    }),
-  );
+  const delta = await changes(actor.businessId, since, (state) => {
+    const member = state.members[actor.id];
+    if (!member?.active) throw new DomainError("FORBIDDEN", "Account disabled");
+    return member.role === "owner" ? state : employeeView(state, actor.id);
+  });
+  // Staff never see these collections, so even the ids of their rows stay out of the delta.
+  const rows = delta && "changes" in delta ? delta.changes : undefined;
+  if (actor.role !== "owner" && rows)
+    for (const name of staffHidden) rows[name] = {};
+  return c.json(delta);
 });
 app.post("/api/v1/commands", async (c) => {
   const cmd = commandSchema.parse(await c.req.json());
@@ -641,14 +656,27 @@ app.post("/api/v1/employees", async (c) => {
       canCollect: z.boolean(),
     })
     .parse(await c.req.json());
-  const account = await auth.api.signUpEmail({
-    body: {
-      name: b.name,
-      email: `${randomUUID()}@accounts.invalid`,
-      username: b.username,
-      password: b.password,
-    },
-  });
+  const account = await auth.api
+    .signUpEmail({
+      body: {
+        name: b.name,
+        email: `${randomUUID()}@accounts.invalid`,
+        username: b.username,
+        password: b.password,
+      },
+    })
+    .catch((e) => {
+      if (
+        /USERNAME_IS_ALREADY_TAKEN|already taken|already exists|unique/i.test(
+          `${e?.body?.code ?? ""} ${e?.message ?? ""}`,
+        )
+      )
+        throw new DomainError(
+          "CONFLICT",
+          "That username is taken. Choose another.",
+        );
+      throw e;
+    });
   await transact(actor.businessId, (s) => {
     const next = structuredClone(s);
     next.members[account.user.id] = {

@@ -299,6 +299,13 @@ export function execute(
         "CONFLICT",
       );
       ensure(op.batch.pricePaise <= op.batch.mrpPaise, "Price exceeds MRP");
+      // Expired stock may be recorded (so it can be taken off the shelf), but never part-units.
+      ensure(
+        ["g", "kg", "ml", "l"].includes(
+          s.products[op.batch.productId].baseUnit.toLowerCase(),
+        ) || D(op.batch.quantity).isInteger(),
+        "Opening stock must contain whole base units",
+      );
       const code = op.batch.code.trim().toUpperCase();
       ensure(
         !values(s.batches).some(
@@ -669,7 +676,13 @@ export function execute(
     case "approval.decide": {
       owner();
       const a = s.approvals[op.approvalId];
-      ensure(a?.status === "pending", "Approval is not pending");
+      // An approved refund nobody has executed can still be cancelled by the owner; once
+      // executed it is "used" and final. Other kinds stay final once decided.
+      ensure(
+        a?.status === "pending" ||
+          (a?.status === "approved" && a.kind === "refund" && !op.approve),
+        "Approval is not pending",
+      );
       a.status = op.approve ? "approved" : "rejected";
       a.decidedBy = actor.id;
       a.decidedAt = now;
@@ -1103,6 +1116,10 @@ export function execute(
     }
     case "eod.close": {
       owner();
+      ensure(
+        op.date <= indiaDate(now),
+        "End of day cannot be closed for a future date",
+      );
       const eod = eodSnapshot(s, op.date, now);
       s.eods[eod.id] = eod;
       result = eod;

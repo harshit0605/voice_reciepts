@@ -758,6 +758,100 @@ describe.skipIf(!enabled)(
       });
     });
 
+    describe("API hardening fixes", () => {
+      const raw = (body: string, type: string) =>
+        app.request("http://localhost:4100/api/v1/commands", {
+          method: "POST",
+          headers: {
+            "Content-Type": type,
+            Origin: "http://localhost:8081",
+            Cookie: ownerCookie,
+            "X-Business-Id": businessId,
+          },
+          body,
+        });
+      it("malformed, empty and form-encoded bodies are 400, not 500", async () => {
+        for (const [body, type] of [
+          ["{not json", "application/json"],
+          ["", "application/json"],
+          ["a=1&b=2", "application/x-www-form-urlencoded"],
+        ] as const) {
+          const r = await raw(body, type);
+          expect(r.status).toBe(400);
+          expect((await r.json()).error).toBe("Request body must be JSON");
+        }
+      });
+      it("a duplicate employee username is 409 with a clear message", async () => {
+        const username = `dup_${randomUUID().slice(0, 8)}`;
+        const body = {
+          name: "Dup",
+          username,
+          password: "Integration-password-2026",
+          canCollect: false,
+        };
+        const first = await req("/api/v1/employees", body);
+        expect(first.status).toBe(201);
+        userIds.push(first.data.id);
+        const second = await req("/api/v1/employees", body);
+        expect(second.status).toBe(409);
+        expect(second.data.error).toBe(
+          "That username is taken. Choose another.",
+        );
+      });
+      it("staff sync lists no ids from collections they cannot see", async () => {
+        const owner = await req(
+          "/api/v1/commands",
+          make({
+            type: "eod.close",
+            date: new Date(Date.now() + 330 * 60_000)
+              .toISOString()
+              .slice(0, 10),
+          }),
+        );
+        expect(owner.status).toBe(200);
+        const ownerSync = await req("/api/v1/sync?since=-1");
+        expect(Object.keys(ownerSync.data.changes.eods).length).toBeGreaterThan(
+          0,
+        );
+        // An earlier test revoked the staff session, so sign in again.
+        const { rows: users } = await db.pool.query(
+          "SELECT username FROM auth_user WHERE id=$1",
+          [employeeId],
+        );
+        const login = await req(
+          "/api/auth/sign-in/username",
+          {
+            username: users[0].username,
+            password: "Integration-password-2026",
+          },
+          "",
+          null,
+        );
+        expect(login.status).toBe(200);
+        const staffCookie = login.response.headers
+          .getSetCookie()
+          .map((x: string) => x.split(";")[0])
+          .join("; ");
+        const sync = await req("/api/v1/sync?since=-1", undefined, staffCookie);
+        expect(sync.status).toBe(200);
+        for (const name of [
+          "eods",
+          "purchases",
+          "suppliers",
+          "audit",
+          "commands",
+          "stock",
+        ])
+          expect(Object.keys(sync.data.changes[name])).toHaveLength(0);
+        for (const rows of Object.values(sync.data.changes) as any[])
+          for (const [id, row] of Object.entries(rows))
+            if (row === null)
+              expect(["eods", "purchases", "audit", "commands"]).not.toContain(
+                id,
+              );
+      });
+    });
+
     describe("reports", () => {
       it("the owner's report for today adds up cash, UPI and invoice count from the ledger", async () => {
         const s = await state();
