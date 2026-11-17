@@ -149,6 +149,11 @@ export const hindiCopy: Record<string, string> = {
   "Base unit": "मूल इकाई",
   "Batch code": "बैच कोड",
   "Bill saved": "बिल सहेज लिया गया",
+  "Saved on this phone · sends when online":
+    "इस फ़ोन में सहेजा गया · नेटवर्क आने पर भेजा जाएगा",
+  "Credit for this bill (₹)": "इस बिल का उधार (₹)",
+  "This discount is more than the bill. Ask the owner to decline it and request again.":
+    "यह छूट बिल से ज़्यादा है। मालिक से इसे मना करवाकर फिर से माँगें।",
   "Brand / product name": "ब्रांड / उत्पाद का नाम",
   COUNTER: "काउंटर",
   "Cash collected (₹)": "प्राप्त नकद (₹)",
@@ -321,7 +326,7 @@ export const hindiCopy: Record<string, string> = {
   "Saving…": "सहेजा जा रहा है…",
   "Collect with credit approval": "उधार की अनुमति से भुगतान लें",
   "Confirm payment & create bill": "भुगतान की पुष्टि करके बिल बनाएँ",
-  "Cash + UPI": "नकद + UPI",
+  "Cash + UPI": "नकद + यूपीआई",
   "Open printable receipt": "प्रिंट करने योग्य बिल खोलें",
   "Print status": "प्रिंट की स्थिति",
   "Check print status": "प्रिंट की स्थिति जाँचें",
@@ -549,7 +554,8 @@ export const hindiCopy: Record<string, string> = {
     "एक और काम सेव हो रहा है। थोड़ा रुककर फिर कोशिश करें।",
   "Order changed; refresh before continuing":
     "ऑर्डर बदल गया है; आगे बढ़ने से पहले रिफ़्रेश करें",
-  "An unused owner approval is required": "मालिक की बिना इस्तेमाल हुई मंज़ूरी चाहिए",
+  "An unused owner approval is required":
+    "मालिक की बिना इस्तेमाल हुई मंज़ूरी चाहिए",
   "Approval does not match this transaction":
     "यह मंज़ूरी इस बिल से मेल नहीं खाती",
   "Reconnect to renew your 24-hour offline authorisation":

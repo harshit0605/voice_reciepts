@@ -2599,3 +2599,48 @@ describe("server-side fixes from API testing", () => {
     ).toBeTruthy();
   });
 });
+
+describe("approval requests are checked when asked, not only when used", () => {
+  const discountRequest = (s: State, amountPaise: number) =>
+    run(
+      s,
+      {
+        type: "approval.request",
+        approvalId: nextId(),
+        kind: "discount",
+        payload: { orderId: "order-1", orderVersion: 1, amountPaise },
+        reason: "QA review",
+      },
+      { actor: owner },
+    );
+  it("rejects a discount larger than the bill, or not above zero", () => {
+    const s = save(freshState(), [L("dolo-b1", "1", "strip")]);
+    const total = quote(s, s.orders["order-1"].lines, NOW).reduce(
+      (n, l) => n + l.netPaise,
+      0,
+    );
+    fails(() => discountRequest(s, total + 1), "INVALID", /more than the bill/);
+    fails(() => discountRequest(s, 0), undefined);
+    expect(discountRequest(s, total).state).toBeTruthy();
+  });
+  it("rejects a return request for more than was sold less what already came back", () => {
+    let s = step(save(freshState(), [L("dolo-b1", "1", "strip")]), pay(2800));
+    const request = (quantity: string) =>
+      run(
+        s,
+        {
+          type: "approval.request",
+          approvalId: nextId(),
+          kind: "refund",
+          payload: {
+            invoiceId: invoiceOf(s).id,
+            lines: [{ index: 0, quantity }],
+          },
+          reason: "returned",
+        },
+        { actor: staff },
+      );
+    fails(() => request("11"), "INVALID", /at most 10 of this item/);
+    expect(request("10").state).toBeTruthy();
+  });
+});

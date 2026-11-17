@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Platform } from "react-native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -190,6 +190,13 @@ export function DrawerPanel() {
     [note, setNote] = useState("");
   const count = useCashCount();
   const canUse = owner || me.canCollect;
+  // "Bills are still sending" is only true while something is waiting to be sent.
+  useEffect(() => {
+    if (!s.pending.length)
+      setError((e) =>
+        e.includes("still sending") || e.includes("भेजे जा रहे") ? "" : e,
+      );
+  }, [s.pending.length]);
   const close = () => {
     setStep(null);
     setDone(null);

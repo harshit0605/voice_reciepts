@@ -6,10 +6,12 @@ import {
   useWindowDimensions,
   ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
+  type TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
-import { useSession } from "./session";
+import { useSession, signInFailure } from "./session";
 import { colors, Txt, Icon, Button, Field, Row, Badge, useText } from "./ui";
 import { SellScreen, ReceiptSheet } from "./selling";
 import { useAttention } from "./payments";
@@ -464,6 +466,8 @@ function Login() {
     [replacement, setReplacement] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const passwordRef = useRef<TextInput>(null),
+    replacementRef = useRef<TextInput>(null);
   const submit = async () => {
     setBusy(true);
     setError("");
@@ -471,122 +475,140 @@ function Login() {
       if (s.passwordRequired) await s.changePassword(password, replacement);
       else await s.login(username, password);
     } catch (e) {
-      setError((e as Error).message);
+      setError(signInFailure(e));
     } finally {
       setBusy(false);
     }
   };
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          padding: 28,
-        }}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={{ width: "100%", maxWidth: 390 }}>
-          <Row style={{ justifyContent: "space-between" }}>
-            <Brand />
-            <Pressable
-              onPress={() => s.setLanguage(s.language === "en" ? "hi" : "en")}
-              style={{ padding: 10 }}
-            >
-              <Txt bold>{s.language === "en" ? "हिंदी" : "EN"}</Txt>
-            </Pressable>
-          </Row>
-          <View style={{ height: 54 }} />
-          <Txt size={32} bold style={{ letterSpacing: -1 }}>
-            {s.passwordRequired
-              ? "Set your password"
-              : s.signInRequired
-                ? "Sign in again"
-                : s.language === "hi"
-                  ? "दुकान का काम, एक जगह।"
-                  : "Ready for the next customer."}
-          </Txt>
-          <Txt
-            muted
-            style={{ lineHeight: 22, marginTop: 12, marginBottom: 30 }}
-          >
-            {s.passwordRequired
-              ? "Replace the temporary password your owner gave you."
-              : s.signInRequired
-                ? "This phone was signed out, for example after a password change on another phone. Sales not yet sent stay on this phone and are sent after you sign in."
-                : "Sign in to your shop to start billing and keep the day’s work in order."}
-          </Txt>
-          {!s.passwordRequired && (
-            <Field
-              identifier
-              label={t("username")}
-              value={username}
-              onChange={setUsername}
-              placeholder="Your shop username"
-            />
-          )}
-          <Field
-            label={s.passwordRequired ? "Temporary password" : t("password")}
-            value={password}
-            onChange={setPassword}
-            secret
-          />
-          {s.passwordRequired && (
-            <Field
-              label="New password · at least 12 characters"
-              value={replacement}
-              onChange={setReplacement}
-              secret
-            />
-          )}
-          {!!error && (
-            <Txt style={{ color: colors.red, marginBottom: 15 }}>{error}</Txt>
-          )}
-          <Button onPress={() => void submit()} disabled={busy}>
-            {busy
-              ? "Signing in…"
-              : s.passwordRequired
-                ? "Update password"
-                : t("signIn")}
-          </Button>
-          <View style={{ height: 30 }} />
-          {DEMO && (
-            <View
-              style={{
-                borderTopWidth: 1,
-                borderColor: colors.line,
-                paddingTop: 22,
-                gap: 12,
-              }}
-            >
-              <Button
-                secondary
-                onPress={() => s.startDemo("owner")}
-                icon="play-outline"
-              >
-                {t("demo")} · Owner
-              </Button>
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 28,
+          }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
+        >
+          <View style={{ width: "100%", maxWidth: 390 }}>
+            <Row style={{ justifyContent: "space-between" }}>
+              <Brand />
               <Pressable
-                onPress={() => s.startDemo("employee")}
-                style={{ padding: 12, alignItems: "center" }}
+                onPress={() => s.setLanguage(s.language === "en" ? "hi" : "en")}
+                style={{ padding: 10 }}
               >
-                <Txt muted size={12}>
-                  Explore employee workspace
-                </Txt>
+                <Txt bold>{s.language === "en" ? "हिंदी" : "EN"}</Txt>
               </Pressable>
-              <Txt
-                size={11}
-                muted
-                style={{ textAlign: "center", lineHeight: 18 }}
+            </Row>
+            <View style={{ height: 54 }} />
+            <Txt size={32} bold style={{ letterSpacing: -1 }}>
+              {s.passwordRequired
+                ? "Set your password"
+                : s.signInRequired
+                  ? "Sign in again"
+                  : s.language === "hi"
+                    ? "दुकान का काम, एक जगह।"
+                    : "Ready for the next customer."}
+            </Txt>
+            <Txt
+              muted
+              style={{ lineHeight: 22, marginTop: 12, marginBottom: 30 }}
+            >
+              {s.passwordRequired
+                ? "Replace the temporary password your owner gave you."
+                : s.signInRequired
+                  ? "This phone was signed out, for example after a password change on another phone. Sales not yet sent stay on this phone and are sent after you sign in."
+                  : "Sign in to your shop to start billing and keep the day’s work in order."}
+            </Txt>
+            {!s.passwordRequired && (
+              <Field
+                identifier
+                label={t("username")}
+                value={username}
+                onChange={setUsername}
+                placeholder="Your shop username"
+                returnKeyType="next"
+                onSubmit={() => passwordRef.current?.focus()}
+              />
+            )}
+            <Field
+              label={s.passwordRequired ? "Temporary password" : t("password")}
+              value={password}
+              onChange={setPassword}
+              secret
+              inputRef={passwordRef}
+              returnKeyType={s.passwordRequired ? "next" : "go"}
+              onSubmit={() =>
+                s.passwordRequired
+                  ? replacementRef.current?.focus()
+                  : void submit()
+              }
+            />
+            {s.passwordRequired && (
+              <Field
+                label="New password · at least 12 characters"
+                value={replacement}
+                onChange={setReplacement}
+                secret
+                inputRef={replacementRef}
+                returnKeyType="go"
+                onSubmit={() => void submit()}
+              />
+            )}
+            {!!error && (
+              <Txt style={{ color: colors.red, marginBottom: 15 }}>{error}</Txt>
+            )}
+            <Button onPress={() => void submit()} disabled={busy}>
+              {busy
+                ? "Signing in…"
+                : s.passwordRequired
+                  ? "Update password"
+                  : t("signIn")}
+            </Button>
+            <View style={{ height: 30 }} />
+            {DEMO && (
+              <View
+                style={{
+                  borderTopWidth: 1,
+                  borderColor: colors.line,
+                  paddingTop: 22,
+                  gap: 12,
+                }}
               >
-                Demo data stays separate from your real shop.
-              </Txt>
-            </View>
-          )}
-        </View>
-      </ScrollView>
+                <Button
+                  secondary
+                  onPress={() => s.startDemo("owner")}
+                  icon="play-outline"
+                >
+                  {t("demo")} · Owner
+                </Button>
+                <Pressable
+                  onPress={() => s.startDemo("employee")}
+                  style={{ padding: 12, alignItems: "center" }}
+                >
+                  <Txt muted size={12}>
+                    Explore employee workspace
+                  </Txt>
+                </Pressable>
+                <Txt
+                  size={11}
+                  muted
+                  style={{ textAlign: "center", lineHeight: 18 }}
+                >
+                  Demo data stays separate from your real shop.
+                </Txt>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

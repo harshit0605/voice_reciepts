@@ -8,7 +8,7 @@ import {
   type Approval,
   type Payment,
 } from "./types";
-import { refundQuote, openRefundRequest } from "./returns";
+import { refundQuote, openRefundRequest, returnable } from "./returns";
 import {
   closingReports,
   denominationTotal,
@@ -643,12 +643,32 @@ export function execute(
           "Order not assigned to you",
           "FORBIDDEN",
         );
+        if (op.kind === "discount") {
+          const asked = (payload as { amountPaise: number }).amountPaise;
+          ensure(asked > 0, "Discount must be more than zero");
+          const total = quoteLines(s, order.lines, cmd.occurredAt).reduce(
+            (n, l) => n + l.netPaise,
+            0,
+          );
+          ensure(
+            asked <= total,
+            `Discount cannot be more than the bill (${rupees(total)})`,
+          );
+        }
       }
       if (op.kind === "refund") {
         const p = payload as { invoiceId: string; lines: ReturnLineInput[] };
         const invoice = s.invoices[p.invoiceId];
         ensure(invoice, "Invoice missing");
         // Checked now, so the owner is never asked to approve a return that cannot be paid out.
+        for (const l of p.lines) {
+          const row = returnable(s, invoice)[l.index];
+          if (row && D(l.quantity).gt(row.remaining))
+            throw new DomainError(
+              "INVALID",
+              `You can return at most ${row.remaining.toFixed()} of this item`,
+            );
+        }
         quoteRefund(invoice, p.lines);
         ensure(
           !values(s.approvals).some((a) => openRefundRequest(a, invoice.id)),

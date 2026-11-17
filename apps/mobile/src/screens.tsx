@@ -33,12 +33,7 @@ import { Checkout } from "./selling";
 import { ProductForm } from "./product-form";
 import { CatalogueImport } from "./catalogue-import";
 import { StockCount, CountForm } from "./stock-count";
-import {
-  ReturnForm,
-  RefundForm,
-  amountOf,
-  approvalLive,
-} from "./payments";
+import { ReturnForm, RefundForm, amountOf, approvalLive } from "./payments";
 import {
   DrawerPanel,
   DayReportView,
@@ -48,6 +43,7 @@ import {
 } from "./drawer";
 import {
   D,
+  quote,
   rupees,
   totals,
   balance,
@@ -604,6 +600,9 @@ export function OrdersScreen({
           a.status !== "used",
       )
       .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))[0];
+  // A new request starts empty: the old amount must not linger after a decline or a send.
+  const selectedRequestStatus = selected ? orderRequest(selected)?.status : "";
+  useEffect(() => setDiscount(""), [selected?.id, selectedRequestStatus]);
   const returnRequest = (i: Invoice) =>
     Object.values(state.approvals)
       .filter((a) => a.kind === "refund" && a.payload.invoiceId === i.id)
@@ -638,14 +637,14 @@ export function OrdersScreen({
           {hi ? "खुले" : "Open"} · {open.length}
         </Chip>
         <Chip active={filter === "bills"} onPress={() => setFilter("bills")}>
-          Completed
+          {hi ? "पूरे हुए" : "Completed"}
         </Chip>
         {cancelled.length > 0 && (
           <Chip
             active={filter === "cancelled"}
             onPress={() => setFilter("cancelled")}
           >
-            Cancelled · {cancelled.length}
+            {hi ? "रद्द" : "Cancelled"} · {cancelled.length}
           </Chip>
         )}
       </Row>
@@ -924,6 +923,18 @@ export function OrdersScreen({
               secondary
               onPress={() =>
                 void run(async () => {
+                  const amountPaise = money(discount);
+                  if (amountPaise <= 0)
+                    throw new Error("Enter the discount amount");
+                  const billPaise = quote(
+                    state,
+                    selected.lines,
+                    new Date().toISOString(),
+                  ).reduce((n, l) => n + l.netPaise, 0);
+                  if (amountPaise > billPaise)
+                    throw new Error(
+                      `The discount cannot be more than the bill (${rupees(billPaise)})`,
+                    );
                   await s.command({
                     type: "approval.request",
                     approvalId: uid(),
@@ -931,10 +942,11 @@ export function OrdersScreen({
                     payload: {
                       orderId: selected.id,
                       orderVersion: selected.version,
-                      amountPaise: money(discount),
+                      amountPaise,
                     },
                     reason: "Customer discount request",
                   });
+                  setDiscount("");
                   setSelected(null);
                 })
               }
@@ -1482,17 +1494,27 @@ export function StockScreen({
             <Button
               onPress={() =>
                 void run(async () => {
+                  if (!/^-?(0|[1-9]\d{0,8})(\.\d{1,3})?$/.test(delta.trim()))
+                    throw new Error(
+                      "Enter the change as a number, for example -2 to remove 2.",
+                    );
+                  if (Number(delta) === 0)
+                    throw new Error("The change cannot be zero");
+                  if (reason.trim().length < 3)
+                    throw new Error(
+                      "Write a short reason (at least 3 letters)",
+                    );
                   await s.command({
                     type: "approval.request",
                     approvalId: uid(),
                     kind: "stock",
                     payload: {
                       batchId: adjust.id,
-                      quantity: delta,
+                      quantity: delta.trim(),
                       kind,
-                      reason,
+                      reason: reason.trim(),
                     },
-                    reason,
+                    reason: reason.trim(),
                   });
                   setAdjust(null);
                 })

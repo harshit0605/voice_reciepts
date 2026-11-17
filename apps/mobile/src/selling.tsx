@@ -259,6 +259,40 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
   } catch {
     basketValid = false;
   }
+  /** Base units of a batch already in the basket (all lines), and what a new line would add. */
+  const baseUnits = (l: {
+    batchId: string;
+    quantity: string;
+    unit: string;
+  }) => {
+    const b = state.batches[l.batchId];
+    const factor = b && state.products[b.productId]?.units[l.unit];
+    try {
+      return factor ? D(l.quantity || 0).mul(factor) : D(0);
+    } catch {
+      return D(0);
+    }
+  };
+  const inBasket = (batchId: string) =>
+    basket
+      .filter((l) => l.batchId === batchId)
+      .reduce((n, l) => n.plus(baseUnits(l)), D(0));
+  /** A basket may never hold more of a batch (summed over its lines) than the batch has. */
+  const basketOversold = basket.some((l) =>
+    inBasket(l.batchId).gt(state.batches[l.batchId]?.quantity ?? 0),
+  );
+  /** Stock left on the batch for a new line; null when the batch is not being added. */
+  const stockLeft = selected
+    ? D(state.batches[selected.id]?.quantity ?? 0).minus(inBasket(selected.id))
+    : null;
+  const overStock =
+    !!selected &&
+    !!stockLeft &&
+    baseUnits({ batchId: selected.id, quantity: qty, unit }).gt(stockLeft);
+  const onlyInStock = (n: { toFixed(): string }) =>
+    s.language === "hi"
+      ? `स्टॉक में सिर्फ़ ${n.toFixed()} हैं`
+      : `Only ${n.toFixed()} in stock`;
   const select = (
     batch: Batch,
     spoken: SpokenItem | null | undefined = voiceItem,
@@ -273,6 +307,10 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
   };
   const add = async () => {
     if (!selected || addLock.current || busy) return;
+    if (overStock) {
+      s.setError(onlyInStock(stockLeft!.lt(0) ? D(0) : stockLeft!));
+      return;
+    }
     addLock.current = true;
     try {
       // Pressing the button that names the batch is the physical-batch confirmation.
@@ -370,6 +408,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
           disabled={
             !basket.length ||
             !basketValid ||
+            basketOversold ||
             busy ||
             selling.reviewRecovery ||
             recovery.kind === "uncertain" ||
@@ -385,6 +424,13 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
         >
           {t("checkout")}
         </Button>
+        {basketOversold && (
+          <Txt size={11} style={{ color: colors.red, marginTop: 8 }}>
+            {s.language === "hi"
+              ? "किसी बैच का स्टॉक कम है। मात्रा घटाएँ।"
+              : "Not enough stock in a batch. Reduce the quantity."}
+          </Txt>
+        )}
         <Txt size={10} muted style={{ textAlign: "center", marginTop: 12 }}>
           {selling.entry.voice.items.length > 0 ||
           selling.entry.voice.jobId ||
@@ -462,7 +508,9 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
           </Chip>
           <View style={{ flex: 1 }} />
           <Txt size={11} muted>
-            {products.length} results
+            {s.language === "hi"
+              ? `${products.length} परिणाम`
+              : `${products.length} ${products.length === 1 ? "result" : "results"}`}
           </Txt>
         </Row>
         {!!selling.error && (
@@ -809,8 +857,13 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
               )}
             </Row>
 
+            {overStock && (
+              <Txt style={{ color: colors.red, marginBottom: 12 }}>
+                {onlyInStock(stockLeft!.lt(0) ? D(0) : stockLeft!)}
+              </Txt>
+            )}
             <Button
-              disabled={!Number(qty) || !unit || busy}
+              disabled={!Number(qty) || !unit || busy || overStock}
               onPress={() => void add()}
               icon="checkmark"
             >
@@ -895,12 +948,18 @@ export function Checkout({
       a.payload.orderVersion === state.orders[existingOrderId ?? ""]?.version,
   );
   const discountPaise = Number(approvedDiscount?.payload.amountPaise ?? 0);
-  const total = quote(
-    state,
-    lines,
-    new Date().toISOString(),
-    discountPaise,
-  ).reduce((n, l) => n + l.netPaise, 0);
+  // An approved discount larger than the bill must never crash this screen: show the bill
+  // without it and ask for the discount to be declined and requested again.
+  let discountTooBig = false;
+  let quoted;
+  try {
+    quoted = quote(state, lines, new Date().toISOString(), discountPaise);
+  } catch (e) {
+    if (!discountPaise) throw e;
+    discountTooBig = true;
+    quoted = quote(state, lines, new Date().toISOString());
+  }
+  const total = quoted.reduce((n, l) => n + l.netPaise, 0);
   // Coming back to an order whose credit the owner approved: start on that credit, with its amount.
   const approvedCredit = Object.values(state.approvals).find(
     (a) =>
@@ -938,6 +997,8 @@ export function Checkout({
     [prescriptionRef, setPrescriptionRef] = useState("");
   const setCustomer = (id: string) => {
     setCustomerId(id);
+    setError("");
+    s.setError("");
     onCustomer?.(id);
   };
   let change: number | null = null;
@@ -1046,6 +1107,10 @@ export function Checkout({
           !prescription.prescriberAddress)
       )
         throw new Error("Complete the prescription register details");
+      if (discountTooBig)
+        throw new Error(
+          "This discount is more than the bill. Ask the owner to decline it and request again.",
+        );
       if (method === "cash" && change !== null && change < 0)
         throw new Error("Cash received is less than the bill total");
       if (billsLocally(method, attempt, existingOrderId)) {
@@ -1157,6 +1222,8 @@ export function Checkout({
             active={method === m}
             onPress={() => {
               setMethod(m);
+              setError("");
+              s.setError("");
               if (m === "credit") {
                 setCredit((total / 100).toString());
                 setCash("0");
@@ -1212,7 +1279,7 @@ export function Checkout({
       )}
       {method === "credit" && (
         <Field
-          label="New customer credit (₹)"
+          label="Credit for this bill (₹)"
           value={credit}
           onChange={(v) => {
             setCredit(v);
@@ -1277,6 +1344,13 @@ export function Checkout({
           />
         </View>
       )}
+      {discountTooBig && (
+        <Txt style={{ color: colors.red }}>
+          {s.language === "hi"
+            ? "यह छूट बिल से ज़्यादा है। मालिक से इसे मना करवाकर फिर से माँगें।"
+            : "This discount is more than the bill. Ask the owner to decline it and request again."}
+        </Txt>
+      )}
       {!!error && <Txt style={{ color: colors.red }}>{error}</Txt>}
       {awaitingServer && (
         <Txt style={{ color: colors.amber }}>
@@ -1285,7 +1359,7 @@ export function Checkout({
         </Txt>
       )}
       <Button
-        disabled={busy || awaitingServer}
+        disabled={busy || awaitingServer || discountTooBig}
         onPress={() => void finish()}
         icon="checkmark"
       >
@@ -1464,7 +1538,9 @@ export function ReceiptSheet({
               <Icon name="checkmark" size={26} color={colors.accent} />
             </View>
             <Txt size={22} bold>
-              Bill saved
+              {s.pending.some((e) => `${e.command.id}:invoice` === invoice.id)
+                ? "Saved on this phone · sends when online"
+                : "Bill saved"}
             </Txt>
             <Txt muted>{invoice.number}</Txt>
             <Txt size={32} bold>

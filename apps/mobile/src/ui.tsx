@@ -170,6 +170,9 @@ export function Field({
   secret = false,
   multiline = false,
   identifier = false,
+  inputRef,
+  returnKeyType,
+  onSubmit,
 }: {
   label?: string;
   value: string;
@@ -180,6 +183,10 @@ export function Field({
   multiline?: boolean;
   /** A username, code or address: the keyboard must not "correct" it ("shopowner" became "shop owner"). */
   identifier?: boolean;
+  /** For moving focus to the next field and submitting from the keyboard. */
+  inputRef?: React.Ref<TextInput>;
+  returnKeyType?: "next" | "go" | "done";
+  onSubmit?: () => void;
 }) {
   const { language } = useSession();
   return (
@@ -190,6 +197,9 @@ export function Field({
         </Txt>
       )}
       <TextInput
+        ref={inputRef}
+        returnKeyType={returnKeyType}
+        onSubmitEditing={onSubmit}
         accessibilityLabel={translateCopy(label ?? placeholder, language)}
         value={value}
         onChangeText={onChange}

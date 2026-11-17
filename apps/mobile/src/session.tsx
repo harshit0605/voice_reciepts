@@ -37,7 +37,18 @@ const signInProblem = (e: { status?: number; message?: string }) =>
       ? "Too many tries. Wait 10 seconds and try again."
       : !e.status
         ? "Cannot reach the shop server. Check the internet and try again."
-        : (e.message ?? "Sign in failed");
+        : e.status >= 500
+          ? "The shop server had a problem. Try again in a minute."
+          : "Sign in failed. Check the username and password.";
+/** Native storage failures (for example "KeyChainException") are not something staff can act on. */
+export const signInFailure = (e: unknown) => {
+  const message = e instanceof Error ? e.message : String(e ?? "");
+  return /keychain|keystore|secure\s?store|exception|native|undefined|\bnull\b/i.test(
+    message,
+  ) || !message
+    ? "This phone could not save the sign-in. Restart the app and try again."
+    : message;
+};
 const CLOCK_SKEW = "Check this phone's date and time, then try again.";
 /** Engine and server wording rewritten into what staff can act on. */
 function friendly<E>(e: E): E {
@@ -217,7 +228,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // The session ended (password changed on another phone, signed out, unused for a week):
       // say so instead of looking connected while every sync is refused.
       if (r.status === 401) setSignInRequired(true);
-      throw Object.assign(new Error(data.error ?? "Request failed"), {
+      // A rejected form field, in words: never the bare "Invalid input" from the validator.
+      const issue = Array.isArray(data.issues) ? data.issues[0] : undefined;
+      const message =
+        data.error === "Invalid input"
+          ? issue
+            ? `Check ${String(issue.path?.at(-1) ?? "the details")}: ${issue.message}`
+            : "Check the details you entered and try again."
+          : (data.error ?? "Request failed");
+      throw Object.assign(new Error(message), {
         httpStatus: r.status,
         code: data.code,
       });
@@ -280,7 +299,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }
   async function login(username: string, password: string) {
     setError("");
-    const r = await authClient.signIn.username({ username, password });
+    let r;
+    try {
+      r = await authClient.signIn.username({ username, password });
+    } catch (e) {
+      throw new Error(signInFailure(e));
+    }
     if (r.error) throw new Error(signInProblem(r.error));
     demoRef.current = false;
     setDemo(false);
@@ -521,13 +545,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (operating.current) throw new Error("A sale is being saved");
     operating.current = true;
     try {
-      const i = identityRef.current!,
-        s = stateRef.current!;
+      const s = stateRef.current!;
       const id = attempt.cashCommandId,
         orderId = attempt.orderId;
       const recorded = s.invoices[`${id}:invoice`];
       if (recorded) return recorded;
-      const now = new Date().toISOString();
+      let now = new Date().toISOString();
+      // After a relaunch the saved lease may have lapsed while the phone is online: renew it
+      // (and wait for it) before signing, so the first tap works.
+      if (
+        !demo &&
+        identityRef.current &&
+        (now < identityRef.current.issuedAt ||
+          now > identityRef.current.expiresAt)
+      ) {
+        try {
+          await renewLease();
+        } catch {
+          /* offline: the check below says what to do */
+        }
+        now = new Date().toISOString();
+      }
+      const i = identityRef.current!;
       if (now < i.issuedAt || now > i.expiresAt)
         throw new Error(
           "Reconnect to renew your 24-hour offline authorisation",
@@ -595,6 +634,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     } finally {
       operating.current = false;
     }
+  }
+  /** Asks the server for a fresh 24-hour offline lease for this device. */
+  async function renewLease() {
+    const registration = await request("/devices/register", {
+      method: "POST",
+      body: JSON.stringify({
+        id: identityRef.current!.deviceId,
+        name: `${Platform.OS} employee device`,
+        counterId:
+          stateRef.current?.devices[identityRef.current!.deviceId]?.counterId ??
+          "counter-1",
+      }),
+    });
+    const renewed = {
+      ...identityRef.current!,
+      lease: registration.lease,
+      issuedAt: registration.issuedAt,
+      expiresAt: registration.expiresAt,
+    };
+    identityRef.current = renewed;
+    setIdentity(renewed);
+    await storage.set("identity", renewed);
   }
   async function sync() {
     if (demo || syncing.current || !identityRef.current?.lease) return;
@@ -703,27 +764,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           setPending([...entries]);
         }
       }
-      if (Date.parse(identityRef.current.expiresAt) - Date.now() < 3600000) {
-        const registration = await request("/devices/register", {
-          method: "POST",
-          body: JSON.stringify({
-            id: identityRef.current.deviceId,
-            name: `${Platform.OS} employee device`,
-            counterId:
-              stateRef.current?.devices[identityRef.current.deviceId]
-                ?.counterId ?? "counter-1",
-          }),
-        });
-        const renewed = {
-          ...identityRef.current,
-          lease: registration.lease,
-          issuedAt: registration.issuedAt,
-          expiresAt: registration.expiresAt,
-        };
-        identityRef.current = renewed;
-        setIdentity(renewed);
-        await storage.set("identity", renewed);
-      }
+      if (Date.parse(identityRef.current.expiresAt) - Date.now() < 3600000)
+        await renewLease();
       const remote = await storage.get<State>(`remote:${scope()}`);
       const latestQueue =
         (await storage.get<storage.Queued[]>(`outbox:${scope()}`)) ?? [];
@@ -741,6 +783,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setError(friendly(e as Error).message);
     } finally {
       syncing.current = false;
+      // Whatever happened above, show what is really still waiting, not a stale count.
+      try {
+        setPending(
+          (await storage.get<storage.Queued[]>(`outbox:${scope()}`)) ?? [],
+        );
+      } catch {
+        /* the next sync will correct it */
+      }
     }
   }
   async function flushOutbox() {

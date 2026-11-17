@@ -521,7 +521,7 @@ describe("retail ledger", () => {
         invoiceId: i.id,
         lines: [{ index: 0, quantity: "11" }],
       }),
-    ).toThrow("exceeds");
+    ).toThrow("at most 10");
   });
   it("prices a return from what was paid and says the exact refund when the amount is wrong", () => {
     let s = apply(order(), checkout());
