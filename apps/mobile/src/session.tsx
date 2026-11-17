@@ -672,14 +672,26 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             setError(
               `Owner reviewed and rejected ${rejected.length} queued sale(s): ${rejected.map((r: any) => r.reason).join("; ")}`,
             );
+          // The server refuses an entry it can never post (malformed, or its id was used for
+          // other data): drop it from the outbox so it cannot block the sales behind it, and say so.
+          const refused = result.results.filter((r: any) =>
+            ["invalid", "conflict"].includes(r.status),
+          );
+          if (refused.length)
+            setError(
+              `${refused.length} queued sale(s) could not be posted and were removed: ${refused.map((r: any) => r.error).join("; ")}`,
+            );
           const responses = new Map(result.results.map((r: any) => [r.id, r]));
           entries = await storage.updateQueue(scope(), (current) =>
             current
               .filter(
                 (e) =>
-                  !["synced", "resolved_rejected"].includes(
-                    (responses.get(e.command.id) as any)?.status,
-                  ),
+                  ![
+                    "synced",
+                    "resolved_rejected",
+                    "invalid",
+                    "conflict",
+                  ].includes((responses.get(e.command.id) as any)?.status),
               )
               .map((e) => {
                 const r = responses.get(e.command.id) as any;

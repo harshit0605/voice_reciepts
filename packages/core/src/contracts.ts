@@ -226,7 +226,7 @@ const data = z.discriminatedUnion("type", [
     type: z.literal("cash.move"),
     drawerId: id,
     kind: z.enum(["introduced", "withdrawal", "safe_transfer"]),
-    amountPaise: money,
+    amountPaise: money.min(1),
     reason: z.string().min(3),
   }),
   z.object({

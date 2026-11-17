@@ -41,6 +41,7 @@ export function parseExpiry(input: string): string | null {
     const out = iso(fullYear(m[3]), +m[2], +m[1]);
     return +m[2] >= 1 &&
       +m[2] <= 12 &&
+      !Number.isNaN(Date.parse(out)) &&
       new Date(out).toISOString().slice(0, 10) === out
       ? out
       : null;

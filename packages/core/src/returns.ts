@@ -62,6 +62,12 @@ export function refundQuote(
     const quantity = D(l.quantity);
     if (!quantity.gt(0))
       throw new Error("Returned quantity must be more than zero");
+    const product = state.products[original.productId];
+    const measured = ["g", "kg", "ml", "l"].includes(
+      (product?.baseUnit ?? "").toLowerCase(),
+    );
+    if (!measured && !quantity.isInteger())
+      throw new Error("Returned quantity must be whole units");
     const before = returned.get(l.index) ?? D(0);
     if (before.plus(quantity).gt(original.baseQuantity))
       throw new Error("Return exceeds quantity sold");

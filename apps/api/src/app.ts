@@ -376,16 +376,31 @@ app.post("/api/v1/devices/heartbeat", async (c) => {
   return c.json({ ok: true });
 });
 app.post("/api/v1/sync", async (c) => {
+  // Entries are checked one by one: a single bad entry is reported on its own and never blocks the
+  // valid sales behind it (the phone resends the same batch until every entry has an answer).
   const data = z
     .object({
       entries: z
-        .array(z.object({ command: commandSchema, lease: z.string() }))
+        .array(z.object({ command: z.unknown(), lease: z.unknown() }))
         .max(100),
     })
     .parse(await c.req.json());
   const actor = c.get("actor");
-  const results = [];
-  for (const entry of data.entries) {
+  const results: Record<string, unknown>[] = [];
+  for (const raw of data.entries) {
+    const parsed = z
+      .object({ command: commandSchema, lease: z.string() })
+      .safeParse(raw);
+    if (!parsed.success) {
+      const id = (raw.command as { id?: unknown } | null | undefined)?.id;
+      results.push({
+        id: typeof id === "string" ? id : null,
+        status: "invalid",
+        error: "Queued sale is malformed and cannot be posted",
+      });
+      continue;
+    }
+    const entry = parsed.data;
     const cmd = entry.command;
     if (cmd.operation.type !== "offline.checkout") {
       results.push({
@@ -413,78 +428,84 @@ app.post("/api/v1/sync", async (c) => {
     } catch (e) {
       reason = (e as Error).message;
     }
-    const result = await transact<Record<string, unknown>>(
-      actor.businessId,
-      (s) => {
-        const existing = s.commands[cmd.id];
-        if (existing) {
-          if (
-            existing.actorId !== actor.id ||
-            !sameFingerprint(existing.fingerprint, JSON.stringify(cmd))
-          )
-            throw new DomainError("CONFLICT", "Command ID already used");
-          return {
-            state: s,
-            result: { id: cmd.id, status: "synced", result: existing.result },
-          };
-        }
-        if (s.quarantine[cmd.id])
-          return {
-            state: s,
-            result: {
-              id: cmd.id,
-              status:
-                s.quarantine[cmd.id].status === "rejected"
-                  ? "resolved_rejected"
-                  : "review_required",
-              reason:
-                s.reviews[cmd.id]?.resolution ?? s.quarantine[cmd.id].reason,
-            },
-          };
-        const device =
-          s.devices[(cmd.operation as { deviceId: string }).deviceId];
-        if (!device || device.revoked || !s.members[actor.id]?.active)
-          reason = "Device or employee access was revoked";
-        if (!reason) {
-          try {
-            const current = s.members[actor.id];
-            const posted = execute(s, cmd, {
-              ...actor,
-              role: current.role,
-              canCollect: current.canCollect,
-              offlineAuthorized: true,
-            });
+    let result: Record<string, unknown>;
+    try {
+      result = await transact<Record<string, unknown>>(
+        actor.businessId,
+        (s) => {
+          const existing = s.commands[cmd.id];
+          if (existing) {
+            if (
+              existing.actorId !== actor.id ||
+              !sameFingerprint(existing.fingerprint, JSON.stringify(cmd))
+            )
+              throw new DomainError("CONFLICT", "Command ID already used");
             return {
-              state: posted.state,
-              result: { id: cmd.id, status: "synced", result: posted.result },
+              state: s,
+              result: { id: cmd.id, status: "synced", result: existing.result },
             };
-          } catch (e) {
-            reason = (e as Error).message;
           }
-        }
-        const next = structuredClone(s);
-        next.quarantine[cmd.id] = {
-          id: cmd.id,
-          actorId: actor.id,
-          command: cmd,
-          reason,
-          status: "pending",
-        };
-        next.reviews[cmd.id] = {
-          id: cmd.id,
-          kind: "quarantined_command",
-          referenceId: cmd.id,
-          title: "Offline sale requires recovery",
-          detail: reason,
-          createdAt: new Date().toISOString(),
-          status: "open",
-        };
-        return {
-          state: next,
-          result: { id: cmd.id, status: "review_required", reason },
-        };
-      },
-    );
+          if (s.quarantine[cmd.id])
+            return {
+              state: s,
+              result: {
+                id: cmd.id,
+                status:
+                  s.quarantine[cmd.id].status === "rejected"
+                    ? "resolved_rejected"
+                    : "review_required",
+                reason:
+                  s.reviews[cmd.id]?.resolution ?? s.quarantine[cmd.id].reason,
+              },
+            };
+          const device =
+            s.devices[(cmd.operation as { deviceId: string }).deviceId];
+          if (!device || device.revoked || !s.members[actor.id]?.active)
+            reason = "Device or employee access was revoked";
+          if (!reason) {
+            try {
+              const current = s.members[actor.id];
+              const posted = execute(s, cmd, {
+                ...actor,
+                role: current.role,
+                canCollect: current.canCollect,
+                offlineAuthorized: true,
+              });
+              return {
+                state: posted.state,
+                result: { id: cmd.id, status: "synced", result: posted.result },
+              };
+            } catch (e) {
+              reason = (e as Error).message;
+            }
+          }
+          const next = structuredClone(s);
+          next.quarantine[cmd.id] = {
+            id: cmd.id,
+            actorId: actor.id,
+            command: cmd,
+            reason,
+            status: "pending",
+          };
+          next.reviews[cmd.id] = {
+            id: cmd.id,
+            kind: "quarantined_command",
+            referenceId: cmd.id,
+            title: "Offline sale requires recovery",
+            detail: reason,
+            createdAt: new Date().toISOString(),
+            status: "open",
+          };
+          return {
+            state: next,
+            result: { id: cmd.id, status: "review_required", reason },
+          };
+        },
+      );
+    } catch (e) {
+      if (!(e instanceof DomainError) || e.code !== "CONFLICT") throw e;
+      result = { id: cmd.id, status: "conflict", error: e.message };
+    }
     results.push(result);
   }
   return c.json({ results });

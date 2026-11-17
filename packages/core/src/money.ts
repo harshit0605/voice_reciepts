@@ -54,13 +54,19 @@ export function quote(
   });
   const total = gross.reduce((n, l) => n + l.gross, 0);
   if (discountPaise > total) throw new Error("Discount exceeds sale");
-  let allocated = 0;
+  // Floor each line's share, then put the leftover paise on the last line, carrying whatever a
+  // line cannot take (its discount may never exceed its gross) back to the lines before it.
+  const shares = gross.map((x) =>
+    Math.floor((discountPaise * x.gross) / Math.max(1, total)),
+  );
+  let left = discountPaise - shares.reduce((n, v) => n + v, 0);
+  for (let i = shares.length - 1; i >= 0 && left > 0; i--) {
+    const add = Math.min(left, gross[i].gross - shares[i]);
+    shares[i] += add;
+    left -= add;
+  }
   return gross.map((x, i) => {
-    const discount =
-      i === gross.length - 1
-        ? discountPaise - allocated
-        : Math.floor((discountPaise * x.gross) / Math.max(1, total));
-    allocated += discount;
+    const discount = shares[i];
     const net = x.gross - discount;
     const tax = round(
       D(net)

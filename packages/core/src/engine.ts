@@ -897,6 +897,11 @@ export function execute(
         s.drawers[op.drawerId] && !s.drawers[op.drawerId].closedAt,
         "Drawer not open",
       );
+      ensure(
+        op.kind === "introduced" ||
+          op.amountPaise <= expectedCash(s, op.drawerId),
+        "Cannot take out more cash than the drawer should hold",
+      );
       s.cash[cmd.id] = {
         id: cmd.id,
         drawerId: op.drawerId,
