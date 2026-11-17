@@ -19,6 +19,7 @@ import {
   Row,
   Sheet,
   Txt,
+  useWord,
   colors,
   styles,
 } from "./ui";
@@ -77,7 +78,8 @@ export function ExpiryScreen({
   const s = useSession(),
     state = s.state!,
     hi = s.language === "hi",
-    run = useRun();
+    run = useRun(),
+    w = useWord();
   const [action, setAction] = useState<Action | null>(null),
     [reason, setReason] = useState("");
   const today = indiaDate(new Date().toISOString());
@@ -311,7 +313,7 @@ export function ExpiryScreen({
                 : "This records the set-aside stock as disposed of and removes it from your stock value. It cannot be undone."}
             </Txt>
             <Field
-              label={`${action.mode === "quarantine" ? "Quantity to set aside" : "Quantity disposed"} (${action.unit})`}
+              label={`${w(action.mode === "quarantine" ? "Quantity to set aside" : "Quantity disposed")} (${action.unit})`}
               value={action.quantity}
               onChange={(quantity: string) =>
                 setAction({ ...action, quantity })
@@ -342,12 +344,20 @@ export function ExpiryScreen({
                     },
                     reason: reason.trim(),
                   });
-                  await s.command({
-                    type: "approval.decide",
-                    approvalId,
-                    approve: true,
-                  });
-                  await s.command({ type: "stock.execute", approvalId });
+                  try {
+                    await s.command({
+                      type: "approval.decide",
+                      approvalId,
+                      approve: true,
+                    });
+                    await s.command({ type: "stock.execute", approvalId });
+                  } catch {
+                    // The request is already saved, so the change can be finished from Reviews.
+                    setAction(null);
+                    throw new Error(
+                      "The stock change is waiting in Reviews. Ask the owner to approve it there.",
+                    );
+                  }
                   setAction(null);
                 })
               }

@@ -345,7 +345,10 @@ export default function App() {
             </Pressable>
           )}
           {attention
-            .filter((a) => a.page !== page)
+            .filter(
+              (a) =>
+                a.page !== page || (page === "orders" && a.key !== "handoff"),
+            )
             .slice(0, 2)
             .map((a) => (
               <Pressable

@@ -517,6 +517,12 @@ export function DrawerPanel() {
                     return `${hi ? "दर्ज हुआ" : "Recorded"}: ${rupees(paise)} · ${reason.trim()}`;
                   }
                   const paise = needCount();
+                  if (!(await s.flushOutbox()))
+                    throw new Error(
+                      hi
+                        ? "कुछ बिल अभी भेजे जा रहे हैं। फ़ोन में 'अप टू डेट' दिखने तक रुकें, फिर दराज़ बंद करें।"
+                        : "Some bills are still sending. Wait until the phone says Up to date, then close.",
+                    );
                   const keptPaise = kept.trim() ? paiseOf(kept) : undefined;
                   if (keptPaise === null)
                     throw new Error(

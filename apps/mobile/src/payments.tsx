@@ -502,6 +502,16 @@ const kindWord = (kind: Approval["kind"], hi: boolean) =>
   })[kind];
 const DECLINED_SHOWN_MS = 2 * 60 * 60 * 1000;
 
+/** Credit and discount approvals die with their order: once it is billed, cancelled or edited they can never be used. */
+export function approvalLive(state: State, a: Approval) {
+  if (a.kind !== "credit" && a.kind !== "discount") return true;
+  const o = state.orders[String(a.payload.orderId)];
+  return (
+    !!o &&
+    (o.status === "held" || o.status === "handoff") &&
+    a.payload.orderVersion === o.version
+  );
+}
 /** What needs this person now: handoffs, decisions waiting for the owner, and answers to their requests. */
 export function useAttention(): Attention[] {
   const s = useSession(),
@@ -523,7 +533,9 @@ export function useAttention(): Attention[] {
     });
   const approvals = Object.values(state.approvals);
   if (me.role === "owner") {
-    const waiting = approvals.filter((a) => a.status === "pending").length;
+    const waiting = approvals.filter(
+      (a) => a.status === "pending" && approvalLive(state, a),
+    ).length;
     if (waiting)
       items.push({
         key: "approvals",
@@ -555,7 +567,7 @@ export function useAttention(): Attention[] {
       ["held", "handoff"].includes(
         state.orders[String(a.payload.orderId)]?.status ?? "",
       );
-    if (!orderOpen) continue;
+    if (!orderOpen || !approvalLive(state, a)) continue;
     const what = kindWord(a.kind, hi);
     if (a.status === "approved")
       items.push({

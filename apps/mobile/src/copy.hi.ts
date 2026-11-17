@@ -541,4 +541,25 @@ export const hindiCopy: Record<string, string> = {
     "यह बैच अभी एक्सपायर नहीं हुआ है। इसे हटाने पर यह अभी अलग रखा जाएगा और बिक नहीं सकेगा। इसे जल्दी हटाना हो तभी करें।",
   "This records the set-aside stock as disposed of and removes it from your stock value. It cannot be undone.":
     "यह अलग रखे माल का निपटारा दर्ज करता है और स्टॉक की कीमत से हटा देता है। इसे वापस नहीं किया जा सकता।",
+  "Open the cash drawer first: More → Cash drawer.":
+    "पहले कैश दराज़ खोलें: ज़्यादा → कैश दराज़।",
+  "Check this phone's date and time, then try again.":
+    "इस फ़ोन की तारीख़ और समय जाँचें, फिर दोबारा कोशिश करें।",
+  "Another action is being saved":
+    "एक और काम सेव हो रहा है। थोड़ा रुककर फिर कोशिश करें।",
+  "Order changed; refresh before continuing":
+    "ऑर्डर बदल गया है; आगे बढ़ने से पहले रिफ़्रेश करें",
+  "An unused owner approval is required": "मालिक की बिना इस्तेमाल हुई मंज़ूरी चाहिए",
+  "Approval does not match this transaction":
+    "यह मंज़ूरी इस बिल से मेल नहीं खाती",
+  "Reconnect to renew your 24-hour offline authorisation":
+    "24 घंटे की ऑफ़लाइन अनुमति दोबारा पाने के लिए इंटरनेट से जुड़ें",
+  "Select a customer for credit": "उधार के लिए ग्राहक चुनें",
+  "This credit is already waiting for the owner. You will see it on screen when they decide.":
+    "यह उधार मालिक की मंज़ूरी का इंतज़ार कर रहा है। मालिक के फ़ैसला करते ही आपको स्क्रीन पर दिखेगा।",
+  "Requested by:": "माँगने वाले:",
+  "Sent to the owner for approval. The bill is waiting in Orders.":
+    "मालिक की मंज़ूरी के लिए भेज दिया। बिल ऑर्डर में इंतज़ार कर रहा है।",
+  "The stock change is waiting in Reviews. Ask the owner to approve it there.":
+    "स्टॉक का बदलाव रिव्यू में इंतज़ार कर रहा है। मालिक से वहाँ मंज़ूर करवाएँ।",
 };

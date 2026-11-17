@@ -33,7 +33,12 @@ import { Checkout } from "./selling";
 import { ProductForm } from "./product-form";
 import { CatalogueImport } from "./catalogue-import";
 import { StockCount, CountForm } from "./stock-count";
-import { ReturnForm, RefundForm, amountOf } from "./payments";
+import {
+  ReturnForm,
+  RefundForm,
+  amountOf,
+  approvalLive,
+} from "./payments";
 import {
   DrawerPanel,
   DayReportView,
@@ -202,7 +207,7 @@ export function OverviewScreen({
   }).length;
   const expiring = expiryRows(state, today).length;
   const waiting = Object.values(state.approvals).filter(
-    (a) => a.status === "pending",
+    (a) => a.status === "pending" && approvalLive(state, a),
   ).length;
   const openReviews = Object.values(state.reviews).filter(
     (r) => r.status === "open",
@@ -675,7 +680,12 @@ export function OrdersScreen({
             <View key={o.id} style={styles.listRow}>
               <Row style={{ justifyContent: "space-between" }}>
                 <View style={{ flex: 1, marginRight: 12 }}>
-                  <Txt bold>Order {o.id.slice(0, 8)}</Txt>
+                  <Txt bold>
+                    Order {o.id.slice(0, 8)}
+                    {o.customerId && state.customers[o.customerId]
+                      ? ` · ${state.customers[o.customerId].name}`
+                      : ""}
+                  </Txt>
                   <Txt size={13} style={{ marginTop: 5 }}>
                     {orderSummary(state, o)
                       .lines.map((l) => l.name)
@@ -1907,7 +1917,9 @@ export function ReviewsScreen() {
     [reason, R] = useState(""),
     [reviewId, V] = useState("");
   const pending = Object.values(state.approvals).filter(
-    (a) => a.status === "pending" || a.status === "approved",
+    (a) =>
+      (a.status === "pending" || a.status === "approved") &&
+      approvalLive(state, a),
   );
   async function clip(preserve = false) {
     const observation =

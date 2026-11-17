@@ -100,7 +100,11 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
   );
   const basket = selling.entry.basket;
   const setBasket = (lines: OrderLine[]) =>
-    void selling.update((v) => ({ ...v, basket: lines }));
+    void selling.update((v) => ({
+      ...v,
+      basket: lines,
+      customerId: lines.length ? v.customerId : undefined,
+    }));
   const addLock = useRef(false);
   const busy = selling.saving || !selling.ready || !!selling.error;
   const voiceItem = selling.entry.voice.items.find((i) => i.id === activeVoice);
@@ -1113,6 +1117,9 @@ export function Checkout({
             },
             reason: "Customer requested credit",
           });
+          s.setError(
+            "Sent to the owner for approval. The bill is waiting in Orders.",
+          );
           onHeld();
           return;
         }

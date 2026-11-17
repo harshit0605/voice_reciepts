@@ -38,6 +38,19 @@ const signInProblem = (e: { status?: number; message?: string }) =>
       : !e.status
         ? "Cannot reach the shop server. Check the internet and try again."
         : (e.message ?? "Sign in failed");
+const CLOCK_SKEW = "Check this phone's date and time, then try again.";
+/** Engine and server wording rewritten into what staff can act on. */
+function friendly<E>(e: E): E {
+  if (!(e instanceof Error)) return e;
+  if (
+    e.message.includes("Online command expired") ||
+    e.message.includes("Transaction is in the future")
+  )
+    e.message = CLOCK_SKEW;
+  else if (e.message === "Open a cash drawer before collecting cash")
+    e.message = "Open the cash drawer first: More → Cash drawer.";
+  return e;
+}
 const NOT_SENT =
   "No connection, so this was not saved. Cash bills still work offline; try this again when the connection returns.";
 type Identity = {
@@ -74,6 +87,8 @@ type Ctx = {
     attempt: CheckoutAttempt,
   ) => Promise<Invoice>;
   sync: () => Promise<void>;
+  /** Sends everything in the outbox; true only when nothing is left waiting. */
+  flushOutbox: () => Promise<boolean>;
   refresh: () => Promise<void>;
   request: (route: string, init?: RequestInit) => Promise<any>;
   setError: (s: string) => void;
@@ -711,10 +726,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         });
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      setError(friendly(e as Error).message);
     } finally {
       syncing.current = false;
     }
+  }
+  async function flushOutbox() {
+    if (demo) return true;
+    for (let i = 0; i < 20 && syncing.current; i++)
+      await new Promise((r) => setTimeout(r, 500));
+    await sync();
+    const left =
+      (await storage.get<storage.Queued[]>(`outbox:${scope()}`)) ?? [];
+    setPending([...left]);
+    return left.length === 0;
   }
   useEffect(() => {
     (async () => {
@@ -793,9 +818,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         startDemo,
         logout,
         setLanguage,
-        command,
-        cashSale,
+        command: (op) => command(op).catch((e) => Promise.reject(friendly(e))),
+        cashSale: (...a) =>
+          cashSale(...a).catch((e) => Promise.reject(friendly(e))),
         sync,
+        flushOutbox,
         refresh,
         request,
         setError,
