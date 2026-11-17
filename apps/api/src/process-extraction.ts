@@ -98,9 +98,23 @@ export async function processClaimedExtraction(
       /Unterminated|Unexpected end of JSON/i.test(message);
     const terminal =
       job.attempts >= 2 || (!transient && !(truncated && job.attempts < 2));
+    // Staff see the final message on the phone: provider and parsing failures become something
+    // they can act on; the technical detail stays in the server log.
+    const technical =
+      /provider|returned \d|timeout|fetch failed|json|unexpected|unterminated|econn|status/i.test(
+        message,
+      );
+    if (terminal && technical)
+      console.error(`Extraction ${job.id} failed: ${message}`);
+    const shown =
+      terminal && technical
+        ? job.kind === "voice"
+          ? "Couldn't make out the recording. Try again closer to the phone, or type the items."
+          : "Couldn't read this bill. Try a clearer photo, or enter it by hand."
+        : message;
     await pool.query(
       "UPDATE jobs SET status=$2,error=$3,locked_at=NULL,available_at=now()+interval '30 seconds' WHERE id=$1",
-      [job.id, terminal ? "failed" : "pending", (e as Error).message],
+      [job.id, terminal ? "failed" : "pending", shown],
     );
     if (terminal && job.kind === "voice")
       await unlink(job.input.filename).catch(() => {});

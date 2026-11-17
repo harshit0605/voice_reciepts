@@ -570,4 +570,8 @@ export const hindiCopy: Record<string, string> = {
     "स्टॉक का बदलाव रिव्यू में इंतज़ार कर रहा है। मालिक से वहाँ मंज़ूर करवाएँ।",
   matches: "मेल खाता है",
   "not counted": "गिना नहीं गया",
+  "Couldn't make out the recording. Try again closer to the phone, or type the items.":
+    "रिकॉर्डिंग समझ नहीं आई। फ़ोन के पास बोलकर फिर कोशिश करें, या दवाएँ टाइप करें।",
+  "Couldn't read this bill. Try a clearer photo, or enter it by hand.":
+    "यह बिल पढ़ा नहीं जा सका। साफ़ फ़ोटो लें, या हाथ से भरें।",
 };
