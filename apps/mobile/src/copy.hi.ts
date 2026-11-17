@@ -588,4 +588,8 @@ export const hindiCopy: Record<string, string> = {
   "Shop backups": "दुकान के बैकअप",
   "Bring back sales that only reached the shop PC.":
     "जो बिक्री सिर्फ़ दुकान के कंप्यूटर तक पहुँची, उसे वापस लाएँ।",
+  "Voice entry is unavailable right now. Type exact catalogue names, or use search.":
+    "बोलकर एंट्री अभी उपलब्ध नहीं है। दवा का पूरा नाम टाइप करें, या खोज इस्तेमाल करें।",
+  "Bill reading is unavailable right now. Enter the bill by hand.":
+    "बिल पढ़ना अभी उपलब्ध नहीं है। बिल हाथ से भरें।",
 };

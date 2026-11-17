@@ -122,7 +122,8 @@ async function generateDraft(
 ) {
   const apiKey = process.env.GEMINI_API_KEY;
   const openRouterKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey && !openRouterKey)
+  const openAiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey && !openRouterKey && !openAiKey)
     throw new Error("Document/structure provider is not configured");
   const schema = kind === "voice" ? voiceSchema : invoiceSchema;
   const input = kind === "voice" ? bytes.toString("utf8") : undefined;
@@ -139,16 +140,30 @@ async function generateDraft(
       : process.env.STRUCTURE_MODEL) ??
     process.env.GEMINI_MODEL ??
     "gemini-2.5-flash-lite";
-  if (!apiKey)
-    return generateWithOpenRouter(
-      openRouterKey!,
-      kind,
-      bytes,
-      mimeType,
-      model,
-      instruction,
-      input,
-    );
+  if (!apiKey) {
+    const viaOpenAi = () =>
+      generateWithOpenAi(openAiKey!, kind, bytes, mimeType, instruction, input);
+    if (!openRouterKey) return viaOpenAi();
+    try {
+      return await generateWithOpenRouter(
+        openRouterKey,
+        kind,
+        bytes,
+        mimeType,
+        model,
+        instruction,
+        input,
+      );
+    } catch (e) {
+      // Out of credits or a revoked key is the account, not the recording: the OpenAI key that
+      // already does speech-to-text takes the draft instead, so the counter keeps working.
+      if (!openAiKey || !isAccountProblem(e)) throw e;
+      console.error(
+        `OpenRouter unavailable, using OpenAI: ${(e as Error).message}`,
+      );
+      return viaOpenAi();
+    }
+  }
   const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
     model: model,
@@ -179,6 +194,93 @@ async function generateDraft(
     provider: "gemini",
     model,
     usage: response.usageMetadata ?? null,
+  };
+}
+
+/** A provider refusing for billing or credentials (401, 402, 403), which retrying cannot fix. */
+export function isAccountProblem(e: unknown) {
+  return /provider returned (401|402|403)\b/i.test(
+    String((e as Error)?.message),
+  );
+}
+
+// OpenAI chat completions, the fallback when OpenRouter is out of credits. Strict mode makes the
+// reply follow the schema exactly (Gemini's constrained decoding does the same), and zod checks it.
+// Contract: https://platform.openai.com/docs/api-reference/chat/create
+async function generateWithOpenAi(
+  key: string,
+  kind: "voice" | "invoice",
+  bytes: Buffer,
+  mimeType: string,
+  instruction: string,
+  input?: string,
+) {
+  const schema = kind === "voice" ? voiceSchema : invoiceSchema;
+  const model = process.env.OPENAI_STRUCTURE_MODEL ?? "gpt-4.1";
+  const data = `data:${mimeType};base64,${bytes.toString("base64")}`;
+  const document =
+    kind === "voice"
+      ? { type: "text", text: input! }
+      : mimeType === "application/pdf"
+        ? { type: "file", file: { filename: "invoice.pdf", file_data: data } }
+        : { type: "image_url", image_url: { url: data } };
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "text", text: instruction }, document],
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: kind === "voice" ? "sale_items" : "invoice_draft",
+          strict: true,
+          schema: decodingSchema(z.toJSONSchema(schema)),
+        },
+      },
+      temperature: 0,
+      max_tokens: kind === "invoice" ? 12000 : 3000,
+      store: false,
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!r.ok) {
+    const detail = await r
+      .json()
+      .then((e: any) => String(e?.error?.message ?? "").slice(0, 300))
+      .catch(() => "");
+    throw new Error(
+      `Structure provider returned ${r.status}${detail ? `: ${detail}` : ""}`,
+    );
+  }
+  const result = z
+    .object({
+      choices: z
+        .array(
+          z.object({ message: z.object({ content: z.string().nullable() }) }),
+        )
+        .min(1),
+      usage: z.unknown().optional(),
+    })
+    .parse(await r.json());
+  const text = (result.choices[0].message.content ?? "")
+    .replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, "")
+    .trim();
+  return {
+    draft: schema.parse(JSON.parse(text)),
+    ...(input ? { transcript: input } : {}),
+    requiresReview: true,
+    provider: "openai",
+    model,
+    usage: result.usage ?? null,
   };
 }
 

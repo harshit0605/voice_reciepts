@@ -6,6 +6,7 @@ import {
   transcribe,
   structureTranscript,
   speechProvider,
+  isAccountProblem,
 } from "./providers";
 export type ExtractionJob = {
   id: string;
@@ -106,12 +107,17 @@ export async function processClaimedExtraction(
       );
     if (terminal && technical)
       console.error(`Extraction ${job.id} failed: ${message}`);
+    // Every provider refused for billing or credentials: say so, rather than blame the recording.
     const shown =
-      terminal && technical
+      terminal && isAccountProblem(e)
         ? job.kind === "voice"
-          ? "Couldn't make out the recording. Try again closer to the phone, or type the items."
-          : "Couldn't read this bill. Try a clearer photo, or enter it by hand."
-        : message;
+          ? "Voice entry is unavailable right now. Type exact catalogue names, or use search."
+          : "Bill reading is unavailable right now. Enter the bill by hand."
+        : terminal && technical
+          ? job.kind === "voice"
+            ? "Couldn't make out the recording. Try again closer to the phone, or type the items."
+            : "Couldn't read this bill. Try a clearer photo, or enter it by hand."
+          : message;
     await pool.query(
       "UPDATE jobs SET status=$2,error=$3,locked_at=NULL,available_at=now()+interval '30 seconds' WHERE id=$1",
       [job.id, terminal ? "failed" : "pending", shown],

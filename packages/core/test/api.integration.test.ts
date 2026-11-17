@@ -423,6 +423,31 @@ describe.skipIf(!enabled)("PostgreSQL and authenticated API", () => {
     };
     expect((await run(wrong.data.id, malformed)).status).toBe("failed");
   });
+  it("tells staff the service is unavailable, not that the recording was bad, when providers are out of credit", async () => {
+    const upload = await req(
+      "/api/v1/extractions/text",
+      { text: `Azithromycin 5 goli ${randomUUID()}`, saleId: randomUUID() },
+      employeeCookie,
+    );
+    const { processClaimedExtraction } =
+      await import("../../../apps/api/src/process-extraction");
+    const noCredit = async () => {
+      throw new Error("Structure provider returned 402: Insufficient credits");
+    };
+    const result = await processClaimedExtraction(
+      await claimed(upload.data.id),
+      { structure: noCredit, catalogue: async () => [] } as any,
+    );
+    expect(result.status).toBe("failed");
+    const job = await req(
+      `/api/v1/extractions/${upload.data.id}`,
+      undefined,
+      employeeCookie,
+    );
+    expect(job.data.error).toBe(
+      "Voice entry is unavailable right now. Type exact catalogue names, or use search.",
+    );
+  });
   it("processes exact typed entries with no speech or structure provider call", async () => {
     const upload = await req(
       "/api/v1/extractions/text",
