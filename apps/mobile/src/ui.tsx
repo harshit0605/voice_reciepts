@@ -44,8 +44,11 @@ function translateCopy(value: any, language: string): any {
   if (language !== "hi") return value;
   if (typeof value === "string") {
     const trim = value.trim();
-    return englishToHindi[trim]
-      ? value.replace(trim, englishToHindi[trim])
+    if (englishToHindi[trim]) return value.replace(trim, englishToHindi[trim]);
+    // Drawer differences from core's differenceText: "₹50.00 short" / "₹20.00 over".
+    const diff = /^(₹[\d,.]+) (short|over)$/.exec(trim);
+    return diff
+      ? value.replace(trim, `${diff[1]} ${diff[2] === "short" ? "कम" : "ज़्यादा"}`)
       : value;
   }
   return Array.isArray(value)

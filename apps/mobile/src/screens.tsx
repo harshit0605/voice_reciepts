@@ -534,11 +534,12 @@ export function OverviewScreen({
               : "Gateway unavailable or not paired"}
           </Txt>
           <Txt muted>
-            Printer:{" "}
+            {hi ? "प्रिंटर:" : "Printer:"}{" "}
             {operations.gateway?.details.printerConfigured
               ? "Configured"
               : "Not configured"}{" "}
-            · {operations.gateway?.details.uncertainPrints ?? 0} uncertain jobs
+            · {operations.gateway?.details.uncertainPrints ?? 0}{" "}
+            {hi ? "अनिश्चित प्रिंट" : "uncertain jobs"}
           </Txt>
         </Section>
       )}

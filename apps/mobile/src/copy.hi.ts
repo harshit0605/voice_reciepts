@@ -568,4 +568,6 @@ export const hindiCopy: Record<string, string> = {
     "मालिक की मंज़ूरी के लिए भेज दिया। बिल ऑर्डर में इंतज़ार कर रहा है।",
   "The stock change is waiting in Reviews. Ask the owner to approve it there.":
     "स्टॉक का बदलाव रिव्यू में इंतज़ार कर रहा है। मालिक से वहाँ मंज़ूर करवाएँ।",
+  matches: "मेल खाता है",
+  "not counted": "गिना नहीं गया",
 };
