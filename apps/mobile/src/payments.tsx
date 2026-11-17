@@ -500,7 +500,7 @@ const kindWord = (kind: Approval["kind"], hi: boolean) =>
     refund: hi ? "वापसी" : "return",
     stock: hi ? "स्टॉक बदलाव" : "stock change",
   })[kind];
-const DECLINED_SHOWN_MS = 2 * 60 * 60 * 1000;
+const DECLINED_SHOWN_MS = 30 * 60 * 1000;
 
 /** Credit and discount approvals die with their order: once it is billed, cancelled or edited they can never be used. */
 export function approvalLive(state: State, a: Approval) {
@@ -520,6 +520,7 @@ export function useAttention(): Attention[] {
     hi = s.language === "hi";
   if (!state || !me) return [];
   const items: Attention[] = [];
+  let declined: { at: string; item: Attention } | null = null;
   const handed = Object.values(state.orders).filter(
     (o) => o.status === "handoff" && o.offeredTo === me.id,
   ).length;
@@ -592,13 +593,20 @@ export function useAttention(): Attention[] {
       });
     else if (
       a.status === "rejected" &&
-      now - Date.parse(a.decidedAt ?? a.requestedAt) < DECLINED_SHOWN_MS
+      now - Date.parse(a.decidedAt ?? a.requestedAt) < DECLINED_SHOWN_MS &&
+      (!declined ||
+        Date.parse(a.decidedAt ?? a.requestedAt) > Date.parse(declined.at))
     )
-      items.push({
-        key: a.id,
-        page: "orders",
-        text: hi ? `मालिक ने ${what} मना किया` : `Owner declined the ${what}`,
-      });
+      declined = {
+        at: a.decidedAt ?? a.requestedAt,
+        item: {
+          key: a.id,
+          page: "orders",
+          text: hi ? `मालिक ने ${what} मना किया` : `Owner declined the ${what}`,
+        },
+      };
   }
+  // Only the latest declined answer is shown, so old ones do not pile up.
+  if (declined) items.push(declined.item);
   return items;
 }

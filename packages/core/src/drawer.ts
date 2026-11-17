@@ -1,5 +1,12 @@
 import { D, expectedCash, indiaDate, round, totals } from "./money";
-import type { Denominations, DrawerCheck, Eod, Order, State } from "./types";
+import type {
+  Denominations,
+  Device,
+  DrawerCheck,
+  Eod,
+  Order,
+  State,
+} from "./types";
 
 /** Indian notes a drawer is counted in, largest first. Coins are entered as one amount. */
 export const NOTES = [500, 200, 100, 50, 20, 10] as const;
@@ -357,10 +364,18 @@ export function eodSnapshot(
     syncCutoffAt: now,
     syncCutoffRevision: state.revision + 1,
     provisional:
-      Object.values(state.devices).some((d) => !d.revoked) ||
+      Object.values(state.devices).some((d) => deviceExpected(d, now)) ||
       Object.values(state.quarantine).some((q) => q.status === "pending"),
     ...extra,
   };
+}
+
+/** A phone a day report must wait for: not revoked, and either holding unsent bills or seen within 24 hours of `at`. A never-seen or long-silent phone is ignored. */
+export function deviceExpected(d: Device, at: string) {
+  if (d.revoked) return false;
+  if (d.pendingCount > 0) return true;
+  const seen = Date.parse(d.lastSeen);
+  return Number.isFinite(seen) && Date.parse(at) - seen <= 86400000;
 }
 
 /** When the last thing was recorded on a day: a bill, payment, refund, cash movement, cancellation or drawer count. */

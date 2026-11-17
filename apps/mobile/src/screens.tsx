@@ -5,6 +5,7 @@ import {
   Pressable,
   useWindowDimensions,
   Platform,
+  type TextInput,
 } from "react-native";
 import { PurchaseForm } from "./receiving";
 import * as FileSystem from "expo-file-system";
@@ -1938,7 +1939,9 @@ export function ReviewsScreen() {
     run = useRun();
   const [selected, setSelected] = useState<Approval | null>(null),
     [reason, R] = useState(""),
-    [reviewId, V] = useState("");
+    [reviewId, V] = useState(""),
+    [confirmCancel, setConfirmCancel] = useState(false);
+  const hi = s.language === "hi";
   const pending = Object.values(state.approvals).filter(
     (a) =>
       (a.status === "pending" || a.status === "approved") &&
@@ -2026,7 +2029,10 @@ export function ReviewsScreen() {
         {pending.map((a) => (
           <Pressable
             key={a.id}
-            onPress={() => setSelected(a)}
+            onPress={() => {
+              setSelected(a);
+              setConfirmCancel(false);
+            }}
             style={styles.listRow}
           >
             <Row style={{ justifyContent: "space-between" }}>
@@ -2082,7 +2088,10 @@ export function ReviewsScreen() {
       <Sheet
         visible={!!selected}
         title="Review approval"
-        onClose={() => setSelected(null)}
+        onClose={() => {
+          setSelected(null);
+          setConfirmCancel(false);
+        }}
       >
         {selected && (
           <>
@@ -2141,10 +2150,48 @@ export function ReviewsScreen() {
                 Execute approved adjustment
               </Button>
             ) : selected.kind === "refund" ? (
-              <RefundForm
-                approval={selected}
-                onDone={() => setSelected(null)}
-              />
+              <>
+                <RefundForm
+                  approval={selected}
+                  onDone={() => setSelected(null)}
+                />
+                <View style={{ height: 16 }} />
+                {confirmCancel ? (
+                  <View style={{ gap: 10 }}>
+                    <Txt muted>
+                      {hi
+                        ? "यह वापसी मंज़ूरी रद्द हो जाएगी और पैसा नहीं लौटाया जा सकेगा। पक्का?"
+                        : "This cancels the approved return. No money can be given back on it. Sure?"}
+                    </Txt>
+                    <Row>
+                      <Button
+                        onPress={() =>
+                          void run(async () => {
+                            await s.command({
+                              type: "approval.decide",
+                              approvalId: selected.id,
+                              approve: false,
+                              reason:
+                                "Cancelled by the owner before the refund",
+                            });
+                            setConfirmCancel(false);
+                            setSelected(null);
+                          })
+                        }
+                      >
+                        {hi ? "हाँ, रद्द करें" : "Yes, cancel approval"}
+                      </Button>
+                      <Button secondary onPress={() => setConfirmCancel(false)}>
+                        {hi ? "नहीं" : "Keep it"}
+                      </Button>
+                    </Row>
+                  </View>
+                ) : (
+                  <Button secondary onPress={() => setConfirmCancel(true)}>
+                    {hi ? "मंज़ूरी रद्द करें" : "Cancel approval"}
+                  </Button>
+                )}
+              </>
             ) : (
               <Txt muted>
                 Return to the held order to use this approval. It is valid only
@@ -2379,6 +2426,8 @@ export function AdministrationScreen() {
     [password, P] = useState(""),
     [collect, C] = useState(true),
     [employee, setEmployee] = useState<string | null>(null);
+  const usernameRef = useRef<TextInput>(null),
+    passwordRef = useRef<TextInput>(null);
   return (
     <Page
       title="Administration"
@@ -2434,18 +2483,29 @@ export function AdministrationScreen() {
         </Button>
       </Section>
       <Section title="Invite employee">
-        <Field label="Employee name" value={name} onChange={N} />
+        <Field
+          label="Employee name"
+          value={name}
+          onChange={N}
+          returnKeyType="next"
+          onSubmit={() => usernameRef.current?.focus()}
+        />
         <Field
           label="Unique username"
           value={username}
           onChange={U}
           identifier
+          inputRef={usernameRef}
+          returnKeyType="next"
+          onSubmit={() => passwordRef.current?.focus()}
         />
         <Field
           label="Temporary password · at least 12 characters"
           value={password}
           onChange={P}
           secret
+          inputRef={passwordRef}
+          returnKeyType="done"
         />
         <Pressable onPress={() => C(!collect)}>
           <Row>

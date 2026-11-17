@@ -1,4 +1,4 @@
-import { eodSnapshot } from "./drawer";
+import { deviceExpected, eodSnapshot } from "./drawer";
 import type { Device, Eod, State } from "./types";
 /** Each live phone must acknowledge a completed sync after the report cutoff.
  * A recent heartbeat before close cannot prove the phone has no queued cash sale.
@@ -30,7 +30,7 @@ export function phonesHoldingReport(state: State, eod: Eod) {
   const cutoff = eod.syncCutoffAt ?? eod.createdAt;
   return Object.values(state.devices).filter(
     (d) =>
-      !d.revoked &&
+      deviceExpected(d, cutoff) &&
       (d.pendingCount > 0 ||
         !d.lastSyncedAt ||
         d.lastSyncedAt < cutoff ||
@@ -46,4 +46,20 @@ export function deviceLabel(state: State, device: Device) {
       ? "Android phone"
       : device.name;
   return `${state.members[device.userId]?.name ?? "Unknown"} · ${kind} · bills ${device.series}`;
+}
+
+/** How far a phone clock may drift from the server's and still sign sales on a lease. */
+export const LEASE_SKEW_MS = 5 * 60 * 1000;
+/** Is `at` inside a lease's validity, allowing for clock drift at either end? Used by the phone before signing and by the server when a sale syncs. */
+export function withinLeaseWindow(
+  at: string,
+  issuedAt: string,
+  expiresAt: string,
+) {
+  const t = Date.parse(at);
+  return (
+    Number.isFinite(t) &&
+    t >= Date.parse(issuedAt) - LEASE_SKEW_MS &&
+    t <= Date.parse(expiresAt) + LEASE_SKEW_MS
+  );
 }

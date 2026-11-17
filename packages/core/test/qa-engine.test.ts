@@ -18,6 +18,10 @@ import {
   openRefundRequest,
   round,
   totals,
+  deviceExpected,
+  phonesHoldingReport,
+  withinLeaseWindow,
+  LEASE_SKEW_MS,
   type Actor,
   type Operation,
   type State,
@@ -2642,5 +2646,71 @@ describe("approval requests are checked when asked, not only when used", () => {
       );
     fails(() => request("11"), "INVALID", /at most 10 of this item/);
     expect(request("10").state).toBeTruthy();
+  });
+});
+
+describe("QA: device clock skew and stale phones", () => {
+  it("accepts a sale signed by a phone clock a few minutes either side of the lease, not hours", () => {
+    const issued = "2026-09-23T09:00:00.000Z",
+      expires = "2026-09-24T09:00:00.000Z";
+    const at = (ms: number) => new Date(Date.parse(issued) + ms).toISOString();
+    expect(withinLeaseWindow(at(-45000), issued, expires)).toBe(true);
+    expect(withinLeaseWindow(at(-LEASE_SKEW_MS), issued, expires)).toBe(true);
+    expect(withinLeaseWindow(at(-LEASE_SKEW_MS - 1000), issued, expires)).toBe(
+      false,
+    );
+    expect(withinLeaseWindow(at(86400000 + 60000), issued, expires)).toBe(true);
+    expect(
+      withinLeaseWindow(at(86400000 + LEASE_SKEW_MS + 1000), issued, expires),
+    ).toBe(false);
+    expect(withinLeaseWindow("garbage", issued, expires)).toBe(false);
+  });
+  it("a day report waits only for live phones: revoked, long-silent ones are ignored, unsent bills always count", () => {
+    const s = freshState();
+    const base = s.devices["demo-device"];
+    const old = new Date(Date.parse(NOW) - 3 * 86400000).toISOString();
+    s.devices["demo-device"] = { ...base, lastSeen: old };
+    s.devices["staff-device"] = { ...s.devices["staff-device"], lastSeen: NOW };
+    s.devices["gone"] = { ...base, id: "gone", revoked: true, lastSeen: NOW };
+    expect(deviceExpected(s.devices["demo-device"], NOW)).toBe(false);
+    expect(deviceExpected(s.devices["staff-device"], NOW)).toBe(true);
+    expect(deviceExpected(s.devices["gone"], NOW)).toBe(false);
+    s.devices["demo-device"].pendingCount = 2;
+    expect(deviceExpected(s.devices["demo-device"], NOW)).toBe(true);
+    s.devices["demo-device"].pendingCount = 0;
+    const eod = {
+      createdAt: NOW,
+      syncCutoffAt: NOW,
+    } as Parameters<typeof phonesHoldingReport>[1];
+    expect(phonesHoldingReport(s, eod).map((d) => d.id)).toEqual([
+      "staff-device",
+    ]);
+  });
+  it("lets the owner cancel an approved refund that was never paid, with a recorded reason", () => {
+    let s = step(save(freshState(), [L("dolo-b1", "1", "strip")]), pay(2800));
+    const id = nextId();
+    s = run(
+      s,
+      {
+        type: "approval.request",
+        approvalId: id,
+        kind: "refund",
+        payload: {
+          invoiceId: invoiceOf(s).id,
+          lines: [{ index: 0, quantity: "1" }],
+        },
+        reason: "returned",
+      },
+      { actor: staff },
+    ).state;
+    s = step(s, { type: "approval.decide", approvalId: id, approve: true });
+    s = step(s, {
+      type: "approval.decide",
+      approvalId: id,
+      approve: false,
+      reason: "Cancelled by the owner",
+    });
+    expect(s.approvals[id].status).toBe("rejected");
+    expect(s.approvals[id].decisionReason).toBe("Cancelled by the owner");
   });
 });

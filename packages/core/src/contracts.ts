@@ -193,6 +193,7 @@ const data = z.discriminatedUnion("type", [
     type: z.literal("approval.decide"),
     approvalId: id,
     approve: z.boolean(),
+    reason: z.string().max(200).optional(),
   }),
   z.object({
     type: z.literal("refund.execute"),

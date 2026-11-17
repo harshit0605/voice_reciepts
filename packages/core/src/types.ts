@@ -168,6 +168,8 @@ export type Approval = Entity & {
   status: "pending" | "approved" | "rejected" | "used";
   decidedBy?: string;
   decidedAt?: string;
+  /** Why the owner declined or cancelled it, when they said. */
+  decisionReason?: string;
   reason: string;
 };
 /** Notes and coins counted: { "500": 3, "200": 1, coins: 1250 } (coins in paise). */

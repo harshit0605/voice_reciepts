@@ -27,6 +27,7 @@ describe.skipIf(!enabled)(
     let otherBusinessId = "";
     let ownerDevice = "";
     let ownerLease = "";
+    let ownerLeaseIssuedAt = "";
     let employeeDevice = "";
     let employeeLease = "";
     let sequence = 700;
@@ -211,6 +212,7 @@ describe.skipIf(!enabled)(
       });
       expect(od.status).toBe(200);
       ownerLease = od.data.lease;
+      ownerLeaseIssuedAt = od.data.issuedAt;
       employeeDevice = randomUUID();
       const ed = await req(
         "/api/v1/devices/register",
@@ -540,6 +542,23 @@ describe.skipIf(!enabled)(
         });
         expect(again.data.results[0].status).toBe("synced");
         expect(await stock()).toBe(before - 1);
+      });
+      it("syncs a sale signed by a phone clock 45 s behind the server, but quarantines one an hour before the lease", async () => {
+        const issued = Date.parse(ownerLeaseIssuedAt);
+        const slow = offlineCommand({
+          at: new Date(issued - 45000).toISOString(),
+        });
+        const ok = await req("/api/v1/sync", {
+          entries: [{ command: slow, lease: ownerLease }],
+        });
+        expect(ok.data.results[0].status).toBe("synced");
+        const wrong = offlineCommand({
+          at: new Date(issued - 3600000).toISOString(),
+        });
+        const bad = await req("/api/v1/sync", {
+          entries: [{ command: wrong, lease: ownerLease }],
+        });
+        expect(bad.data.results[0].status).toBe("review_required");
       });
       it("quarantines a sale with a forged lease, keeps it quarantined on replay and posts nothing", async () => {
         const c = offlineCommand();

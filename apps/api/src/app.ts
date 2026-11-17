@@ -19,6 +19,8 @@ import {
   type Actor,
   type Notice,
   type State,
+  LEASE_SKEW_MS,
+  withinLeaseWindow,
 } from "@counterwell/core";
 import {
   db,
@@ -435,9 +437,8 @@ app.post("/api/v1/sync", async (c) => {
       )
         throw new Error("Offline identity mismatch");
       if (
-        cmd.occurredAt < lease.issuedAt ||
-        cmd.occurredAt > lease.expiresAt ||
-        Date.parse(cmd.occurredAt) > Date.now() + 120000
+        !withinLeaseWindow(cmd.occurredAt, lease.issuedAt, lease.expiresAt) ||
+        Date.parse(cmd.occurredAt) > Date.now() + LEASE_SKEW_MS
       )
         throw new Error("Sale outside authorised offline window");
     } catch (e) {

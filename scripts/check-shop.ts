@@ -51,6 +51,7 @@ if (action === "create") {
     username,
   };
   delete state.members["demo-employee"];
+  delete state.devices["demo-device"];
   state.settings.name = name.endsWith(TEST) ? name : `${name} ${TEST}`;
   await createBusiness(state);
   console.log(JSON.stringify({ businessId: id, username, password }));

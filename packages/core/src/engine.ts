@@ -706,6 +706,7 @@ export function execute(
       a.status = op.approve ? "approved" : "rejected";
       a.decidedBy = actor.id;
       a.decidedAt = now;
+      if (op.reason) a.decisionReason = op.reason;
       result = a;
       break;
     }

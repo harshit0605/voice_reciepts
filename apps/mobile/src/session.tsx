@@ -24,7 +24,10 @@ import {
   type OrderLine,
   type CheckoutAttempt,
   neverSent,
+  withinLeaseWindow,
 } from "@counterwell/core";
+const leaseValid = (now: string, i: { issuedAt: string; expiresAt: string }) =>
+  withinLeaseWindow(now, i.issuedAt, i.expiresAt);
 const NO_RESPONSE =
   "No response from the server. This may already be saved, so do not collect payment again. It will be checked when the connection returns.";
 const CONNECTION_LOST =
@@ -393,6 +396,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       );
     if (!demo) await authClient.signOut();
     await storage.remove("identity");
+    setError("");
     setState(null);
     setUncertain(null);
     setIdentity(null);
@@ -556,8 +560,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (
         !demo &&
         identityRef.current &&
-        (now < identityRef.current.issuedAt ||
-          now > identityRef.current.expiresAt)
+        !leaseValid(now, identityRef.current)
       ) {
         try {
           await renewLease();
@@ -567,7 +570,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         now = new Date().toISOString();
       }
       const i = identityRef.current!;
-      if (now < i.issuedAt || now > i.expiresAt)
+      if (!leaseValid(now, i))
         throw new Error(
           "Reconnect to renew your 24-hour offline authorisation",
         );

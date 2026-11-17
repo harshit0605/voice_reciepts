@@ -69,8 +69,12 @@ export default function App() {
   signedIn.current = actorId;
   useEffect(() => {
     setPage(tapped.current ?? "sell");
+    session.setError("");
     tapped.current = undefined;
   }, [actorId]);
+  // One-off messages belong to the screen that raised them: drop them on leaving it.
+  const { setError } = session;
+  useEffect(() => setError(""), [page]);
   useEffect(
     () =>
       onNotificationTap((target) => {
