@@ -23,6 +23,7 @@ import {
   palette,
   stampDate,
   clock as hhmm,
+  deviceText,
   styles,
   type Tone,
 } from "./ui";
@@ -47,10 +48,11 @@ import {
 
 export const clock = (at?: string) =>
   at
-    ? new Date(at).toLocaleTimeString("en-IN", {
+    ? new Date(at).toLocaleTimeString("en-GB", {
         timeZone: "Asia/Kolkata",
-        hour: "numeric",
+        hour: "2-digit",
         minute: "2-digit",
+        hour12: false,
       })
     : "";
 export const dayLabel = (date: string, hi = false) =>
@@ -231,6 +233,8 @@ function useCashCount() {
       paise = denominationTotal(d);
     } else if (valid) paise = 0;
   } else paise = paiseOf(total);
+  /** Changes whenever any count input changes, so a stale error can be cleared. */
+  const version = JSON.stringify([byNotes, notes, coins, total]);
   const reset = () => {
     setNotes({});
     setCoins("");
@@ -298,7 +302,7 @@ function useCashCount() {
       </View>
     </View>
   );
-  return { element, paise, denominations, reset };
+  return { element, paise, denominations, reset, version };
 }
 
 type Step = "open" | "count" | "move" | "close" | null;
@@ -352,6 +356,8 @@ export function DrawerPanel() {
         e.includes("still sending") || e.includes("भेजे जा रहे") ? "" : e,
       );
   }, [s.pending.length]);
+  // Editing the count dismisses an earlier "enter the count correctly".
+  useEffect(() => setError(""), [count.version]);
   const close = () => {
     setStep(null);
     setDone(null);
@@ -787,7 +793,7 @@ function WaitingFor({ eod }: { eod: Eod }) {
       {phones.map((d) => (
         <Txt key={d.id} size={14} color={palette.waiting}>
           {hi
-            ? `इंतज़ार: ${deviceLabel(state, d)} · आख़िरी बार ${dayLabel(indiaDate(d.lastSeen), hi)} ${clock(d.lastSeen)}${d.pendingCount ? ` · ${d.pendingCount} बिल भेजना बाकी` : ""}`
+            ? `इंतज़ार: ${deviceText(deviceLabel(state, d), "hi")} · आख़िरी बार ${dayLabel(indiaDate(d.lastSeen), hi)} ${clock(d.lastSeen)}${d.pendingCount ? ` · ${d.pendingCount} बिल भेजना बाकी` : ""}`
             : `Waiting for ${deviceLabel(state, d)} · last seen ${dayLabel(indiaDate(d.lastSeen), hi)} ${clock(d.lastSeen)}${d.pendingCount ? ` · ${d.pendingCount} unsent` : ""}`}
         </Txt>
       ))}

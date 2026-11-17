@@ -538,6 +538,40 @@ export function stampDate(at: string | number | Date, language = "en") {
   });
   return `${day} · ${clock(d)}`;
 }
+/**
+ * A customer's mobile number as ten digits, or null when it is not one. Spaces, dashes and a
+ * +91 / 91 / 0 prefix are allowed; an empty entry is fine (returns ""). Indian mobiles start 6-9.
+ */
+export function indianMobile(raw: string): string | null {
+  const text = raw.trim();
+  if (!text) return "";
+  if (!/^\+?[\d\s-]+$/.test(text)) return null;
+  let digits = text.replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
+  else if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+  return /^[6-9]\d{9}$/.test(digits) ? digits : null;
+}
+/** "17 Nov 2026, 22:11": a full date and time in IST, 24-hour like the rest of the app. */
+export function dateTime24(at: string | number | Date) {
+  return new Date(at).toLocaleString("en-GB", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+/** The core device label ("Aarav · iPhone · bills 004") in Hindi when the app is. */
+export function deviceText(label: string, language: string) {
+  return language === "hi"
+    ? label
+        .replace(" · bills ", " · बिल ")
+        .replace("Android phone", "एंड्रॉइड फ़ोन")
+        .replace(/^Unknown/, "अज्ञात")
+    : label;
+}
 /** "12:49" (24-hour, like a register). */
 export function clock(at: string | number | Date) {
   const d = new Date(at);
@@ -634,67 +668,78 @@ export function Entry({
   onPress?: () => void;
   children?: React.ReactNode;
 }) {
-  const body = (
-    <View style={{ flexDirection: "row", minHeight: 60 }}>
-      <View style={{ width: TIME_COLUMN, paddingTop: 15 }}>
-        <Txt size={13} num weight={500} color={palette.ink3}>
-          {time ?? ""}
-        </Txt>
-      </View>
-      <View
-        style={{
-          flex: 1,
-          borderLeftWidth: 1,
-          borderLeftColor: palette.margin,
-          paddingLeft: 12,
-          paddingVertical: 12,
-          gap: 4,
-        }}
-      >
-        {/* Only the title line shares its width with the mark and amount; the detail and any
-            actions below run the full width of the entry. */}
-        <Row style={{ alignItems: "flex-start" }}>
-          <View style={{ flex: 1 }}>
-            {typeof title === "string" ? (
-              <Txt size={16} weight={600}>
-                {title}
-              </Txt>
-            ) : (
-              title
-            )}
-          </View>
-          {who && <StaffMark id={who.id} name={who.name} size={24} />}
-          {amount !== undefined && (
-            <Amount value={amount} size={16} color={amountColor} />
+  const head = (
+    <>
+      {/* Only the title line shares its width with the mark and amount; the detail and any
+          actions below run the full width of the entry. */}
+      <Row style={{ alignItems: "flex-start" }}>
+        <View style={{ flex: 1 }}>
+          {typeof title === "string" ? (
+            <Txt size={16} weight={600}>
+              {title}
+            </Txt>
+          ) : (
+            title
           )}
-          {trailing}
-        </Row>
-        {typeof detail === "string" ? (
-          <Txt size={14} color={palette.ink2}>
-            {detail}
-          </Txt>
-        ) : (
-          detail
+        </View>
+        {who && <StaffMark id={who.id} name={who.name} size={24} />}
+        {amount !== undefined && (
+          <Amount value={amount} size={16} color={amountColor} />
         )}
-        {children}
-      </View>
-    </View>
+        {trailing}
+      </Row>
+      {typeof detail === "string" ? (
+        <Txt size={14} color={palette.ink2}>
+          {detail}
+        </Txt>
+      ) : (
+        detail
+      )}
+    </>
   );
+  const hasActions = !!children;
+  // The tappable part is the title and detail only. Actions (buttons) sit beside it, not
+  // inside it: a button inside a button is invalid on the web and unreliable to tap.
+  const headStyle = {
+    gap: 4,
+    paddingTop: 12,
+    paddingBottom: hasActions ? 4 : 12,
+  } as const;
   return (
     <View style={{ borderBottomWidth: 1, borderColor: palette.rule }}>
-      {onPress ? (
-        <Pressable
-          onPress={onPress}
-          accessibilityRole="button"
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? palette.desk : "transparent",
-          })}
+      <View style={{ flexDirection: "row", minHeight: 60 }}>
+        <View style={{ width: TIME_COLUMN, paddingTop: 15 }}>
+          <Txt size={13} num weight={500} color={palette.ink3}>
+            {time ?? ""}
+          </Txt>
+        </View>
+        <View
+          style={{
+            flex: 1,
+            borderLeftWidth: 1,
+            borderLeftColor: palette.margin,
+            paddingLeft: 12,
+          }}
         >
-          {body}
-        </Pressable>
-      ) : (
-        body
-      )}
+          {onPress ? (
+            <Pressable
+              onPress={onPress}
+              accessibilityRole="button"
+              style={({ pressed }) => ({
+                ...headStyle,
+                backgroundColor: pressed ? palette.desk : "transparent",
+              })}
+            >
+              {head}
+            </Pressable>
+          ) : (
+            <View style={headStyle}>{head}</View>
+          )}
+          {hasActions && (
+            <View style={{ gap: 4, paddingBottom: 12 }}>{children}</View>
+          )}
+        </View>
+      </View>
     </View>
   );
 }

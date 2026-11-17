@@ -16,6 +16,7 @@ import {
   palette,
   stampDate,
   useWord,
+  indianMobile,
 } from "./ui";
 import { CountStepper } from "./drawer";
 import {
@@ -436,6 +437,7 @@ export function CustomerPicker({
     [adding, setAdding] = useState(false),
     [name, setName] = useState(""),
     [phone, setPhone] = useState(""),
+    [phoneError, setPhoneError] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     // The customer just saved here, kept until the refreshed customer list carries it, so the
@@ -465,9 +467,19 @@ export function CustomerPicker({
     Keyboard.dismiss();
     setBusy(true);
     setError("");
+    const mobile = indianMobile(phone);
+    if (mobile === null) {
+      setPhoneError(
+        hi
+          ? "10 अंकों का मोबाइल नंबर भरें (जैसे 98765 43210)"
+          : "Enter a 10-digit mobile number (for example 98765 43210)",
+      );
+      setBusy(false);
+      return;
+    }
     try {
       const id = uid(),
-        customer = { id, name: name.trim(), phone: phone.trim(), address: "" };
+        customer = { id, name: name.trim(), phone: mobile, address: "" };
       await s.command({ type: "customer.create", customer });
       // Choose the customer this command just created, by the id it was created with.
       setAdded({ id, name: customer.name });
@@ -475,6 +487,7 @@ export function CustomerPicker({
       setAdding(false);
       setName("");
       setPhone("");
+      setPhoneError("");
       setQuery("");
     } catch (e) {
       setError((e as Error).message);
@@ -572,7 +585,16 @@ export function CustomerPicker({
             {hi ? "नया ग्राहक" : "New customer"}
           </Txt>
           <Field label="Customer name" value={name} onChange={setName} />
-          <Field label="Phone" value={phone} onChange={setPhone} number />
+          <Field
+            label="Phone"
+            value={phone}
+            onChange={(v: string) => {
+              setPhone(v);
+              setPhoneError("");
+            }}
+            error={phoneError}
+            number
+          />
           {!!error && (
             <Txt color={palette.declined} style={{ marginBottom: 12 }}>
               {error}

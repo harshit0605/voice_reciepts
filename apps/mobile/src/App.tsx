@@ -205,25 +205,31 @@ export default function App() {
         </Pressable>
       );
     });
+  // On a phone the owner screens open from More; give them a way back to it.
+  const backToMore = owner && !wide ? () => setPage("more") : undefined;
   const content =
     page === "sell" ? (
       <SellScreen onInvoice={setInvoice} />
     ) : page === "orders" ? (
       <OrdersScreen onInvoice={setInvoice} />
     ) : page === "stock" || page === "inventory" ? (
-      <StockScreen manage={owner && page === "inventory"} navigate={setPage} />
+      <StockScreen
+        manage={owner && page === "inventory"}
+        navigate={setPage}
+        onBack={backToMore}
+      />
     ) : page === "expiry" && owner ? (
       <ExpiryScreen navigate={setPage} />
     ) : page === "customers" ? (
       <CustomersScreen />
     ) : page === "overview" ? (
-      <OverviewScreen navigate={setPage} />
+      <OverviewScreen navigate={setPage} onBack={backToMore} />
     ) : page === "money" ? (
-      <MoneyScreen />
+      <MoneyScreen onBack={backToMore} />
     ) : page === "reviews" ? (
-      <ReviewsScreen />
+      <ReviewsScreen onBack={backToMore} />
     ) : page === "administration" ? (
-      <AdministrationScreen />
+      <AdministrationScreen onBack={backToMore} />
     ) : (
       <MoreScreen navigate={setPage} />
     );
@@ -349,9 +355,9 @@ export default function App() {
                   accessibilityLabel={
                     session.language === "en"
                       ? "हिंदी में बदलें"
-                      : "Switch to English"
+                      : "अंग्रेज़ी में बदलें"
                   }
-                  hitSlop={6}
+                  hitSlop={8}
                   style={({ pressed }) => ({
                     height: 34,
                     minWidth: 48,
@@ -370,9 +376,9 @@ export default function App() {
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`${syncText}. Synchronise`}
+                  accessibilityLabel={`${syncText}. ${t("sync")}`}
                   onPress={() => void session.sync()}
-                  hitSlop={6}
+                  hitSlop={8}
                   style={({ pressed }) => ({
                     height: 34,
                     flexDirection: "row",

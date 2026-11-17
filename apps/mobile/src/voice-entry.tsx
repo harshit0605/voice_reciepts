@@ -29,6 +29,8 @@ import {
   toneInk,
   type Tone,
   Notice,
+  useWord,
+  clock,
 } from "./ui";
 import {
   readableQuantity,
@@ -65,7 +67,8 @@ export function VoiceEntry({
   onPick: (id: string, productId: string) => void;
 }) {
   const s = useSession(),
-    t = (en: string, hi: string) => (s.language === "hi" ? hi : en);
+    t = (en: string, hi: string) => (s.language === "hi" ? hi : en),
+    w = useWord();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY),
     audio = useAudioRecorderState(recorder, 200);
   const [recording, setRecording] = useState(false),
@@ -192,6 +195,20 @@ export function VoiceEntry({
         setAddingMore(false);
         return;
       }
+      // Without the internet nothing else can read this text, so say which line failed.
+      const products = Object.values(s.state!.products);
+      const badLine = text
+        .split(/[;\n]+/)
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .find((l) => !parseExactSaleText(l, products));
+      if (badLine && (s.demo || !s.online))
+        throw new Error(
+          t(
+            `Could not match "${badLine}". Write each item as exact name, quantity and unit, like "Dolo 650 mg 2 strip", with a ; between items.`,
+            `"${badLine}" पहचान में नहीं आया। हर सामान ऐसे लिखें: पूरा नाम, मात्रा, इकाई ("Dolo 650 mg 2 strip"), और सामान के बीच ; लगाएँ।`,
+          ),
+        );
       if (s.demo)
         throw new Error(
           t(
@@ -567,14 +584,14 @@ export function VoiceEntry({
             <Txt muted size={13}>
               {work.source === "local"
                 ? t(
-                    "Processed locally · no API call",
-                    "डिवाइस पर पढ़ा गया · कोई API कॉल नहीं",
+                    "Read on this phone · nothing sent out",
+                    "इसी फ़ोन पर पढ़ा गया · कुछ बाहर नहीं भेजा गया",
                   )
                 : work.source === "sample"
                   ? t("Synthetic sample", "नमूना डेटा")
                   : t(
-                      "API draft · human confirmation required",
-                      "API ड्राफ्ट · इंसानी पुष्टि ज़रूरी",
+                      "Draft from the voice service · you must confirm",
+                      "आवाज़ सेवा से बना ड्राफ्ट · आपकी पुष्टि ज़रूरी",
                     )}
             </Txt>
           </View>
@@ -611,8 +628,13 @@ export function VoiceEntry({
                 )}
               </Row>
               <Txt color={palette.ink2} size={14} num>
-                {readableQuantity(item.quantity)} {readableUnit(item.unit)} ·{" "}
-                {item.form || t("Check form", "रूप जाँचें")}
+                {readableQuantity(item.quantity)} {w(readableUnit(item.unit))}
+                {/* A form that only repeats the unit ("tablet · tablet") adds nothing. */}
+                {item.form &&
+                item.form.trim().toLowerCase() ===
+                  readableUnit(item.unit).trim().toLowerCase()
+                  ? ""
+                  : ` · ${item.form || t("Check form", "रूप जाँचें")}`}
               </Txt>
               <Row style={{ justifyContent: "flex-start" }}>
                 <Button
@@ -761,7 +783,7 @@ export function VoiceEntry({
                 }
               >
                 {t("Resume voice draft", "आवाज़ ड्राफ्ट फिर खोलें")} ·{" "}
-                {j.status} · {new Date(j.created_at).toLocaleTimeString()}
+                {j.status} · {clock(j.created_at)}
               </Button>
             ))}
         <View style={{ marginTop: 16, alignItems: "flex-end", gap: 12 }}>

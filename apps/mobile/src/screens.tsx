@@ -43,6 +43,9 @@ import {
   Panel,
   Banner,
   stampDate,
+  indianMobile,
+  dateTime24,
+  deviceText,
 } from "./ui";
 import { Checkout } from "./selling";
 import { ProductForm } from "./product-form";
@@ -145,7 +148,8 @@ function OrderLines({ order }: { order: Order }) {
     </View>
   );
 }
-export function Page({ title, subtitle, action, children }: any) {
+export function Page({ title, subtitle, action, onBack, children }: any) {
+  const { language } = useSession();
   return (
     <ScrollView
       style={{ backgroundColor: palette.paper }}
@@ -157,6 +161,31 @@ export function Page({ title, subtitle, action, children }: any) {
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
     >
+      {onBack && (
+        // A quiet way back to More for the owner screens that open from it.
+        <Pressable
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel={language === "hi" ? "अन्य पर वापस" : "Back to More"}
+          hitSlop={8}
+          style={({ pressed }) => ({
+            alignSelf: "flex-start",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            minHeight: 44,
+            marginTop: -12,
+            marginLeft: -6,
+            paddingRight: 12,
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <Icon name="chevron-back" size={20} color={palette.ink2} />
+          <Txt size={14} weight={500} color={palette.ink2}>
+            {language === "hi" ? "अन्य" : "More"}
+          </Txt>
+        </Pressable>
+      )}
       <Row
         style={{
           justifyContent: "space-between",
@@ -198,8 +227,10 @@ export function useRun() {
 }
 export function OverviewScreen({
   navigate,
+  onBack,
 }: {
   navigate: (page: string) => void;
+  onBack?: () => void;
 }) {
   const s = useSession(),
     state = s.state!,
@@ -338,7 +369,7 @@ export function OverviewScreen({
       .map((d) => ({
         icon: "phone-portrait-outline",
         text: hi
-          ? `${deviceLabel(state, d)} ${dayLabel(indiaDate(d.lastSeen), hi)} से नहीं दिखा; रिपोर्ट उसका इंतज़ार कर रही हैं। इस्तेमाल न हो तो हटाएँ।`
+          ? `${deviceText(deviceLabel(state, d), "hi")} ${dayLabel(indiaDate(d.lastSeen), hi)} से नहीं दिखा; रिपोर्ट उसका इंतज़ार कर रही हैं। इस्तेमाल न हो तो हटाएँ।`
           : `${deviceLabel(state, d)} not seen since ${dayLabel(indiaDate(d.lastSeen))}; reports wait for it. Revoke it if it is no longer used.`,
         page: "administration",
         alert: d.pendingCount > 0,
@@ -386,6 +417,7 @@ export function OverviewScreen({
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
   return (
     <Page
+      onBack={onBack}
       title={t("overview")}
       subtitle={
         hi
@@ -688,18 +720,41 @@ export function OrdersScreen({
     type: "order.accept" | "order.decline" | "order.recall",
     o: Order,
   ) => void run(() => s.command({ type, orderId: o.id, version: o.version }));
-  /** "Order 1a2b3c4d" with the number set as an identifier, then who it is for. */
-  const orderTitle = (id: string, customer?: string) => (
-    <Txt size={16} weight={600}>
-      {"Order "}
-      <Txt size={16} weight={600} num>
-        {id.slice(0, 8)}
+  /**
+   * The bill number when the order has been billed, otherwise "Open sale · 10:42" (never a raw
+   * id fragment), then who it is for.
+   */
+  const orderTitle = (o: Order, customer?: string) => {
+    const invoice = Object.values(state.invoices).find((i) => i.orderId === o.id);
+    const label =
+      o.status === "cancelled"
+        ? hi
+          ? "रद्द बिक्री"
+          : "Cancelled sale"
+        : hi
+          ? "खुली बिक्री"
+          : "Open sale";
+    return (
+      <Txt size={16} weight={600}>
+        {invoice ? (
+          <Txt size={16} weight={600} num>
+            {invoice.number}
+          </Txt>
+        ) : (
+          <>
+            {label}
+            {" · "}
+            <Txt size={16} weight={600} num>
+              {clock(o.createdAt)}
+            </Txt>
+          </>
+        )}
+        {customer ? (
+          <Txt size={16} weight={400}>{` · ${customer}`}</Txt>
+        ) : null}
       </Txt>
-      {customer ? (
-        <Txt size={16} weight={400}>{` · ${customer}`}</Txt>
-      ) : null}
-    </Txt>
-  );
+    );
+  };
   const markOf = (id: string | undefined) => {
     const m = state.members[id ?? ""];
     return m ? { id: m.id, name: m.name } : undefined;
@@ -730,7 +785,7 @@ export function OrdersScreen({
           <Entry
             key={o.id}
             time={o.cancelledAt ? entryTime(o.cancelledAt) : ""}
-            title={orderTitle(o.id)}
+            title={orderTitle(o)}
             who={markOf(o.collectorId)}
             detail={
               <View style={{ gap: 6 }}>
@@ -773,7 +828,7 @@ export function OrdersScreen({
               <Entry
                 key={o.id}
                 time={entryTime(o.createdAt)}
-                title={orderTitle(o.id, customer?.name)}
+                title={orderTitle(o, customer?.name)}
                 who={markOf(o.dispenserId)}
                 amount={rupees(summary.totalPaise)}
                 detail={
@@ -1191,6 +1246,7 @@ export function CustomersScreen() {
   const [add, setAdd] = useState(false),
     [name, setName] = useState(""),
     [phone, setPhone] = useState(""),
+    [phoneError, setPhoneError] = useState(""),
     [address, setAddress] = useState(""),
     [selected, setSelected] = useState(""),
     [amount, setAmount] = useState(""),
@@ -1205,6 +1261,7 @@ export function CustomersScreen() {
     setAdd(false);
     setName("");
     setPhone("");
+    setPhoneError("");
     setAddress("");
   };
   return (
@@ -1270,18 +1327,36 @@ export function CustomersScreen() {
       )}
       <Sheet visible={add} title="Add customer" onClose={() => closeAdd()}>
         <Field label={t("name")} value={name} onChange={setName} />
-        <Field label={t("phone")} value={phone} onChange={setPhone} number />
+        <Field
+          label={t("phone")}
+          value={phone}
+          onChange={(v: string) => {
+            setPhone(v);
+            setPhoneError("");
+          }}
+          error={phoneError}
+          number
+        />
         <Field label={t("address")} value={address} onChange={setAddress} />
         <Button
           disabled={!name.trim()}
           onPress={() =>
             void run(async () => {
+              const mobile = indianMobile(phone);
+              if (mobile === null) {
+                setPhoneError(
+                  hi
+                    ? "10 अंकों का मोबाइल नंबर भरें (जैसे 98765 43210)"
+                    : "Enter a 10-digit mobile number (for example 98765 43210)",
+                );
+                return;
+              }
               await s.command({
                 type: "customer.create",
                 customer: {
                   id: uid(),
                   name: name.trim(),
-                  phone: phone.trim(),
+                  phone: mobile,
                   address: address.trim(),
                 },
               });
@@ -1429,13 +1504,16 @@ export function CustomersScreen() {
 export function StockScreen({
   manage = false,
   navigate,
+  onBack,
 }: {
   manage?: boolean;
   navigate?: (page: string) => void;
+  onBack?: () => void;
 }) {
   const s = useSession(),
     state = s.state!,
     t = useText(),
+    w = useWord(),
     run = useRun();
   const [search, setSearch] = useState(""),
     [editing, setEditing] = useState<Product | null | undefined>(),
@@ -1494,6 +1572,7 @@ export function StockScreen({
   );
   return (
     <Page
+      onBack={manage ? onBack : undefined}
       title={manage ? t("inventory") : t("stock")}
       subtitle="Batch-level stock, expiry, and verified physical counts."
       action={
@@ -1560,8 +1639,8 @@ export function StockScreen({
                 <Row style={{ flexWrap: "wrap", gap: 8 }}>
                   <Txt size={14} weight={600} num>
                     {hi
-                      ? `${Number(total.toFixed(3))} ${p.baseUnit} बचे`
-                      : `${Number(total.toFixed(3))} ${p.baseUnit}${Number(total.toFixed(3)) === 1 ? "" : "s"} left`}
+                      ? `${Number(total.toFixed(3))} ${w(p.baseUnit)} बचे`
+                      : `${amountOf(Number(total.toFixed(3)), p.baseUnit, w)} left`}
                   </Txt>
                   {low && <Badge tone="waiting">{hi ? "कम" : "Low"}</Badge>}
                   {expired && (
@@ -1585,7 +1664,7 @@ export function StockScreen({
                 {manage && (
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="Edit medicine"
+                    accessibilityLabel={hi ? "दवा बदलें" : "Edit medicine"}
                     onPress={() => setEditing(p)}
                     hitSlop={8}
                     style={{
@@ -1632,7 +1711,7 @@ export function StockScreen({
                       </Txt>
                     </Txt>
                     <Txt size={13} color={palette.ink3} num>
-                      {`${rupees(b.pricePaise)} / ${p.baseUnit}`}
+                      {`${rupees(b.pricePaise)} / ${w(p.baseUnit)}`}
                       {Number(b.quarantined) > 0
                         ? ` · ${b.quarantined} quarantined`
                         : ""}
@@ -1650,7 +1729,7 @@ export function StockScreen({
                           : palette.ink
                     }
                   >
-                    {`${b.quantity} ${p.baseUnit}${hi || Number(b.quantity) === 1 ? "" : "s"}`}
+                    {amountOf(b.quantity, p.baseUnit, w)}
                   </Txt>
                 </Pressable>
               );
@@ -1839,7 +1918,7 @@ function PriceForm({ batch }: { batch: Batch }) {
     </View>
   );
 }
-export function MoneyScreen() {
+export function MoneyScreen({ onBack }: { onBack?: () => void }) {
   const s = useSession(),
     state = s.state!,
     t = useText(),
@@ -1877,6 +1956,7 @@ export function MoneyScreen() {
     p < 0 ? ("declined" as const) : p > 0 ? ("waiting" as const) : ("paid" as const);
   return (
     <Page
+      onBack={onBack}
       title={t("money")}
       subtitle={
         hi
@@ -2020,6 +2100,7 @@ function approvalTitle(state: State, a: Approval, hi: boolean) {
 }
 function ApprovalDetails({ approval }: { approval: Approval }) {
   const { state, language } = useSession();
+  const w = useWord();
   const hi = language === "hi";
   const p = approval.payload,
     s = state!,
@@ -2169,7 +2250,7 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
           fact(
             hi ? "समय" : "Time",
             <Txt size={15} num>
-              {new Date(o.createdAt).toLocaleString()}
+              {dateTime24(o.createdAt)}
             </Txt>,
           )}
         {o &&
@@ -2190,11 +2271,7 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
           fact(
             hi ? "समय" : "Time",
             <Txt size={15} num>
-              {new Date(i.occurredAt).toLocaleString("en-IN", {
-                timeZone: "Asia/Kolkata",
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
+              {dateTime24(i.occurredAt)}
             </Txt>,
           )}
         {i &&
@@ -2260,7 +2337,7 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
               <Line
                 key={n}
                 label={`${item?.name ?? ""} ${item?.strength ?? ""}`.trim()}
-                value={`${amountOf(l.quantity, unit, (x) => x)} of ${item?.baseQuantity}`}
+                value={`${amountOf(l.quantity, unit, w)} of ${item?.baseQuantity}`}
                 note={
                   <Txt size={13} num weight={600} color={palette.ink3}>
                     {item?.batchCode}
@@ -2303,7 +2380,11 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
           />
           <Line
             label={String(p.kind).replaceAll("_", " ")}
-            value={`${String(p.quantity)} ${s.products[b.productId]?.baseUnit ?? ""}`}
+            value={amountOf(
+              String(p.quantity),
+              s.products[b.productId]?.baseUnit ?? "",
+              w,
+            )}
           />
           <Line label="Available" value={String(b.quantity)} />
           <Line label="Quarantined" value={String(b.quarantined)} />
@@ -2352,9 +2433,7 @@ function ExceptionDetails({ reviewId }: { reviewId: string }) {
             value={rupees(op.cashPaise)}
           />
           <Line
-            label={new Date(command.occurredAt).toLocaleString("en-IN", {
-              timeZone: "Asia/Kolkata",
-            })}
+            label={dateTime24(command.occurredAt)}
             value={op.counterId}
           />
           {op.lines.map((l: any, index: number) => {
@@ -2379,7 +2458,7 @@ function ExceptionDetails({ reviewId }: { reviewId: string }) {
         <>
           <Line strong label="Counter" value={observation.counterId} />
           <Line
-            label={`${new Date(observation.startedAt).toLocaleString()} – ${new Date(observation.endedAt).toLocaleTimeString()}`}
+            label={`${dateTime24(observation.startedAt)} – ${dateTime24(observation.endedAt)}`}
             value=""
           />
           <Txt size={14} color={palette.ink2} style={{ marginTop: 8 }}>
@@ -2393,7 +2472,7 @@ function ExceptionDetails({ reviewId }: { reviewId: string }) {
     </View>
   );
 }
-export function ReviewsScreen() {
+export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
   const s = useSession(),
     state = s.state!,
     t = useText(),
@@ -2519,6 +2598,7 @@ export function ReviewsScreen() {
   }
   return (
     <Page
+      onBack={onBack}
       title={t("reviews")}
       subtitle="Approvals and evidence that need a human decision."
     >
@@ -3018,7 +3098,7 @@ export function MoreScreen({ navigate }: { navigate: (p: string) => void }) {
           detail={
             <Txt size={14} color={palette.ink2}>
               Offline authorisation expires{" "}
-              {new Date(s.identity!.expiresAt).toLocaleString("en-IN")}
+              {dateTime24(s.identity!.expiresAt)}
             </Txt>
           }
         />
@@ -3026,7 +3106,7 @@ export function MoreScreen({ navigate }: { navigate: (p: string) => void }) {
           leading={lead("information-circle-outline")}
           title={
             <Txt size={16} weight={600} num>
-              {appVersion()}
+              {appVersion(s.language === "hi")}
             </Txt>
           }
         />
@@ -3063,7 +3143,7 @@ export function MoreScreen({ navigate }: { navigate: (p: string) => void }) {
     </Page>
   );
 }
-export function AdministrationScreen() {
+export function AdministrationScreen({ onBack }: { onBack?: () => void }) {
   const s = useSession(),
     state = s.state!,
     run = useRun();
@@ -3077,6 +3157,7 @@ export function AdministrationScreen() {
     passwordRef = useRef<TextInput>(null);
   return (
     <Page
+      onBack={onBack}
       title="Administration"
       subtitle="Shop configuration, employee access, and registered devices."
     >
@@ -3238,7 +3319,7 @@ export function AdministrationScreen() {
             title={
               <Row style={{ gap: 8 }}>
                 <Txt size={16} weight={600} style={{ flexShrink: 1 }}>
-                  {deviceLabel(state, d)}
+                  {deviceText(deviceLabel(state, d), s.language)}
                 </Txt>
                 <Txt size={14} num weight={600} color={palette.ink2}>
                   {d.counterId}
@@ -3247,8 +3328,10 @@ export function AdministrationScreen() {
             }
             detail={
               <Txt size={13} color={palette.ink3} num>
-                Series {d.series} · {d.pendingCount} pending · Last seen{" "}
-                {new Date(d.lastSeen).toLocaleString("en-IN")}
+                {s.language === "hi" ? "सीरीज़" : "Series"} {d.series} ·{" "}
+                {d.pendingCount} {s.language === "hi" ? "बाकी" : "pending"} ·{" "}
+                {s.language === "hi" ? "आख़िरी बार दिखा" : "Last seen"}{" "}
+                {dateTime24(d.lastSeen)}
               </Txt>
             }
             trailing={d.revoked ? <Badge tone="declined">Revoked</Badge> : undefined}
@@ -3418,7 +3501,7 @@ function EmployeeSheet({
 }
 
 /** "App 0.1.0 · build 1452340": which build a phone runs, when helping someone over the phone. */
-function appVersion() {
+function appVersion(hi = false) {
   const config = Constants.expoConfig;
   const build =
     Platform.OS === "android"
@@ -3426,5 +3509,5 @@ function appVersion() {
       : Platform.OS === "ios"
         ? config?.ios?.buildNumber
         : undefined;
-  return `App ${config?.version ?? ""}${build ? ` · build ${build}` : ""}`;
+  return `${hi ? "ऐप" : "App"} ${config?.version ?? ""}${build ? ` · ${hi ? "बिल्ड" : "build"} ${build}` : ""}`;
 }

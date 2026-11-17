@@ -594,4 +594,5 @@ export const hindiCopy: Record<string, string> = {
     "बिल पढ़ना अभी उपलब्ध नहीं है। बिल हाथ से भरें।",
   "The phone was locked while the app was starting. Close and reopen the app.":
     "ऐप खुलते समय फ़ोन लॉक था। ऐप बंद करके फिर से खोलें।",
+  "Tablets must be whole units": "गोलियाँ पूरी संख्या में होनी चाहिए",
 };

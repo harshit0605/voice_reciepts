@@ -47,6 +47,8 @@ import {
   spokenUnit,
   spokenItemTitle,
   spokenQuantity,
+  readableQuantity,
+  readableUnit,
   emptyVoice,
   recoverCheckout,
   billsLocally,
@@ -126,11 +128,20 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
     [filter, setFilter] = useState("all"),
     [selected, setSelected] = useState<Batch | null>(null),
     [qty, setQty] = useState("1"),
+    [heldNotice, setHeldNotice] = useState<{
+      tone: "paid" | "waiting";
+      text: string;
+    } | null>(null),
     [unit, setUnit] = useState(""),
     [checkout, setCheckout] = useState(false),
     [basketOpen, setBasketOpen] = useState(false),
     [voiceOpen, setVoiceOpen] = useState(false);
   const [activeVoice, setActiveVoice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!heldNotice) return;
+    const id = setTimeout(() => setHeldNotice(null), 10000);
+    return () => clearTimeout(id);
+  }, [heldNotice]);
   const selling = useSaleEntry(
     `sale-entry:${s.demo ? "demo:" : ""}${state.businessId}:${s.identity!.actor.id}`,
   );
@@ -184,19 +195,22 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
     ) {
       settled.current = key;
       void finishEntry().then(() =>
-        s.setError(
-          recovery.kind === "saved_locally"
-            ? "This cash sale is already saved on this phone and waiting to sync. Do not collect again."
-            : "This sale was billed, handed over or cancelled elsewhere. Check Orders; do not collect it again here.",
-        ),
+        setHeldNotice({
+          tone: "waiting",
+          text:
+            recovery.kind === "saved_locally"
+              ? "This cash sale is already saved on this phone and waiting to sync. Do not collect again."
+              : "This sale was billed, handed over or cancelled elsewhere. Check Orders; do not collect it again here.",
+        }),
       );
     }
   }, [selling.ready, selling.entry.checkout?.orderId, recovery.kind]);
   async function setAside() {
     await finishEntry();
-    s.setError(
-      "Sale set aside. It will be confirmed automatically when the connection returns. Do not bill these items again; check Orders later.",
-    );
+    setHeldNotice({
+      tone: "waiting",
+      text: "Sale set aside. It will be confirmed automatically when the connection returns. Do not bill these items again; check Orders later.",
+    });
   }
   const today = indiaDate(new Date().toISOString());
   const [scanNotice, setScanNotice] = useState<{
@@ -335,6 +349,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
   ) => {
     setSelected(batch);
     setScanWarning("");
+    s.setError("");
     const product = state.products[batch.productId];
     setQty(spoken ? spokenQuantity(spoken.quantity) : "1");
     setUnit(
@@ -345,9 +360,12 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
     const n = Number(qty) || 0;
     const next = dir > 0 ? n + 1 : n - 1 > 0 ? n - 1 : n;
     setQty(String(Math.round(next * 100) / 100));
+    s.setError("");
   };
   /** The line total for what the add sheet currently shows, when it can be priced. */
   let lineAmount: number | null = null;
+  /** Why the sheet's line cannot be added (e.g. 2.5 tablets); shown inside the sheet. */
+  let lineError = "";
   if (selected && unit && Number(qty) > 0) {
     try {
       lineAmount = quote(
@@ -355,14 +373,13 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
         [{ batchId: selected.id, quantity: qty, unit, confirmed: true }],
         new Date().toISOString(),
       )[0].netPaise;
-    } catch {}
+    } catch (e) {
+      lineError = (e as Error).message;
+    }
   }
   const add = async () => {
     if (!selected || addLock.current || busy) return;
-    if (overStock) {
-      s.setError(onlyInStock(stockLeft!.lt(0) ? D(0) : stockLeft!));
-      return;
-    }
+    if (overStock || lineError) return;
     addLock.current = true;
     try {
       // Pressing the button that names the batch is the physical-batch confirmation.
@@ -379,6 +396,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
           : { ...entry, basket: [...entry.basket, line] },
       );
       if (!saved) return;
+      s.setError("");
       setSelected(null);
       // Start the next item with an empty search.
       setQuery("");
@@ -456,7 +474,9 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                     onPress={() =>
                       setBasket(basket.filter((_, index) => index !== i))
                     }
-                    accessibilityLabel="Remove item"
+                    accessibilityLabel={
+                      s.language === "hi" ? "सामान हटाएँ" : "Remove item"
+                    }
                     accessibilityRole="button"
                     hitSlop={4}
                     style={{
@@ -574,7 +594,9 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                 }}
               />
               <Pressable
-                accessibilityLabel="Scan barcode"
+                accessibilityLabel={
+                  s.language === "hi" ? "बारकोड स्कैन करें" : "Scan barcode"
+                }
                 accessibilityRole="button"
                 onPress={() => void openScanner()}
                 style={{
@@ -622,6 +644,9 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                 : `${products.length} ${products.length === 1 ? "result" : "results"}`}
             </Txt>
           </Row>
+          {!!heldNotice && (
+            <Strip tone={heldNotice.tone}>{heldNotice.text}</Strip>
+          )}
           {!!selling.error && (
             <View style={{ gap: 8, marginBottom: 8 }}>
               <Strip tone="declined">{selling.error}</Strip>
@@ -712,7 +737,9 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                   ? s.language === "hi"
                     ? "आवाज़ का ड्राफ्ट बन रहा है…"
                     : "Voice draft processing…"
-                  : `${selling.entry.voice.items.length} ${s.language === "hi" ? "बोले सामान की जाँच बाकी" : "spoken items to review"}`}
+                  : s.language === "hi"
+                    ? `${selling.entry.voice.items.length} बोले सामान की जाँच बाकी`
+                    : `${selling.entry.voice.items.length} spoken ${selling.entry.voice.items.length === 1 ? "item" : "items"} to review`}
               </Button>
             </View>
           )}
@@ -940,7 +967,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
             {voiceItem && (
               <Strip tone="waiting" icon="mic-outline">
                 {(s.language === "hi" ? "बोला गया: " : "Spoken: ") +
-                  `${spokenItemTitle(voiceItem)} · ${voiceItem.quantity} ${voiceItem.unit}`}
+                  `${spokenItemTitle(voiceItem)} · ${readableQuantity(voiceItem.quantity)} ${w(readableUnit(voiceItem.unit))}`}
                 {"\n"}
                 {s.language === "hi"
                   ? "नाम, ताकत, रूप, मात्रा और इकाई जाँचें।"
@@ -1016,6 +1043,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                 value={qty}
                 onChangeText={(v) => {
                   setQty(v);
+                  s.setError("");
                 }}
                 accessibilityLabel={t("quantity")}
                 keyboardType="decimal-pad"
@@ -1056,6 +1084,7 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                     active={unit === u}
                     onPress={() => {
                       setUnit(u);
+                      s.setError("");
                     }}
                   >
                     {u}
@@ -1063,13 +1092,17 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
                 ),
               )}
             </Row>
-            {overStock && (
+            {overStock ? (
               <Strip tone="declined">
                 {onlyInStock(stockLeft!.lt(0) ? D(0) : stockLeft!)}
               </Strip>
+            ) : (
+              !!lineError && <Strip tone="declined">{lineError}</Strip>
             )}
             <Button
-              disabled={!Number(qty) || !unit || busy || overStock}
+              disabled={
+                !Number(qty) || !unit || busy || overStock || !!lineError
+              }
               onPress={() => void add()}
               icon="checkmark"
             >
@@ -1097,7 +1130,10 @@ export function SellScreen({ onInvoice }: { onInvoice: (i: Invoice) => void }) {
             void selling.update((v) => ({ ...v, customerId: id || undefined }))
           }
           onComplete={(i) => void finishEntry(i)}
-          onHeld={() => void finishEntry()}
+          onHeld={(message) => {
+            setHeldNotice(message ? { tone: "paid", text: message } : null);
+            void finishEntry();
+          }}
         />
       </Sheet>
       {scanner.sheet}
@@ -1135,7 +1171,8 @@ export function Checkout({
 }: {
   lines: OrderLine[];
   onComplete: (i: Invoice) => void;
-  onHeld: () => void;
+  /** The bill is parked; `message` is a confirmation to show on the Sell screen. */
+  onHeld: (message?: string) => void;
   /** Collect an order already in Orders. Otherwise `attempt` and `pin` are required. */
   existingOrderId?: string;
   attempt?: CheckoutAttempt;
@@ -1389,10 +1426,7 @@ export function Checkout({
             },
             reason: "Customer requested credit",
           });
-          s.setError(
-            "Sent to the owner for approval. The bill is waiting in Orders.",
-          );
-          onHeld();
+          onHeld("Sent to the owner for approval. The bill is waiting in Orders.");
           return;
         }
       }
@@ -1449,7 +1483,10 @@ export function Checkout({
           <Field
             label="Cash received (₹) · optional"
             value={received}
-            onChange={setReceived}
+            onChange={(v: string) => {
+              setReceived(v);
+              setError("");
+            }}
             number
           />
           <Row style={{ flexWrap: "wrap", gap: 8 }}>
@@ -1457,7 +1494,10 @@ export function Checkout({
               <Chip
                 key={v}
                 active={received === (v / 100).toString()}
-                onPress={() => setReceived((v / 100).toString())}
+                onPress={() => {
+                  setReceived((v / 100).toString());
+                  setError("");
+                }}
               >
                 {rupees(v)}
               </Chip>
