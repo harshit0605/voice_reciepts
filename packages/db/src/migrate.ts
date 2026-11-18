@@ -3,6 +3,11 @@ import { collections } from "@counterwell/core";
 const c = await pool.connect();
 try {
   await c.query("BEGIN");
+  // Runs at every deploy and from parallel test files: one migration at a time (concurrent
+  // CREATE ... IF NOT EXISTS can still collide), and without the pool's request-sized timeouts.
+  await c.query("SET LOCAL statement_timeout = 0");
+  await c.query("SET LOCAL lock_timeout = 0");
+  await c.query("SELECT pg_advisory_xact_lock(727274001)");
   await c.query(`
 CREATE TABLE IF NOT EXISTS auth_user(id text PRIMARY KEY,name text NOT NULL,email text NOT NULL UNIQUE,email_verified boolean NOT NULL DEFAULT false,image text,created_at timestamp NOT NULL DEFAULT now(),updated_at timestamp NOT NULL DEFAULT now(),username text UNIQUE,display_username text);
 CREATE TABLE IF NOT EXISTS auth_session(id text PRIMARY KEY,expires_at timestamp NOT NULL,token text NOT NULL UNIQUE,created_at timestamp NOT NULL DEFAULT now(),updated_at timestamp NOT NULL DEFAULT now(),ip_address text,user_agent text,user_id text NOT NULL REFERENCES auth_user(id) ON DELETE CASCADE);
