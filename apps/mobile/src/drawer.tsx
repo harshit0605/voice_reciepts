@@ -1025,7 +1025,13 @@ export function DayReportView({
             <Entry
               key={i}
               time={hhmm(m.at)}
-              title={m.reason}
+              title={
+                hi
+                  ? (Object.values(MOVE_REASONS)
+                      .flat()
+                      .find(([en]) => en === m.reason)?.[1] ?? m.reason)
+                  : m.reason
+              }
               who={{ name: m.name }}
               amount={`${m.kind === "introduced" ? "+" : "−"}${rupees(m.amountPaise)}`}
             />

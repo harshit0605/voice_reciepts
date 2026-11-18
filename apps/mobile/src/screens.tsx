@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useDeferredValue,
+} from "react";
 import {
   View,
   ScrollView,
@@ -8,6 +14,7 @@ import {
   type TextInput,
 } from "react-native";
 import { PurchaseForm } from "./receiving";
+import { approvalReason, reviewDetail, reviewTitle } from "./review-text";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import Constants from "expo-constants";
@@ -216,8 +223,10 @@ export function useRun() {
   return async (fn: () => Promise<any>) => {
     if (running.current) return;
     running.current = true;
+    s.setError("");
     try {
       await fn();
+      s.setError("");
     } catch (e) {
       s.setError((e as Error).message);
     } finally {
@@ -1106,6 +1115,8 @@ export function OrdersScreen({
               }}
               onHeld={() => setSelected(null)}
             />
+            {s.identity?.actor.role !== "owner" && (
+              <>
             <View style={{ height: 24 }} />
             <Field
               label="Request discount (₹)"
@@ -1147,6 +1158,8 @@ export function OrdersScreen({
             >
               Ask owner to approve discount
             </Button>
+              </>
+            )}
           </>
         )}
       </Sheet>
@@ -1537,11 +1550,13 @@ export function StockScreen({
     () => groupBatches(state.batches),
     [state.batches],
   );
+  // Filter on a deferred copy so a long list never blocks the keyboard (fast typing dropped letters).
+  const deferredSearch = useDeferredValue(search);
   const matching = useMemo(() => {
     return Object.values(state.products)
-      .filter((p) => matchesSearch(p, search))
-      .sort(bySearch(search));
-  }, [state.products, search]);
+      .filter((p) => matchesSearch(p, deferredSearch))
+      .sort(bySearch(deferredSearch));
+  }, [state.products, deferredSearch]);
   const today = indiaDate(new Date().toISOString()),
     hi = s.language === "hi";
   /** An owner tool: a ruled row, an icon in ink, the name. Two sit side by side. */
@@ -1574,7 +1589,11 @@ export function StockScreen({
     <Page
       onBack={manage ? onBack : undefined}
       title={manage ? t("inventory") : t("stock")}
-      subtitle="Batch-level stock, expiry, and verified physical counts."
+      subtitle={
+        hi
+          ? "बैच के हिसाब से स्टॉक, एक्सपायरी और जाँची हुई गिनती।"
+          : "Batch-level stock, expiry, and verified physical counts."
+      }
       action={
         manage ? (
           <Button
@@ -2482,6 +2501,19 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
     [reviewId, V] = useState(""),
     [confirmCancel, setConfirmCancel] = useState(false);
   const hi = s.language === "hi";
+  // After a sheet closes from an action, the next row slides under the finger. Ignore the list
+  // briefly so a double tap on Approve does not open the next request.
+  const listLockedUntil = useRef(0);
+  const sheetOpen = !!selected || !!reviewId;
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current && !sheetOpen) listLockedUntil.current = Date.now() + 600;
+    wasOpen.current = sheetOpen;
+  }, [sheetOpen]);
+  const listOpen = (open: () => void) => () => {
+    if (Date.now() < listLockedUntil.current) return;
+    open();
+  };
   const pending = Object.values(state.approvals).filter(
     (a) =>
       (a.status === "pending" || a.status === "approved") &&
@@ -2614,7 +2646,7 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
                 title={x.heading}
                 detail={
                   <Txt size={14} color={palette.ink2} numberOfLines={2}>
-                    {[a.reason, x.items].filter(Boolean).join(" · ")}
+                    {[approvalReason(a.reason, hi), x.items].filter(Boolean).join(" · ")}
                   </Txt>
                 }
                 who={{
@@ -2622,10 +2654,10 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
                   name: state.members[a.requestedBy]?.name,
                 }}
                 amount={x.amount}
-                onPress={() => {
+                onPress={listOpen(() => {
                   setSelected(a);
                   setConfirmCancel(false);
-                }}
+                })}
               >
                 <Badge tone="waiting">{hi ? "इंतज़ार" : "Waiting"}</Badge>
               </Entry>
@@ -2652,7 +2684,7 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
                   }
                   detail={
                     <Txt size={14} color={palette.ink3} numberOfLines={2}>
-                      {[a.reason, x.items].filter(Boolean).join(" · ")}
+                      {[approvalReason(a.reason, hi), x.items].filter(Boolean).join(" · ")}
                     </Txt>
                   }
                   who={{
@@ -2661,10 +2693,10 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
                   }}
                   amount={x.amount}
                   amountColor={palette.ink2}
-                  onPress={() => {
+                  onPress={listOpen(() => {
                     setSelected(a);
                     setConfirmCancel(false);
-                  }}
+                  })}
                 >
                   <Badge tone="approved">{hi ? "मंज़ूर" : "Approved"}</Badge>
                 </Entry>
@@ -2678,7 +2710,7 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
           .map((r) => (
             <ListRow
               key={r.id}
-              onPress={() => V(r.id)}
+              onPress={listOpen(() => V(r.id))}
               leading={
                 <Icon
                   name={
@@ -2690,8 +2722,8 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
                   color={palette.waiting}
                 />
               }
-              title={r.title}
-              detail={r.detail}
+              title={reviewTitle(r.title, hi)}
+              detail={reviewDetail(r.detail, hi)}
             />
           ))}
         <Txt size={13} color={palette.ink3} style={{ marginTop: 12 }}>
@@ -2863,7 +2895,7 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
         {reviewId && (
           <>
             <Txt color={palette.ink2} style={{ marginBottom: 20 }}>
-              {state.reviews[reviewId]?.detail}
+              {reviewDetail(state.reviews[reviewId]?.detail ?? "", hi)}
             </Txt>
             <ExceptionDetails reviewId={reviewId} />
             <Field
@@ -3151,6 +3183,7 @@ export function AdministrationScreen({ onBack }: { onBack?: () => void }) {
     [name, N] = useState(""),
     [username, U] = useState(""),
     [password, P] = useState(""),
+    [staffErrors, setStaffErrors] = useState<Record<string, string>>({}),
     [collect, C] = useState(true),
     [employee, setEmployee] = useState<string | null>(null);
   const usernameRef = useRef<TextInput>(null),
@@ -3219,23 +3252,45 @@ export function AdministrationScreen({ onBack }: { onBack?: () => void }) {
         <Field
           label="Employee name"
           value={name}
-          onChange={N}
+          error={staffErrors.name}
+          onChange={(v: string) => {
+            N(v);
+            setStaffErrors((e) => ({ ...e, name: "" }));
+          }}
           returnKeyType="next"
           onSubmit={() => usernameRef.current?.focus()}
         />
         <Field
           label="Unique username"
           value={username}
-          onChange={U}
+          error={staffErrors.username}
+          hint={
+            s.language === "hi"
+              ? "3 से 30 अक्षर: अंग्रेज़ी अक्षर, अंक, _ या ."
+              : "3 to 30 characters: letters, numbers, _ or ."
+          }
+          onChange={(v: string) => {
+            U(v);
+            setStaffErrors((e) => ({ ...e, username: "" }));
+          }}
           identifier
           inputRef={usernameRef}
           returnKeyType="next"
           onSubmit={() => passwordRef.current?.focus()}
         />
         <Field
-          label="Temporary password · at least 12 characters"
+          label="Temporary password"
           value={password}
-          onChange={P}
+          error={staffErrors.password}
+          hint={
+            s.language === "hi"
+              ? "कम से कम 12 अक्षर"
+              : "At least 12 characters"
+          }
+          onChange={(v: string) => {
+            P(v);
+            setStaffErrors((e) => ({ ...e, password: "" }));
+          }}
           secret
           inputRef={passwordRef}
           returnKeyType="done"
@@ -3258,6 +3313,20 @@ export function AdministrationScreen({ onBack }: { onBack?: () => void }) {
         <Button
           onPress={() =>
             void run(async () => {
+              const hi = s.language === "hi";
+              const found: Record<string, string> = {};
+              if (!name.trim())
+                found.name = hi ? "कर्मचारी का नाम भरें" : "Enter the employee's name";
+              if (!/^[a-zA-Z0-9_.]{3,30}$/.test(username))
+                found.username = hi
+                  ? "यूज़रनेम 3 से 30 अक्षर का हो: अंग्रेज़ी अक्षर, अंक, _ या ."
+                  : "Username must be 3 to 30 characters: letters, numbers, _ or .";
+              if (password.length < 12)
+                found.password = hi
+                  ? "पासवर्ड कम से कम 12 अक्षर का हो"
+                  : "Password must be at least 12 characters";
+              setStaffErrors(found);
+              if (Object.keys(found).length) return;
               if (s.demo)
                 throw new Error(
                   "Account creation requires a signed-in live shop.",
@@ -3265,7 +3334,7 @@ export function AdministrationScreen({ onBack }: { onBack?: () => void }) {
               await s.request("/employees", {
                 method: "POST",
                 body: JSON.stringify({
-                  name,
+                  name: name.trim(),
                   username,
                   password,
                   canCollect: collect,
@@ -3275,6 +3344,7 @@ export function AdministrationScreen({ onBack }: { onBack?: () => void }) {
               N("");
               U("");
               P("");
+              setStaffErrors({});
             })
           }
         >
@@ -3447,8 +3517,20 @@ function EmployeeSheet({
                   and choose their own password when they next sign in.
                 </Txt>
                 <Field
-                  label="Temporary password · at least 12 characters"
+                  label="Temporary password"
                   value={password}
+                  error={
+                    password.length > 0 && password.length < 12
+                      ? s.language === "hi"
+                        ? "पासवर्ड कम से कम 12 अक्षर का हो"
+                        : "Password must be at least 12 characters"
+                      : undefined
+                  }
+                  hint={
+                    s.language === "hi"
+                      ? "कम से कम 12 अक्षर"
+                      : "At least 12 characters"
+                  }
                   onChange={setPassword}
                   secret
                 />

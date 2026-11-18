@@ -272,8 +272,11 @@ export function Field({
   onSubmit,
   hint,
   error,
+  autoCorrect = false,
 }: {
   label?: string;
+  /** Opt in to keyboard autocorrect and spell check for free text. Off by default: medicine names, strengths, batch codes and phone numbers must never be "corrected". */
+  autoCorrect?: boolean;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
@@ -316,8 +319,8 @@ export function Field({
         keyboardType={number ? "decimal-pad" : "default"}
         secureTextEntry={secret}
         autoCapitalize="none"
-        autoCorrect={!identifier && !secret}
-        spellCheck={!identifier && !secret}
+        autoCorrect={autoCorrect && !identifier && !secret}
+        spellCheck={autoCorrect && !identifier && !secret}
         multiline={multiline}
         maxFontSizeMultiplier={1.4}
         style={[
@@ -569,6 +572,7 @@ export function deviceText(label: string, language: string) {
     ? label
         .replace(" · bills ", " · बिल ")
         .replace("Android phone", "एंड्रॉइड फ़ोन")
+        .replace("Preview device", "डेमो फ़ोन")
         .replace(/^Unknown/, "अज्ञात")
     : label;
 }
@@ -1063,6 +1067,8 @@ const SheetContext = createContext({ scrollToTop: () => {} });
 export const useSheet = () => useContext(SheetContext);
 export function Sheet({ title, visible, onClose, children }: any) {
   const t = useText();
+  // The app-level error banner sits behind this modal, so show the current error here too.
+  const { error: sessionError, setError: setSessionError } = useSession();
   // A second tap on the button that opened the sheet can land on whatever sits under it
   // in the new sheet (for example Hold order under Review & collect). Ignore touches
   // until the sheet has settled.
@@ -1148,6 +1154,11 @@ export function Sheet({ title, visible, onClose, children }: any) {
               <Icon name="close" size={20} color={palette.ink2} />
             </Pressable>
           </Row>
+          {visible && !!sessionError && (
+            <Banner tone="declined" onClose={() => setSessionError("")}>
+              {sessionError}
+            </Banner>
+          )}
           <ScrollView
             ref={scroller}
             contentContainerStyle={{

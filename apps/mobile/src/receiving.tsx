@@ -40,6 +40,40 @@ import {
   productFromInvoiceLine,
 } from "@counterwell/core";
 
+type T2 = (en: string, hi: string) => string;
+const moneyOk = (v: string) => /^\d+(\.\d{1,2})?$/.test(v.trim());
+const qtyOk = (v: string) => /^(0|[1-9]\d{0,8})(\.\d{1,3})?$/.test(v.trim());
+const dateOk = (v: string) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(v) &&
+  Number.isFinite(Date.parse(v)) &&
+  new Date(v).toISOString().slice(0, 10) === v;
+/** What is wrong with each field of one received item, in the words next to that field. */
+function lineFieldErrors(line: ReceivingLine, t: T2) {
+  const e: Record<string, string> = {};
+  const amount = (v: string, empty: string) =>
+    !v.trim() ? empty : !moneyOk(v) ? t("Enter an amount with up to two decimals", "अधिकतम दो दशमलव वाली रकम भरें") : "";
+  if (!line.code.trim()) e.code = t("Enter the batch code", "बैच का नंबर भरें");
+  if (!dateOk(line.expiry))
+    e.expiry = t("Enter a valid expiry date, YYYY-MM-DD", "सही एक्सपायरी तारीख भरें, YYYY-MM-DD");
+  else if (line.expiry < indiaDate(new Date().toISOString()))
+    e.expiry = t("This date has passed. Expired stock cannot be received", "यह तारीख निकल चुकी है। एक्सपायर स्टॉक नहीं लिया जा सकता");
+  if (!line.quantity.trim()) e.quantity = t("Enter the quantity", "मात्रा भरें");
+  else if (!qtyOk(line.quantity))
+    e.quantity = t("Enter a quantity with up to three decimals", "अधिकतम तीन दशमलव वाली मात्रा भरें");
+  if (line.bonus.trim() && !qtyOk(line.bonus))
+    e.bonus = t("Enter a quantity, or 0", "मात्रा भरें, या 0");
+  const mrp = amount(line.mrp, t("Enter the MRP", "एमआरपी भरें"));
+  if (mrp) e.mrp = mrp;
+  const price = amount(line.price, t("Enter the selling price", "बिक्री कीमत भरें"));
+  if (price) e.price = price;
+  else if (!mrp && Number(line.price) > Number(line.mrp))
+    e.price = t("Selling price is more than the MRP", "बिक्री कीमत एमआरपी से ज़्यादा है");
+  if (line.cost.trim() && !moneyOk(line.cost))
+    e.cost = t("Enter an amount with up to two decimals", "अधिकतम दो दशमलव वाली रकम भरें");
+  const total = amount(line.total, t("Enter the line total", "इस सामान का कुल भरें"));
+  if (total) e.total = total;
+  return e;
+}
 function fresh(): ReceivingDraft {
   return {
     id: uid(),
@@ -71,7 +105,8 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
     [expanded, setExpanded] = useState<string | null>(null),
     [saved, setSaved] = useState(false),
     [discard, setDiscard] = useState(false),
-    [allowance, setAllowance] = useState("");
+    [allowance, setAllowance] = useState(""),
+    [showErrors, setShowErrors] = useState(false);
   const writes = useRef(Promise.resolve()),
     posted = useRef(false),
     request = useRef(s.request),
@@ -286,6 +321,25 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
     difference =
       inputPaise(draft.total) - sum - signedPaise(draft.adjustment || "0");
   } catch {}
+  // Field-level problems with the invoice itself, shown once Confirm has been tried.
+  const fieldErrors: Record<string, string> = {};
+  if (!state.suppliers[draft.supplierId])
+    fieldErrors.supplier = t("Choose or add the supplier", "सप्लायर चुनें या जोड़ें");
+  if (!dateOk(draft.date) || draft.date > indiaDate(new Date().toISOString()))
+    fieldErrors.date = t("Enter a valid invoice date, not in the future, as YYYY-MM-DD", "सही बिल तारीख भरें, आगे की नहीं, YYYY-MM-DD");
+  if (!draft.number.trim())
+    fieldErrors.number = t("Enter the supplier's invoice number", "सप्लायर का बिल नंबर भरें");
+  if (!draft.total.trim())
+    fieldErrors.total = t("Enter the invoice total", "बिल का कुल भरें");
+  else if (!moneyOk(draft.total))
+    fieldErrors.total = t("Enter an amount with up to two decimals", "अधिकतम दो दशमलव वाली रकम भरें");
+  if (
+    draft.adjustment &&
+    draft.adjustment !== "0" &&
+    (draft.adjustmentReason ?? "").trim().length < 3
+  )
+    fieldErrors.adjustmentReason = t("Enter a reason for the adjustment", "समायोजन का कारण भरें");
+  const shown = (k: string) => (showErrors ? fieldErrors[k] : undefined);
   const confirmed = draft.lines.filter(
     (l) =>
       l.confirmed &&
@@ -504,6 +558,11 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
                 </Chip>
               ))}
             </Row>
+            {!!shown("supplier") && (
+              <Txt size={13} color={palette.declined}>
+                {shown("supplier")}
+              </Txt>
+            )}
             <Button
               variant="quiet"
               small
@@ -560,6 +619,7 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
               label={t("Invoice number", "बिल नंबर")}
               identifier
               value={draft.number}
+              error={shown("number")}
               onChange={(number) => change({ number })}
             />
             <Field
@@ -568,11 +628,13 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
                 "बिल की तारीख (YYYY-MM-DD)",
               )}
               value={draft.date}
+              error={shown("date")}
               onChange={(date) => change({ date })}
             />
             <Field
               label={t("Invoice total (₹)", "बिल का कुल (₹)")}
               value={draft.total}
+              error={shown("total")}
               onChange={(total) => change({ total })}
               number
             />
@@ -598,6 +660,7 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
                     setExpanded(expanded === line.id ? null : line.id)
                   }
                   error={rowResults[i].error}
+                  showErrors={showErrors}
                   result={rowResults[i].line}
                   change={(patch) => changeLine(line.id, patch)}
                   remove={() =>
@@ -649,6 +712,7 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
               <Field
                 label={t("Adjustment reason", "समायोजन का कारण")}
                 value={draft.adjustmentReason ?? ""}
+                error={shown("adjustmentReason")}
                 onChange={(adjustmentReason) => change({ adjustmentReason })}
               />
             )}
@@ -664,9 +728,24 @@ export function PurchaseForm({ onDone }: { onDone: () => void }) {
               )}
             </Txt>
             <Button
-              disabled={!operation || busy || !!draft.jobId}
+              disabled={busy || !!draft.jobId}
               onPress={() =>
                 void (async () => {
+                  if (!operation) {
+                    setShowErrors(true);
+                    const bad = draft.lines.findIndex((l) =>
+                      Object.keys(
+                        lineFieldErrors(l, t),
+                      ).length,
+                    );
+                    if (bad >= 0) setExpanded(draft.lines[bad].id);
+                    setError(
+                      Object.keys(fieldErrors).length || bad >= 0
+                        ? t("Fix the highlighted fields.", "लाल निशान वाले खाने सुधारें।")
+                        : validation,
+                    );
+                    return;
+                  }
                   setBusy(true);
                   setError("");
                   try {
@@ -726,6 +805,7 @@ function ReceivingItem({
   expanded,
   toggle,
   error,
+  showErrors = false,
   result,
   change,
   remove,
@@ -735,6 +815,7 @@ function ReceivingItem({
   expanded: boolean;
   toggle: () => void;
   error: string;
+  showErrors?: boolean;
   result: ReturnType<typeof receivingLine> | null;
   change: (p: Partial<ReceivingLine>) => void;
   remove: () => void;
@@ -743,6 +824,8 @@ function ReceivingItem({
   const t = (en: string, hi: string) => (language === "hi" ? hi : en);
   const [search, setSearch] = useState(line.source?.name ?? "");
   const [newProduct, setNewProduct] = useState<Product | null>(null);
+  const [tried, setTried] = useState(false);
+  const fe = tried || showErrors ? lineFieldErrors(line, t) : {};
   const product = products.find((p) => p.id === line.productId);
   const validReview =
     line.confirmed &&
@@ -965,6 +1048,7 @@ function ReceivingItem({
                     identifier
                     label={t("Physical batch code", "मिले बैच का नंबर")}
                     value={line.code}
+                    error={fe.code}
                     onChange={(code) => change({ code })}
                   />
                 </View>
@@ -976,6 +1060,7 @@ function ReceivingItem({
                       "जाँची गई एक्सपायरी (YYYY-MM-DD)",
                     )}
                     value={line.expiry}
+                    error={fe.expiry}
                     onChange={(expiry) => change({ expiry })}
                   />
                 </View>
@@ -1000,6 +1085,7 @@ function ReceivingItem({
                     number
                     label={t("Paid quantity", "खरीदी मात्रा")}
                     value={line.quantity}
+                    error={fe.quantity}
                     onChange={(quantity) => change({ quantity })}
                   />
                 </View>
@@ -1011,6 +1097,7 @@ function ReceivingItem({
                       "मुफ़्त / बोनस मात्रा (उसी इकाई में)",
                     )}
                     value={line.bonus}
+                    error={fe.bonus}
                     onChange={(bonus) => change({ bonus })}
                   />
                 </View>
@@ -1042,6 +1129,7 @@ function ReceivingItem({
                     number
                     label={t("MRP (₹)", "एमआरपी (₹)")}
                     value={line.mrp}
+                    error={fe.mrp}
                     onChange={(mrp) => change({ mrp })}
                   />
                 </View>
@@ -1050,6 +1138,7 @@ function ReceivingItem({
                     number
                     label={t("Selling price (₹)", "बिक्री कीमत (₹)")}
                     value={line.price}
+                    error={fe.price}
                     onChange={(price) => change({ price })}
                   />
                 </View>
@@ -1061,6 +1150,7 @@ function ReceivingItem({
                   "जाँची खरीद लागत (₹, वैकल्पिक)",
                 )}
                 value={line.cost}
+                error={fe.cost}
                 onChange={(cost) => change({ cost })}
               />
               <Field
@@ -1070,6 +1160,7 @@ function ReceivingItem({
                   "इस सामान का टैक्स सहित कुल (₹)",
                 )}
                 value={line.total}
+                error={fe.total}
                 onChange={(total) => change({ total })}
               />
               {result && (
@@ -1089,8 +1180,11 @@ function ReceivingItem({
           )}
           {!!error && <Notice tone="waiting">{error}</Notice>}
           <Button
-            disabled={!!error}
             onPress={() => {
+              if (error || Object.keys(lineFieldErrors(line, t)).length) {
+                setTried(true);
+                return;
+              }
               change({
                 confirmed: true,
                 catalogueSignature: catalogueSignature(product!),

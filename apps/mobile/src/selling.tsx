@@ -1191,7 +1191,20 @@ export function Checkout({
       a.payload.orderId === existingOrderId &&
       a.payload.orderVersion === state.orders[existingOrderId ?? ""]?.version,
   );
-  const discountPaise = Number(approvedDiscount?.payload.amountPaise ?? 0);
+  // The owner gives a discount straight at checkout; staff must ask the owner first.
+  const isOwner = s.identity?.actor.role === "owner";
+  const [ownerDiscount, setOwnerDiscount] = useState("");
+  let ownerDiscountPaise = 0;
+  if (isOwner && !approvedDiscount) {
+    try {
+      ownerDiscountPaise = ownerDiscount.trim() ? exactPaise(ownerDiscount) : 0;
+    } catch {
+      /* keep the bill whole while the amount is being typed */
+    }
+  }
+  const discountPaise = approvedDiscount
+    ? Number(approvedDiscount.payload.amountPaise ?? 0)
+    : ownerDiscountPaise;
   // An approved discount larger than the bill must never crash this screen: show the bill
   // without it and ask for the discount to be declined and requested again.
   let discountTooBig = false;
@@ -1353,7 +1366,9 @@ export function Checkout({
         throw new Error("Complete the prescription register details");
       if (discountTooBig)
         throw new Error(
-          "This discount is more than the bill. Ask the owner to decline it and request again.",
+          isOwner && !approvedDiscount
+            ? "This discount is more than the bill. Reduce it."
+            : "This discount is more than the bill. Ask the owner to decline it and request again.",
         );
       if (method === "cash" && change !== null && change < 0)
         throw new Error("Cash received is less than the bill total");
@@ -1401,7 +1416,7 @@ export function Checkout({
                 a.payload.amountPaise === creditPaise,
             )
           : undefined;
-      if (method === "credit") {
+      if (method === "credit" && !isOwner) {
         if (!customerId) throw new Error("Select a customer for credit");
         const waiting = Object.values(s.state!.approvals).some(
           (a) =>
@@ -1458,6 +1473,17 @@ export function Checkout({
         <Amount value={rupees(total)} size={40} weight={700} />
         <TotalRule />
       </View>
+      {isOwner && !approvedDiscount && !!existingOrderId && (
+        <Field
+          label={s.language === "hi" ? "छूट (₹) · वैकल्पिक" : "Discount (₹) · optional"}
+          value={ownerDiscount}
+          onChange={(v: string) => {
+            setOwnerDiscount(v);
+            setError("");
+          }}
+          number
+        />
+      )}
       <CustomerPicker value={customerId} onChange={setCustomer} />
       <Row style={{ flexWrap: "wrap", gap: 8 }}>
         {["cash", "upi", "split", "credit"].map((m) => (
@@ -1550,7 +1576,7 @@ export function Checkout({
           number
         />
       )}
-      {method === "credit" && !approvedCredit && (
+      {method === "credit" && !approvedCredit && !isOwner && (
         <Strip tone="waiting" icon="time-outline">
           {s.language === "hi"
             ? "उधार के लिए मालिक की मंज़ूरी चाहिए। सेल ऑर्डर में रुकी रहेगी और मंज़ूरी आते ही स्क्रीन पर दिखेगा।"
@@ -1613,9 +1639,13 @@ export function Checkout({
       )}
       {discountTooBig && (
         <Strip tone="declined">
-          {s.language === "hi"
-            ? "यह छूट बिल से ज़्यादा है। मालिक से इसे मना करवाकर फिर से माँगें।"
-            : "This discount is more than the bill. Ask the owner to decline it and request again."}
+          {isOwner && !approvedDiscount
+            ? s.language === "hi"
+              ? "यह छूट बिल से ज़्यादा है। छूट कम करें।"
+              : "This discount is more than the bill. Reduce it."
+            : s.language === "hi"
+              ? "यह छूट बिल से ज़्यादा है। मालिक से इसे मना करवाकर फिर से माँगें।"
+              : "This discount is more than the bill. Ask the owner to decline it and request again."}
         </Strip>
       )}
       {!!error && <Strip tone="declined">{error}</Strip>}
@@ -1633,7 +1663,7 @@ export function Checkout({
         >
           {busy
             ? "Saving…"
-            : method === "credit" && !approvedCredit
+            : method === "credit" && !approvedCredit && !isOwner
               ? "Ask the owner to approve credit"
               : "Confirm payment & create bill"}
         </Button>
@@ -1801,8 +1831,7 @@ export function ReceiptSheet({
         .filter((p) => p.invoiceId === invoice.id)
         .reduce((n, p) => n + p.amountPaise, 0)
     : 0;
-  const onCredit =
-    !!invoice && !offlineBill && paidPaise > 0 && paidPaise < invoice.totalPaise;
+  const onCredit = !!invoice && !offlineBill && paidPaise < invoice.totalPaise;
   return (
     <Sheet visible={!!invoice} title={t("receipt")} onClose={onClose}>
       {invoice && (
