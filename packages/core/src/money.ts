@@ -8,6 +8,23 @@ export function integer(v: Decimal.Value): number {
   // Never -0: it would print as "-₹0.00".
   return d.toNumber() || 0;
 }
+/** Base units that are measured rather than counted, so a fraction can be sold. */
+export const MEASURED_UNITS = new Set([
+  "ml",
+  "l",
+  "litre",
+  "liter",
+  "g",
+  "gm",
+  "gram",
+  "kg",
+  "mg",
+  "mcg",
+  "cm",
+  "m",
+  "metre",
+  "meter",
+]);
 export const round = (v: Decimal.Value) =>
   integer(D(v).toDecimalPlaces(0, Decimal.ROUND_HALF_UP));
 export function indiaDate(at: string): string {
@@ -41,6 +58,12 @@ export function quote(
     const base = D(line.quantity).mul(multiplier);
     if (p.baseUnit === "tablet" && !base.isInteger())
       throw new Error("Tablets must be whole units");
+    // A bottle, tube or piece cannot be split at the counter; only measured units (ml, g) can.
+    if (
+      !MEASURED_UNITS.has(p.baseUnit.trim().toLowerCase()) &&
+      !base.isInteger()
+    )
+      throw new Error("This medicine is sold in whole units");
     const price = override?.[i]?.pricePaise ?? batch.pricePaise;
     if (price > batch.mrpPaise) throw new Error("Selling price exceeds MRP");
     return {

@@ -489,20 +489,25 @@ export function execute(
       const discount = offline ? 0 : op.discountPaise;
       const credit = offline ? 0 : op.creditPaise;
       const upi = offline ? 0 : op.upiPaise;
-      if (discount)
-        useApproval(!offline ? op.discountApprovalId : undefined, "discount", {
+      // The owner gives discount and credit on their own authority; staff need an approval.
+      const ownerDecides = actor.role === "owner";
+      const discountApprovalId = offline ? undefined : op.discountApprovalId;
+      const creditApprovalId = offline ? undefined : op.creditApprovalId;
+      if (discount && !(ownerDecides && !discountApprovalId))
+        useApproval(discountApprovalId, "discount", {
           orderId: o.id,
           orderVersion: o.version,
           amountPaise: discount,
         });
       if (credit) {
         ensure(o.customerId, "Credit needs a customer");
-        useApproval(!offline ? op.creditApprovalId : undefined, "credit", {
-          orderId: o.id,
-          orderVersion: o.version,
-          customerId: o.customerId,
-          amountPaise: credit,
-        });
+        if (!(ownerDecides && !creditApprovalId))
+          useApproval(creditApprovalId, "credit", {
+            orderId: o.id,
+            orderVersion: o.version,
+            customerId: o.customerId,
+            amountPaise: credit,
+          });
       }
       const lines = quoteLines(
         s,

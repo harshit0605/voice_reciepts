@@ -1257,10 +1257,39 @@ describe("approvals", () => {
         run(s, pay(2700, { discountPaise: 100, discountApprovalId: "ap-d" })),
       "FORBIDDEN",
     );
-    fails(() => run(s, pay(2700, { discountPaise: 100 })), "FORBIDDEN");
     fails(
       () =>
         run(s, pay(2700, { discountPaise: 100, discountApprovalId: "nope" })),
+      "FORBIDDEN",
+    );
+  });
+  it("never sells part of a bottle or a piece", () => {
+    fails(
+      () =>
+        run(
+          save(freshState(), [L("betadine-b1", "1.5", "bottle")]),
+          pay(21750),
+        ),
+      undefined,
+      /whole units/,
+    );
+    fails(
+      () =>
+        run(save(freshState(), [L("bandage-b1", "0.5", "piece")]), pay(1750)),
+      undefined,
+      /whole units/,
+    );
+  });
+  it("staff need an approval for a discount; the owner gives one directly", () => {
+    // The owner's own sale: no request to themselves.
+    expect(
+      run(held(), pay(2700, { discountPaise: 100 })).state.invoices,
+    ).not.toEqual({});
+    let s = freshState();
+    s.devices["demo-device"].userId = staff.id;
+    s = save(s, [L("dolo-b1", "1", "strip")], { actor: staff });
+    fails(
+      () => run(s, pay(2700, { discountPaise: 100 }), { actor: staff }),
       "FORBIDDEN",
     );
   });

@@ -595,4 +595,6 @@ export const hindiCopy: Record<string, string> = {
   "The phone was locked while the app was starting. Close and reopen the app.":
     "ऐप खुलते समय फ़ोन लॉक था। ऐप बंद करके फिर से खोलें।",
   "Tablets must be whole units": "गोलियाँ पूरी संख्या में होनी चाहिए",
+  "This medicine is sold in whole units":
+    "यह दवा पूरी इकाई में ही बिकती है",
 };
