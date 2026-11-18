@@ -67,6 +67,9 @@ export type RetryOptions = {
   neverSent?: (e: unknown) => boolean;
   /** Stop retrying, e.g. once the app has gone to the background. */
   shouldStop?: () => boolean;
+  /** Start no new attempt once this long has passed since the first (fast failures retry more). */
+  budgetMs?: number;
+  now?: () => number;
 };
 
 const defaultSleep = (ms: number) =>
@@ -91,13 +94,17 @@ export async function withRetry<T extends Answer>(
   options: RetryOptions,
 ): Promise<T> {
   const sleep = options.sleep ?? defaultSleep;
+  const now = options.now ?? Date.now;
   const delays = options.delaysMs ?? [400, 1500, 3000];
+  const began = now();
   let allNeverSent = true;
   let last: unknown;
   let lastStatus: number | undefined;
   for (let n = 0; n <= options.retries; n++) {
     if (n > 0) {
       if (options.shouldStop?.()) break;
+      if (options.budgetMs !== undefined && now() - began >= options.budgetMs)
+        break;
       // Jitter so a shop's phones do not all retry in the same instant after an outage.
       const base = delays[Math.min(n - 1, delays.length - 1)];
       await sleep(base + Math.floor(Math.random() * base * 0.25));
@@ -106,8 +113,10 @@ export async function withRetry<T extends Answer>(
     try {
       const response = await attempt(signal);
       if (!fromGateway(response)) return response;
-      // The gateway answered, so the request reached the server side: it may have been applied.
-      allNeverSent = false;
+      // A gateway status means the request reached the server side and may have been applied.
+      // A proxy's own text 404 means it had no route to the API at all: nothing was applied.
+      if (GATEWAY_STATUSES.has(response.status) || response.status !== 404)
+        allNeverSent = false;
       lastStatus = response.status;
       last = new Error(`Gateway answered ${response.status}`);
     } catch (e) {
@@ -125,8 +134,10 @@ export async function withRetry<T extends Answer>(
 }
 
 export type ReachabilityOptions = {
-  /** Consecutive failed requests (after their retries) that mean offline. */
+  /** Consecutive failed requests (after their retries) that mean offline... */
   failuresToOffline?: number;
+  /** ...once nothing has succeeded for at least this long (a short dropout is not an outage). */
+  minOutageMs?: number;
   /** One failed request means offline if nothing succeeded for this long. */
   staleAfterMs?: number;
   /** Failures right after the app comes back to the front are the OS waking the radio, not an outage. */
@@ -135,8 +146,10 @@ export type ReachabilityOptions = {
 };
 
 /**
- * Decides when the phone is offline. One dropped request is not an outage: it takes two failed
- * requests in a row, or one failure after a long silence. Any success means online again.
+ * Decides when the phone is offline. A dropped request or a dropout of a few seconds is not an
+ * outage: it takes two failed requests and 15 s with no successful answer, or 25 s of silence and a
+ * failure. (Requests on separate timers can fail within the same second, so a count alone flapped.)
+ * Any success means online again.
  * Failures while the app is in the background, or just after it returns, are ignored, because the
  * OS suspends networking there and those failures say nothing about the shop's connection.
  */
@@ -147,12 +160,14 @@ export class Reachability {
   private active = true;
   online = true;
   private readonly failuresToOffline: number;
+  private readonly minOutageMs: number;
   private readonly staleAfterMs: number;
   private readonly resumeGraceMs: number;
   private readonly now: () => number;
   constructor(options: ReachabilityOptions = {}) {
     this.failuresToOffline = options.failuresToOffline ?? 2;
-    this.staleAfterMs = options.staleAfterMs ?? 20_000;
+    this.minOutageMs = options.minOutageMs ?? 15_000;
+    this.staleAfterMs = options.staleAfterMs ?? 25_000;
     this.resumeGraceMs = options.resumeGraceMs ?? 4_000;
     this.now = options.now ?? Date.now;
     this.lastSuccess = this.now();
@@ -178,8 +193,12 @@ export class Reachability {
     )
       return false;
     this.failures++;
-    const stale = this.now() - this.lastSuccess >= this.staleAfterMs;
-    if (this.online && (this.failures >= this.failuresToOffline || stale)) {
+    const silence = this.now() - this.lastSuccess;
+    const outage =
+      (this.failures >= this.failuresToOffline &&
+        silence >= this.minOutageMs) ||
+      silence >= this.staleAfterMs;
+    if (this.online && outage) {
       this.online = false;
       return true;
     }

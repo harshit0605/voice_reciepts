@@ -234,18 +234,20 @@ export default function App() {
       <MoreScreen navigate={setPage} />
     );
   const me = session.state.members[session.identity.actor.id];
-  const counter =
-    session.state.devices[session.identity.deviceId]?.counterId;
-  const syncTone = session.pending.length
-    ? "waiting"
-    : session.online
-      ? "paid"
-      : "declined";
-  const syncText = session.pending.length
-    ? `${session.pending.length} ${t("pending")}`
-    : session.online
-      ? t("synced")
-      : t("offline");
+  const counter = session.state.devices[session.identity.deviceId]?.counterId;
+  // Offline matters more than a pending count: say it first, with the count beside it.
+  const syncTone = !session.online
+    ? "declined"
+    : session.pending.length
+      ? "waiting"
+      : "paid";
+  const syncWord = !session.online
+    ? t("offline")
+    : session.pending.length
+      ? t("pending")
+      : t("synced");
+  const syncCount = session.pending.length || undefined;
+  const syncText = syncCount ? `${syncCount} ${syncWord}` : syncWord;
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: palette.paper }}
@@ -407,10 +409,29 @@ export default function App() {
                   />
                   {/* On a phone a green dot says "up to date"; words appear when something
                       is waiting or the phone is offline. */}
+                  {/* Count and word as separate pieces, so a Hindi word can never wrap onto a
+                      hidden second line inside the pill. */}
                   {(wide || syncTone !== "paid") && (
-                    <Txt size={13} weight={600} color={toneInk[syncTone][0]}>
-                      {syncText}
-                    </Txt>
+                    <>
+                      {syncCount !== undefined && (
+                        <Txt
+                          size={13}
+                          weight={600}
+                          num
+                          color={toneInk[syncTone][0]}
+                        >
+                          {String(syncCount)}
+                        </Txt>
+                      )}
+                      <Txt
+                        size={13}
+                        weight={600}
+                        color={toneInk[syncTone][0]}
+                        numberOfLines={1}
+                      >
+                        {syncWord}
+                      </Txt>
+                    </>
                   )}
                 </Pressable>
               </Row>
@@ -443,7 +464,11 @@ export default function App() {
             )
             .slice(0, 2)
             .map((a) => (
-              <Banner key={a.key} tone="waiting" onPress={() => setPage(a.page)}>
+              <Banner
+                key={a.key}
+                tone="waiting"
+                onPress={() => setPage(a.page)}
+              >
                 {a.text}
               </Banner>
             ))}
@@ -505,7 +530,9 @@ export default function App() {
                         }}
                       />
                       <Icon
-                        name={(active ? icon.replace("-outline", "") : icon) as any}
+                        name={
+                          (active ? icon.replace("-outline", "") : icon) as any
+                        }
                         size={22}
                         color={active ? palette.blue : palette.ink2}
                       />
@@ -685,7 +712,9 @@ function Login() {
                 />
               )}
               <Field
-                label={s.passwordRequired ? "Temporary password" : t("password")}
+                label={
+                  s.passwordRequired ? "Temporary password" : t("password")
+                }
                 value={password}
                 onChange={setPassword}
                 secret
@@ -720,7 +749,11 @@ function Login() {
                     marginBottom: 14,
                   }}
                 >
-                  <Icon name="alert-circle" size={18} color={palette.declined} />
+                  <Icon
+                    name="alert-circle"
+                    size={18}
+                    color={palette.declined}
+                  />
                   <Txt size={14} color={palette.declined} style={{ flex: 1 }}>
                     {error}
                   </Txt>

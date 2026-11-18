@@ -251,7 +251,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           };
         },
         {
-          retries: !repeatable ? 0 : route === "/commands" ? 1 : 2,
+          // A sale retries fast failures (refused, gateway) up to three times but starts no new
+          // attempt after 15 s, so a real outage answers within ~25 s.
+          retries: !repeatable ? 0 : route === "/commands" ? 3 : 2,
+          budgetMs: route === "/commands" ? 15_000 : undefined,
           // A bill photo on a slow uplink needs far longer than a small request; a sale should
           // not keep the counter waiting long before its one retry.
           timeoutMs: upload ? 120_000 : route === "/commands" ? 10_000 : 12_000,
@@ -268,8 +271,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         notSent: e instanceof TransientFailure ? e.notSent : neverSent(e),
       });
     }
-    // The API answered, so the connection works, whatever the answer says.
-    reachability.current.success();
+    // The API answered, so the connection works, whatever the answer says. Coming back from
+    // offline, send waiting sales now rather than at the next 30-second tick.
+    if (reachability.current.success()) setTimeout(() => void sync(), 0);
     setOnline(true);
     // An old "unavailable" notice would now be wrong.
     setError((current) => (current === CONNECTION_LOST ? "" : current));
