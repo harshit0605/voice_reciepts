@@ -251,9 +251,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           };
         },
         {
-          // A sale retries fast failures (refused, gateway) up to three times but starts no new
+          // A sale retries fast failures (refused, gateway) up to five times but starts no new
           // attempt after 15 s, so a real outage answers within ~25 s.
-          retries: !repeatable ? 0 : route === "/commands" ? 3 : 2,
+          retries: !repeatable ? 0 : route === "/commands" ? 5 : 2,
           budgetMs: route === "/commands" ? 15_000 : undefined,
           // A bill photo on a slow uplink needs far longer than a small request; a sale should
           // not keep the counter waiting long before its one retry.
@@ -871,7 +871,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       const remote = await storage.get<State>(`remote:${scope()}`);
       const latestQueue =
         (await storage.get<storage.Queued[]>(`outbox:${scope()}`)) ?? [];
-      if (!operating.current)
+      // Right after an app update establish() briefly holds an identity with no device id while
+      // it re-registers; a heartbeat then would be refused as "Device unavailable".
+      if (!operating.current && identityRef.current?.deviceId)
         await request("/devices/heartbeat", {
           method: "POST",
           body: JSON.stringify({

@@ -128,6 +128,9 @@ export function Txt({
   const w: Weight = weight ?? (bold ? 600 : 400);
   return (
     <Text
+      // Android's default "high quality" line breaking measures Devanagari a little narrower than it
+      // draws, so a label in a fitted pill (filter chips, the header) wrapped onto a hidden line.
+      textBreakStrategy="simple"
       maxFontSizeMultiplier={1.4}
       {...rest}
       style={[
@@ -401,6 +404,7 @@ export function Chip({ children, active = false, onPress }: any) {
         size={14}
         weight={active ? 600 : 500}
         color={active ? "#FFFFFF" : palette.ink2}
+        numberOfLines={1}
       >
         {children}
       </Txt>
