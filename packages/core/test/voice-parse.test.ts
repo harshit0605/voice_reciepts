@@ -545,3 +545,35 @@ describe("voiceCandidates", () => {
     ).toEqual(["dolo"]);
   });
 });
+
+describe("model output with placeholder words", () => {
+  it('treats a unit, strength or form of "null" or "none" as not said', async () => {
+    const { applyVoiceResult, emptyVoice } = await import("../src/voice");
+    let n = 0;
+    const out = applyVoiceResult(
+      emptyVoice("sale-1"),
+      "job-1",
+      {
+        draft: {
+          items: [
+            {
+              name: "Betadine",
+              strength: "null",
+              form: "None",
+              quantity: "1",
+              unit: "null",
+              uncertain: false,
+            },
+          ],
+          warnings: [],
+        },
+      },
+      () => `i${++n}`,
+    );
+    expect(out.items[0]).toMatchObject({
+      unit: "",
+      strength: null,
+      form: null,
+    });
+  });
+});

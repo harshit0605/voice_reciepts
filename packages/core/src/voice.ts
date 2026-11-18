@@ -275,6 +275,9 @@ export function parseExactSaleText(
   }
   return { items, warnings: [] };
 }
+/** "null", "none", "n/a" or blank from a model means nothing was said. */
+const blankWord = (v: string | null) =>
+  v == null || /^\s*(null|none|n\/?a|-)?\s*$/i.test(v) ? null : v;
 export function applyVoiceResult(
   work: VoiceWork,
   jobId: string,
@@ -289,7 +292,14 @@ export function applyVoiceResult(
     transcript: output.transcript ?? work.input,
     items: [
       ...work.items,
-      ...draft.items.map((item) => ({ ...item, id: id() })),
+      ...draft.items.map((item) => ({
+        ...item,
+        // Models told "null when not said" but held to a string write the word itself.
+        unit: blankWord(item.unit) ?? "",
+        strength: blankWord(item.strength),
+        form: blankWord(item.form),
+        id: id(),
+      })),
     ],
     warnings: draft.items.length ? draft.warnings : [NO_MEDICINES_WARNING],
     appliedJobIds: [...work.appliedJobIds, jobId].slice(-100),
