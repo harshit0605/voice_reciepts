@@ -106,6 +106,7 @@ export default function App() {
       }),
     [],
   );
+  // Same mark as while fonts load, so start-up reads as one calm screen, not blank then spinner.
   if (session.loading)
     return (
       <View
@@ -113,10 +114,12 @@ export default function App() {
           flex: 1,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: colors.bg,
+          gap: 20,
+          backgroundColor: palette.paper,
         }}
       >
-        <ActivityIndicator color={colors.accent} />
+        <BrandMark size={64} />
+        <ActivityIndicator color={palette.blue} />
       </View>
     );
   if (!session.identity || session.passwordRequired || session.signInRequired)

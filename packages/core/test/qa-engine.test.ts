@@ -1522,6 +1522,28 @@ describe("cash drawer", () => {
     expect(expectedCash(c, "drawer-demo")).toBe(201000);
     expect(balance(c, "customer-1")).toBe(1300);
   });
+  it("cash repayments store no reference, so the second one is not a duplicate", () => {
+    // Seen on a device: cash repayments sent reference "" and the unique UPI-reference index made
+    // every cash repayment after the first fail.
+    let c = save(freshState(), [L("dolo-b1", "1", "strip")], {
+      customerId: "customer-1",
+    });
+    c = step(c, pay(0, { creditPaise: 2800 }));
+    for (const amountPaise of [1000, 500])
+      c = step(c, {
+        type: "credit.repay",
+        customerId: "customer-1",
+        amountPaise,
+        method: "cash",
+        reference: "",
+      });
+    const repayments = Object.values(c.payments).filter(
+      (p) => p.kind === "repayment",
+    );
+    expect(repayments).toHaveLength(2);
+    for (const p of repayments) expect("reference" in p).toBe(false);
+    expect(balance(c, "customer-1")).toBe(1300);
+  });
   it("a split bill counts only its cash leg exactly once", () => {
     let s = save(freshState(), [L("dolo-b1", "1", "strip")]);
     s = step(

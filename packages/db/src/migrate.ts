@@ -21,7 +21,7 @@ ALTER TABLE gateway_health ADD COLUMN IF NOT EXISTS outage_notified_at timestamp
       `CREATE TABLE IF NOT EXISTS retail_${name}(business_id text NOT NULL REFERENCES businesses(id),id text NOT NULL,revision integer NOT NULL,payload jsonb NOT NULL,PRIMARY KEY(business_id,id)); CREATE INDEX IF NOT EXISTS ${name}_sync_idx ON retail_${name}(business_id,revision);`,
     );
   await c.query(
-    `CREATE UNIQUE INDEX IF NOT EXISTS invoice_number_unique ON retail_invoices(business_id,(payload->>'number')); CREATE UNIQUE INDEX IF NOT EXISTS upi_reference_unique ON retail_payments(business_id,(payload->>'reference')) WHERE payload->>'reference' IS NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS device_series_unique ON retail_devices(business_id,(payload->>'series'));`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS invoice_number_unique ON retail_invoices(business_id,(payload->>'number')); DROP INDEX IF EXISTS upi_reference_unique; CREATE UNIQUE INDEX IF NOT EXISTS upi_reference_unique_v2 ON retail_payments(business_id,(payload->>'reference')) WHERE coalesce(payload->>'reference','') <> ''; CREATE UNIQUE INDEX IF NOT EXISTS device_series_unique ON retail_devices(business_id,(payload->>'series'));`,
   );
   await c.query("COMMIT");
   console.log("Database schema ready");

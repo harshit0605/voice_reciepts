@@ -177,6 +177,10 @@ export function execute(
         "PAYMENT_REFERENCE_REUSED",
       );
       p.reference = ref;
+    } else if (!p.reference?.trim()) {
+      // A cash payment has no reference: never store "", which the unique UPI-reference index
+      // would then treat as a reference shared by every cash payment.
+      delete p.reference;
     }
     s.payments[id] = { id, ...p };
   };

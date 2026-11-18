@@ -4,7 +4,9 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
+import { View } from "react-native";
 import { SessionProvider } from "../src/session";
+import { BrandMark } from "../src/ui";
 export default function Layout() {
   // Text laid out before the font arrives keeps the fallback font's width on iOS and gets clipped.
   // The faces are Anek Devanagari with corrected line metrics (assets/fonts/patch-anek.py); the
@@ -16,7 +18,21 @@ export default function Layout() {
     AnekDevanagari_700Bold: require("../assets/fonts/CounterwellAnek-Bold.ttf"),
     ...Ionicons.font,
   });
-  if (!loaded && !failed) return null;
+  // The mark is drawn with plain views, so it needs no font: a brand moment instead of a blank
+  // white screen while the faces load.
+  if (!loaded && !failed)
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#FFFFFF",
+        }}
+      >
+        <BrandMark size={64} />
+      </View>
+    );
   return (
     <SafeAreaProvider>
       <SessionProvider>

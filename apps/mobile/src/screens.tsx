@@ -173,7 +173,9 @@ export function Page({ title, subtitle, action, onBack, children }: any) {
         <Pressable
           onPress={onBack}
           accessibilityRole="button"
-          accessibilityLabel={language === "hi" ? "अन्य पर वापस" : "Back to More"}
+          accessibilityLabel={
+            language === "hi" ? "अन्य पर वापस" : "Back to More"
+          }
           hitSlop={8}
           style={({ pressed }) => ({
             alignSelf: "flex-start",
@@ -458,7 +460,11 @@ export function OverviewScreen({
           weight={700}
           style={{ marginTop: 4 }}
         />
-        <Txt size={13} color={palette.ink3} style={{ marginTop: 4, marginBottom: 12 }}>
+        <Txt
+          size={13}
+          color={palette.ink3}
+          style={{ marginTop: 4, marginBottom: 12 }}
+        >
           {r.sales.bills} {hi ? "बिल" : r.sales.bills === 1 ? "bill" : "bills"}
           {r.sales.returnsPaise
             ? ` · ${hi ? "वापसी" : "returns"} ${rupees(r.sales.returnsPaise)}`
@@ -599,12 +605,18 @@ export function OverviewScreen({
           {closes.map((d) => (
             <Entry
               key={d.id}
-              time={new Date(`${indiaDate(d.closedAt!)}T00:00:00Z`).toLocaleDateString(
-                hi ? "hi-IN" : "en-IN",
-                { day: "numeric", month: "short", timeZone: "UTC" },
-              )}
+              time={new Date(
+                `${indiaDate(d.closedAt!)}T00:00:00Z`,
+              ).toLocaleDateString(hi ? "hi-IN" : "en-IN", {
+                day: "numeric",
+                month: "short",
+                timeZone: "UTC",
+              })}
               title={state.members[d.closedBy ?? ""]?.name ?? ""}
-              who={{ id: d.closedBy, name: state.members[d.closedBy ?? ""]?.name }}
+              who={{
+                id: d.closedBy,
+                name: state.members[d.closedBy ?? ""]?.name,
+              }}
               trailing={
                 <Badge
                   tone={
@@ -651,7 +663,11 @@ export function OverviewScreen({
               hour: "2-digit",
               minute: "2-digit",
             })}
-            title={<Txt num size={16} weight={600}>{i.number}</Txt>}
+            title={
+              <Txt num size={16} weight={600}>
+                {i.number}
+              </Txt>
+            }
             detail={itemCount(i.lines.length, s.language)}
             who={{
               id: i.collectorId,
@@ -734,7 +750,9 @@ export function OrdersScreen({
    * id fragment), then who it is for.
    */
   const orderTitle = (o: Order, customer?: string) => {
-    const invoice = Object.values(state.invoices).find((i) => i.orderId === o.id);
+    const invoice = Object.values(state.invoices).find(
+      (i) => i.orderId === o.id,
+    );
     const label =
       o.status === "cancelled"
         ? hi
@@ -758,9 +776,7 @@ export function OrdersScreen({
             </Txt>
           </>
         )}
-        {customer ? (
-          <Txt size={16} weight={400}>{` · ${customer}`}</Txt>
-        ) : null}
+        {customer ? <Txt size={16} weight={400}>{` · ${customer}`}</Txt> : null}
       </Txt>
     );
   };
@@ -856,7 +872,9 @@ export function OrdersScreen({
                       )}
                       {a && a.status !== "pending" && (
                         <Badge
-                          tone={a.status === "approved" ? "approved" : "declined"}
+                          tone={
+                            a.status === "approved" ? "approved" : "declined"
+                          }
                         >
                           {a.status === "approved"
                             ? hi
@@ -995,7 +1013,10 @@ export function OrdersScreen({
                           {i.number}
                         </Txt>
                         {customer ? (
-                          <Txt size={16} weight={400}>{` · ${customer.name}`}</Txt>
+                          <Txt
+                            size={16}
+                            weight={400}
+                          >{` · ${customer.name}`}</Txt>
                         ) : null}
                       </Txt>
                     }
@@ -1117,47 +1138,47 @@ export function OrdersScreen({
             />
             {s.identity?.actor.role !== "owner" && (
               <>
-            <View style={{ height: 24 }} />
-            <Field
-              label="Request discount (₹)"
-              value={discount}
-              onChange={setDiscount}
-              number
-            />
-            <Button
-              secondary
-              onPress={() =>
-                void run(async () => {
-                  const amountPaise = money(discount);
-                  if (amountPaise <= 0)
-                    throw new Error("Enter the discount amount");
-                  const billPaise = quote(
-                    state,
-                    selected.lines,
-                    new Date().toISOString(),
-                  ).reduce((n, l) => n + l.netPaise, 0);
-                  if (amountPaise > billPaise)
-                    throw new Error(
-                      `The discount cannot be more than the bill (${rupees(billPaise)})`,
-                    );
-                  await s.command({
-                    type: "approval.request",
-                    approvalId: uid(),
-                    kind: "discount",
-                    payload: {
-                      orderId: selected.id,
-                      orderVersion: selected.version,
-                      amountPaise,
-                    },
-                    reason: "Customer discount request",
-                  });
-                  setDiscount("");
-                  setSelected(null);
-                })
-              }
-            >
-              Ask owner to approve discount
-            </Button>
+                <View style={{ height: 24 }} />
+                <Field
+                  label="Request discount (₹)"
+                  value={discount}
+                  onChange={setDiscount}
+                  number
+                />
+                <Button
+                  secondary
+                  onPress={() =>
+                    void run(async () => {
+                      const amountPaise = money(discount);
+                      if (amountPaise <= 0)
+                        throw new Error("Enter the discount amount");
+                      const billPaise = quote(
+                        state,
+                        selected.lines,
+                        new Date().toISOString(),
+                      ).reduce((n, l) => n + l.netPaise, 0);
+                      if (amountPaise > billPaise)
+                        throw new Error(
+                          `The discount cannot be more than the bill (${rupees(billPaise)})`,
+                        );
+                      await s.command({
+                        type: "approval.request",
+                        approvalId: uid(),
+                        kind: "discount",
+                        payload: {
+                          orderId: selected.id,
+                          orderVersion: selected.version,
+                          amountPaise,
+                        },
+                        reason: "Customer discount request",
+                      });
+                      setDiscount("");
+                      setSelected(null);
+                    })
+                  }
+                >
+                  Ask owner to approve discount
+                </Button>
               </>
             )}
           </>
@@ -1441,7 +1462,11 @@ export function CustomersScreen() {
                 />
                 <Pressable
                   onPress={() => setVerified(!verified)}
-                  style={{ marginBottom: 20, minHeight: 48, justifyContent: "center" }}
+                  style={{
+                    marginBottom: 20,
+                    minHeight: 48,
+                    justifyContent: "center",
+                  }}
                 >
                   <Row>
                     <Icon
@@ -1503,7 +1528,9 @@ export function CustomersScreen() {
                         ) : undefined
                       }
                       amount={`${l.amountPaise < 0 ? "−" : "+"}${rupees(Math.abs(l.amountPaise))}`}
-                      amountColor={l.amountPaise < 0 ? palette.paid : palette.ink}
+                      amountColor={
+                        l.amountPaise < 0 ? palette.paid : palette.ink
+                      }
                     />
                   );
                 })}
@@ -1693,7 +1720,11 @@ export function StockScreen({
                       justifyContent: "center",
                     }}
                   >
-                    <Icon name="create-outline" size={22} color={palette.ink2} />
+                    <Icon
+                      name="create-outline"
+                      size={22}
+                      color={palette.ink2}
+                    />
                   </Pressable>
                 )}
               </Row>
@@ -1732,7 +1763,7 @@ export function StockScreen({
                     <Txt size={13} color={palette.ink3} num>
                       {`${rupees(b.pricePaise)} / ${w(p.baseUnit)}`}
                       {Number(b.quarantined) > 0
-                        ? ` · ${b.quarantined} quarantined`
+                        ? ` · ${b.quarantined} ${hi ? "अलग रखी" : "quarantined"}`
                         : ""}
                     </Txt>
                   </View>
@@ -1972,7 +2003,11 @@ export function MoneyScreen({ onBack }: { onBack?: () => void }) {
       timeZone: "UTC",
     });
   const diffTone = (p: number = 0) =>
-    p < 0 ? ("declined" as const) : p > 0 ? ("waiting" as const) : ("paid" as const);
+    p < 0
+      ? ("declined" as const)
+      : p > 0
+        ? ("waiting" as const)
+        : ("paid" as const);
   return (
     <Page
       onBack={onBack}
@@ -2130,7 +2165,9 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
     p.customerId ?? o?.customerId ?? i?.customerId ?? "",
   );
   const requester = s.members[approval.requestedBy];
-  const decider = approval.decidedBy ? s.members[approval.decidedBy] : undefined;
+  const decider = approval.decidedBy
+    ? s.members[approval.decidedBy]
+    : undefined;
   // A statement line whose right side can be a mark, an identifier or plain text.
   const fact = (label: string, node: React.ReactNode) => (
     <View
@@ -2190,7 +2227,9 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
       : kindWord;
   return (
     <View>
-      <Row style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+      <Row
+        style={{ justifyContent: "space-between", alignItems: "flex-start" }}
+      >
         <View style={{ flex: 1, gap: 2 }}>
           {bigAmount !== undefined && (
             <Amount value={bigAmount} size={40} weight={700} />
@@ -2204,7 +2243,9 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
             tone="approved"
             land
             date={
-              approval.decidedAt ? stampDate(approval.decidedAt, language) : undefined
+              approval.decidedAt
+                ? stampDate(approval.decidedAt, language)
+                : undefined
             }
           >
             {hi ? "मंज़ूर" : "Approved"}
@@ -2214,7 +2255,9 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
             tone="declined"
             land
             date={
-              approval.decidedAt ? stampDate(approval.decidedAt, language) : undefined
+              approval.decidedAt
+                ? stampDate(approval.decidedAt, language)
+                : undefined
             }
           >
             {hi ? "अस्वीकृत" : "Declined"}
@@ -2244,7 +2287,11 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
           fact(
             hi ? "फ़ैसला किया" : "Decided by",
             <Row style={{ gap: 8 }}>
-              <StaffMark id={approval.decidedBy} name={decider.name} size={26} />
+              <StaffMark
+                id={approval.decidedBy}
+                name={decider.name}
+                size={26}
+              />
               <Txt size={15} weight={600}>
                 {decider.name}
               </Txt>
@@ -2309,7 +2356,12 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
           )}
       </View>
       {customerId && approval.kind === "credit" && (
-        <Txt size={14} weight={600} color={palette.waiting} style={{ marginTop: 12 }}>
+        <Txt
+          size={14}
+          weight={600}
+          color={palette.waiting}
+          style={{ marginTop: 12 }}
+        >
           {(() => {
             const bills = Object.values(s.invoices).filter(
               (inv) => inv.customerId === customerId && billDue(s, inv.id) > 0,
@@ -2323,7 +2375,12 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
       )}
       {o && o.lines.length > 0 && (
         <View style={{ marginTop: 20 }}>
-          <Txt size={14} weight={600} color={palette.ink2} style={{ marginBottom: 4 }}>
+          <Txt
+            size={14}
+            weight={600}
+            color={palette.ink2}
+            style={{ marginBottom: 4 }}
+          >
             {hi ? "दवाएँ" : "Items"}
           </Txt>
           {o.lines.map((l, n) => {
@@ -2346,7 +2403,12 @@ function ApprovalDetails({ approval }: { approval: Approval }) {
       )}
       {i && (
         <View style={{ marginTop: 20 }}>
-          <Txt size={14} weight={600} color={palette.ink2} style={{ marginBottom: 4 }}>
+          <Txt
+            size={14}
+            weight={600}
+            color={palette.ink2}
+            style={{ marginBottom: 4 }}
+          >
             {hi ? "लौटाई जा रही दवाएँ" : "Items returned"}
           </Txt>
           {(p.lines as ReturnLine[]).map((l, n) => {
@@ -2451,10 +2513,7 @@ function ExceptionDetails({ reviewId }: { reviewId: string }) {
             }
             value={rupees(op.cashPaise)}
           />
-          <Line
-            label={dateTime24(command.occurredAt)}
-            value={op.counterId}
-          />
+          <Line label={dateTime24(command.occurredAt)} value={op.counterId} />
           {op.lines.map((l: any, index: number) => {
             const b = s.batches[l.batchId],
               p = b ? s.products[b.productId] : undefined;
@@ -2507,7 +2566,8 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
   const sheetOpen = !!selected || !!reviewId;
   const wasOpen = useRef(false);
   useEffect(() => {
-    if (wasOpen.current && !sheetOpen) listLockedUntil.current = Date.now() + 600;
+    if (wasOpen.current && !sheetOpen)
+      listLockedUntil.current = Date.now() + 1000;
     wasOpen.current = sheetOpen;
   }, [sheetOpen]);
   const listOpen = (open: () => void) => () => {
@@ -2646,7 +2706,9 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
                 title={x.heading}
                 detail={
                   <Txt size={14} color={palette.ink2} numberOfLines={2}>
-                    {[approvalReason(a.reason, hi), x.items].filter(Boolean).join(" · ")}
+                    {[approvalReason(a.reason, hi), x.items]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </Txt>
                 }
                 who={{
@@ -2668,7 +2730,9 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
         )}
       </Section>
       {pending.some((a) => a.status === "approved") && (
-        <Section title={hi ? "मंज़ूर, इस्तेमाल बाकी" : "Approved, not yet used"}>
+        <Section
+          title={hi ? "मंज़ूर, इस्तेमाल बाकी" : "Approved, not yet used"}
+        >
           {pending
             .filter((a) => a.status === "approved")
             .map((a) => {
@@ -2684,7 +2748,9 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
                   }
                   detail={
                     <Txt size={14} color={palette.ink3} numberOfLines={2}>
-                      {[approvalReason(a.reason, hi), x.items].filter(Boolean).join(" · ")}
+                      {[approvalReason(a.reason, hi), x.items]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </Txt>
                   }
                   who={{
@@ -2732,39 +2798,43 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
         </Txt>
       </Section>
       <Section title="Shop backups">
-        <Txt size={14} color={palette.ink2} style={{ marginTop: 8, marginBottom: 4 }}>
+        <Txt
+          size={14}
+          color={palette.ink2}
+          style={{ marginTop: 8, marginBottom: 4 }}
+        >
           Bring back sales that only reached the shop PC.
         </Txt>
         <View style={{ alignItems: "flex-start" }}>
-        <Button
-          variant="secondary"
-          small
-          icon="cloud-download-outline"
-          onPress={() =>
-            void run(async () => {
-              if (s.demo)
-                throw new Error(
-                  "Gateway recovery needs a real shop connection",
-                );
-              const r = await fetch(state.settings.gatewayUrl + "/backups", {
-                headers: { Authorization: `Bearer ${s.identity!.lease}` },
-                signal: AbortSignal.timeout(10000),
-              });
-              if (!r.ok) throw new Error("Shop backups are unavailable");
-              const data = await r.json();
-              for (let index = 0; index < data.entries.length; index += 100)
-                await s.request("/recovery/import", {
-                  method: "POST",
-                  body: JSON.stringify({
-                    entries: data.entries.slice(index, index + 100),
-                  }),
+          <Button
+            variant="secondary"
+            small
+            icon="cloud-download-outline"
+            onPress={() =>
+              void run(async () => {
+                if (s.demo)
+                  throw new Error(
+                    "Gateway recovery needs a real shop connection",
+                  );
+                const r = await fetch(state.settings.gatewayUrl + "/backups", {
+                  headers: { Authorization: `Bearer ${s.identity!.lease}` },
+                  signal: AbortSignal.timeout(10000),
                 });
-              await s.refresh();
-            })
-          }
-        >
-          Recover from shop backups
-        </Button>
+                if (!r.ok) throw new Error("Shop backups are unavailable");
+                const data = await r.json();
+                for (let index = 0; index < data.entries.length; index += 100)
+                  await s.request("/recovery/import", {
+                    method: "POST",
+                    body: JSON.stringify({
+                      entries: data.entries.slice(index, index + 100),
+                    }),
+                  });
+                await s.refresh();
+              })
+            }
+          >
+            Recover from shop backups
+          </Button>
         </View>
       </Section>
       <Sheet
@@ -2799,16 +2869,16 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
                 <View style={{ alignItems: "flex-end" }}>
                   <Button
                     variant="danger"
-                  onPress={() =>
-                    void run(async () => {
-                      await s.command({
-                        type: "approval.decide",
-                        approvalId: selected.id,
-                        approve: false,
-                      });
-                      setSelected(null);
-                    })
-                  }
+                    onPress={() =>
+                      void run(async () => {
+                        await s.command({
+                          type: "approval.decide",
+                          approvalId: selected.id,
+                          approve: false,
+                        });
+                        setSelected(null);
+                      })
+                    }
                   >
                     {t("reject")}
                   </Button>
@@ -2842,7 +2912,10 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
                         ? "यह वापसी मंज़ूरी रद्द हो जाएगी और पैसा नहीं लौटाया जा सकेगा। पक्का?"
                         : "This cancels the approved return. No money can be given back on it. Sure?"}
                     </Txt>
-                    <Button variant="quiet" onPress={() => setConfirmCancel(false)}>
+                    <Button
+                      variant="quiet"
+                      onPress={() => setConfirmCancel(false)}
+                    >
                       {hi ? "नहीं" : "Keep it"}
                     </Button>
                     <View style={{ height: 12 }} />
@@ -2947,22 +3020,22 @@ export function ReviewsScreen({ onBack }: { onBack?: () => void }) {
                 <View style={{ alignItems: "flex-end" }}>
                   <Button
                     variant="danger"
-                  onPress={() =>
-                    void run(async () => {
-                      await s.request(
-                        `/recovery/${state.reviews[reviewId].referenceId}`,
-                        {
-                          method: "POST",
-                          body: JSON.stringify({ accept: false, reason }),
-                        },
-                      );
-                      await s.refresh();
-                      V("");
-                    })
-                  }
-                >
-                  Reject with reason
-                </Button>
+                    onPress={() =>
+                      void run(async () => {
+                        await s.request(
+                          `/recovery/${state.reviews[reviewId].referenceId}`,
+                          {
+                            method: "POST",
+                            body: JSON.stringify({ accept: false, reason }),
+                          },
+                        );
+                        await s.refresh();
+                        V("");
+                      })
+                    }
+                  >
+                    Reject with reason
+                  </Button>
                 </View>
               </>
             ) : (
@@ -3129,8 +3202,7 @@ export function MoreScreen({ navigate }: { navigate: (p: string) => void }) {
           }
           detail={
             <Txt size={14} color={palette.ink2}>
-              Offline authorisation expires{" "}
-              {dateTime24(s.identity!.expiresAt)}
+              Offline authorisation expires {dateTime24(s.identity!.expiresAt)}
             </Txt>
           }
         />
@@ -3283,9 +3355,7 @@ export function AdministrationScreen({ onBack }: { onBack?: () => void }) {
           value={password}
           error={staffErrors.password}
           hint={
-            s.language === "hi"
-              ? "कम से कम 12 अक्षर"
-              : "At least 12 characters"
+            s.language === "hi" ? "कम से कम 12 अक्षर" : "At least 12 characters"
           }
           onChange={(v: string) => {
             P(v);
@@ -3316,7 +3386,9 @@ export function AdministrationScreen({ onBack }: { onBack?: () => void }) {
               const hi = s.language === "hi";
               const found: Record<string, string> = {};
               if (!name.trim())
-                found.name = hi ? "कर्मचारी का नाम भरें" : "Enter the employee's name";
+                found.name = hi
+                  ? "कर्मचारी का नाम भरें"
+                  : "Enter the employee's name";
               if (!/^[a-zA-Z0-9_.]{3,30}$/.test(username))
                 found.username = hi
                   ? "यूज़रनेम 3 से 30 अक्षर का हो: अंग्रेज़ी अक्षर, अंक, _ या ."
@@ -3404,7 +3476,9 @@ export function AdministrationScreen({ onBack }: { onBack?: () => void }) {
                 {dateTime24(d.lastSeen)}
               </Txt>
             }
-            trailing={d.revoked ? <Badge tone="declined">Revoked</Badge> : undefined}
+            trailing={
+              d.revoked ? <Badge tone="declined">Revoked</Badge> : undefined
+            }
           >
             {!d.revoked && (
               <View style={{ alignItems: "flex-end", marginTop: 4 }}>
@@ -3512,7 +3586,11 @@ function EmployeeSheet({
                 </Row>
               </Pressable>
               <Section title="Forgot password">
-                <Txt size={14} color={palette.ink2} style={{ marginBottom: 12 }}>
+                <Txt
+                  size={14}
+                  color={palette.ink2}
+                  style={{ marginBottom: 12 }}
+                >
                   Set a temporary password. They are signed out on every phone
                   and choose their own password when they next sign in.
                 </Txt>

@@ -68,7 +68,10 @@ function translateCopy(value: any, language: string): any {
     // Drawer differences from core's differenceText: "₹50.00 short" / "₹20.00 over".
     const diff = /^(₹[\d,.]+) (short|over)$/.exec(trim);
     return diff
-      ? value.replace(trim, `${diff[1]} ${diff[2] === "short" ? "कम" : "ज़्यादा"}`)
+      ? value.replace(
+          trim,
+          `${diff[1]} ${diff[2] === "short" ? "कम" : "ज़्यादा"}`,
+        )
       : value;
   }
   return Array.isArray(value)
@@ -258,6 +261,35 @@ export function Button({
     </Pressable>
   );
 }
+/**
+ * A text input's own copy of what was typed. When the screen re-renders slowly (a sync or a banner
+ * update while typing fast or scanning a barcode), the parent can hand back an older value than
+ * the one just typed, and a plain controlled input would reset to it and lose characters. Values
+ * this input emitted itself are echoes and ignored; any other value is a real change from outside
+ * (a reset after saving, a scanned code) and replaces the text.
+ */
+export function useBufferedText(value: string, onChange: (v: string) => void) {
+  const [text, setText] = useState(value);
+  const emitted = useRef<string[]>([]);
+  useEffect(() => {
+    const echo = emitted.current.lastIndexOf(value);
+    if (echo >= 0) {
+      emitted.current = emitted.current.slice(echo + 1);
+      return;
+    }
+    emitted.current = [];
+    setText(value);
+  }, [value]);
+  return {
+    value: text,
+    change: (next: string) => {
+      emitted.current.push(next);
+      if (emitted.current.length > 50) emitted.current.shift();
+      setText(next);
+      onChange(next);
+    },
+  };
+}
 export function Field({
   label,
   value,
@@ -296,6 +328,7 @@ export function Field({
 }) {
   const { language } = useSession();
   const [focused, setFocused] = useState(false);
+  const text = useBufferedText(value, onChange);
   return (
     <View style={{ gap: 6, marginBottom: 16 }}>
       {label && (
@@ -310,8 +343,8 @@ export function Field({
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         accessibilityLabel={translateCopy(label ?? placeholder, language)}
-        value={value}
-        onChangeText={onChange}
+        value={text.value}
+        onChangeText={text.change}
         placeholder={translateCopy(placeholder, language)}
         placeholderTextColor={palette.ink3}
         selectionColor={palette.blue}
@@ -375,12 +408,7 @@ export function Chip({ children, active = false, onPress }: any) {
   );
 }
 export type Tone =
-  | "info"
-  | "waiting"
-  | "approved"
-  | "declined"
-  | "paid"
-  | "neutral";
+  "info" | "waiting" | "approved" | "declined" | "paid" | "neutral";
 export const toneInk: Record<Tone, [string, string]> = {
   info: [palette.blue, palette.blueTint],
   waiting: [palette.waiting, palette.waitingTint],
@@ -551,7 +579,8 @@ export function indianMobile(raw: string): string | null {
   if (!/^\+?[\d\s-]+$/.test(text)) return null;
   let digits = text.replace(/\D/g, "");
   if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
-  else if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+  else if (digits.length === 11 && digits.startsWith("0"))
+    digits = digits.slice(1);
   return /^[6-9]\d{9}$/.test(digits) ? digits : null;
 }
 /** "17 Nov 2026, 22:11": a full date and time in IST, 24-hour like the rest of the app. */

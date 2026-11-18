@@ -76,6 +76,16 @@ app.use(
 // JSON, so the app can tell the API's own 404 from a proxy's text page while the API is down.
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 app.onError((e, c) => {
+  // A unique-index violation is a conflict with data already recorded, not a server fault: the
+  // phone must get a definite answer instead of retrying an "unknown outcome" for minutes.
+  if ((e as { code?: string }).code === "23505")
+    return c.json(
+      {
+        error: "This conflicts with something already recorded",
+        code: "CONFLICT",
+      },
+      409,
+    );
   if (e instanceof ZodError)
     return c.json({ error: "Invalid input", issues: e.issues }, 400);
   if (e instanceof SyntaxError)
